@@ -19,15 +19,6 @@ type GoSNMP struct {
 	Version   uint8
 }
 
-type SNMPMessage struct {
-	Version uint8
-	Request PDU
-}
-
-type PDU struct {
-	Request uint8
-}
-
 func NewGoSNMP(target, community string, version uint8) *GoSNMP {
 	s := &GoSNMP{target, community, version}
 
