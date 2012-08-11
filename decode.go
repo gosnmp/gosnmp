@@ -6,7 +6,6 @@ package gosnmp
 
 import (
 	"encoding/asn1"
-	"errors"
 	"fmt"
 )
 
@@ -48,7 +47,7 @@ type PDUResponse struct {
 	RequestId   int32
 	ErrorStatus int
 	ErrorIndex  int
-	VarBindList []Variable
+	VarBindList []*Variable
 }
 
 type Message struct {
@@ -86,7 +85,7 @@ func decode(data []byte) (*PDUResponse, error) {
 		resp.ErrorIndex = pdu.ErrorIndex
 		resp.ErrorStatus = pdu.ErrorStatus
 
-		resp.VarBindList = make([]Variable, len(pdu.VarBindList))
+		resp.VarBindList = make([]*Variable, len(pdu.VarBindList))
 
 		// Decode all vars
 		for c, v := range pdu.VarBindList {
@@ -102,12 +101,14 @@ func decode(data []byte) (*PDUResponse, error) {
 
 		return resp, nil
 	default:
-		fmt.Printf("Unable to decode type: %#v\n", choice)
+		return nil, fmt.Errorf("Unable to decode type: %#v\n", choice)
 	}
 	return nil, fmt.Errorf("Unknown CHOICE: %x", choice)
 }
 
-func decodeValue(data asn1.RawValue) (retVal Variable, err error) {
+func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
+	retVal = new(Variable)
+
 	switch Asn1BER(data.FullBytes[0]) {
 
 	// Integer

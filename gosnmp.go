@@ -6,7 +6,6 @@ package gosnmp
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -25,7 +24,7 @@ func NewGoSNMP(target, community string, version uint8) *GoSNMP {
 	return s
 }
 
-func (x *GoSNMP) Get(oid string) string {
+func (x *GoSNMP) Get(oid string) (*Variable, error) {
 	var err error
 	// Encode the oid
 	oid = strings.Trim(oid, ".")
@@ -35,16 +34,14 @@ func (x *GoSNMP) Get(oid string) string {
 	for i := 0; i < len(oidParts); i++ {
 		oidBytes[i], err = strconv.Atoi(oidParts[i])
 		if err != nil {
-			fmt.Printf("Unable to parse OID: %s\n", err.Error())
-			return ""
+			return nil, fmt.Errorf("Unable to parse OID: %s\n", err.Error())
 		}
 	}
 
 	mOid, err := marshalObjectIdentifier(oidBytes)
 
 	if err != nil {
-		fmt.Printf("Unable to marshal OID: %s\n", err.Error())
-		return ""
+		return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
 	}
 
 	fmt.Printf("OID Length: %d - Target: %s\n", len(mOid), fmt.Sprintf("%s:161", x.Target))
@@ -58,12 +55,12 @@ func (x *GoSNMP) Get(oid string) string {
 	//	ln, err := net.ListenUDP("udp", laddrUDP)
 
 	if err != nil {
-		fmt.Printf("Error on listen: %s\n", err.Error())
+		return nil, fmt.Errorf("Error on listen: %s\n", err.Error())
 	}
 	//defer ln.Close()
 
 	if err != nil {
-		fmt.Printf("Error establishing connection to host: %s\n", err.Error())
+		return nil, fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
 	// Prepare the buffer to send
 	buffer := make([]byte, 0, 1024)
@@ -95,16 +92,14 @@ func (x *GoSNMP) Get(oid string) string {
 	// Send the packet!
 	_, err = conn.Write(fBuf)
 	if err != nil {
-		fmt.Printf("Error writing to socket: %s\n", err.Error())
-		return ""
-
+		return nil, fmt.Errorf("Error writing to socket: %s\n", err.Error())
 	}
 	// Try to read the response
 	resp := make([]byte, 2048, 2048)
 	n, err := conn.Read(resp)
 
 	if err != nil {
-		fmt.Printf("Error reading from UDP: %s\n", err.Error())
+		return nil, fmt.Errorf("Error reading from UDP: %s\n", err.Error())
 	}
 	/*
 		for _, b := range resp[0:n] {
@@ -120,35 +115,17 @@ func (x *GoSNMP) Get(oid string) string {
 	*/
 	pdu, err := decode(resp[:n])
 
-	var response string
-
 	if err != nil {
-		fmt.Printf("Unable to decode packet: %s\n", err.Error())
+		return nil, fmt.Errorf("Unable to decode packet: %s\n", err.Error())
 	} else {
 		fmt.Printf("PDU Request ID %d - Error: %d - Responses: %d\n", pdu.RequestId, pdu.ErrorStatus, len(pdu.VarBindList))
 
-		for _, v := range pdu.VarBindList {
-			// Print ObjectIdentifier
-
-			for _, o := range v.Name {
-				fmt.Printf("%d.", o)
-			}
-			fmt.Printf(" => ")
-
-			switch t := v.Value.(type) {
-			case []uint8:
-				//fmt.Printf("%s\n", string(t))
-				response = string(t)
-			case int:
-				response = fmt.Sprintf("%d", int(t))
-			case int64:
-				response = fmt.Sprintf("%d", int64(t))
-
-			default:
-				fmt.Printf("Unable to decode [%T] %v\n", v.Value, v.Value)
-			}
+		if len(pdu.VarBindList) < 1 {
+			return nil, fmt.Errorf("No responses received.")
+		} else {
+			return pdu.VarBindList[0], nil
 		}
 	}
 
-	return response
+	return nil, nil
 }
