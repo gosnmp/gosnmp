@@ -38,8 +38,8 @@ Responses are a struct of the following format:
 
     type Variable struct {
       Name  asn1.ObjectIdentifier
-	    Type  Asn1BER
-	    Value interface{}
+      Type  Asn1BER
+      Value interface{}
     }
     
 Where Name is the OID encoded as an object identifier, Type is the encoding type of the response and Value is an interface{} type, with the response appropriately decoded.
