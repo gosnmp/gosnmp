@@ -5,9 +5,9 @@
 package main
 
 import (
+	"./gosnmp"
 	"flag"
 	"fmt"
-	"github.com/alouca/gosnmp"
 )
 
 var (

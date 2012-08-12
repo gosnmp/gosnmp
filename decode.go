@@ -26,6 +26,8 @@ const (
 	Uinteger32               = 0x47
 )
 
+// Different packet structure is needed during decode, to trick encoding/asn1 to decode the SNMP packet
+
 type Variable struct {
 	Name  asn1.ObjectIdentifier
 	Type  Asn1BER
