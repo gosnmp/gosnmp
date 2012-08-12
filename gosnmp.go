@@ -27,6 +27,8 @@ func NewGoSNMP(target, community string, version uint8) *GoSNMP {
 func marshalOID(oid string) ([]byte, error) {
 	var err error
 
+	fmt.Printf("Marshalling: %s\n", oid)
+
 	// Encode the oid
 	oid = strings.Trim(oid, ".")
 	oidParts := strings.Split(oid, ".")
@@ -173,15 +175,16 @@ func (packet *snmpPacket) marshal() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("PDU Length: %d\n", len(pdu))
 		pduLength += len(pdu)
 		snmpPduBuf.Write(pdu)
 	}
 
 	pduBytes := snmpPduBuf.Bytes()
 	// Varbind list length
-	pduBytes[12] = byte(pduLength + 2)
+	pduBytes[12] = byte(pduLength)
 	// SNMP PDU length (PDU header + varbind list length)
-	pduBytes[1] = byte(pduLength + 13)
+	pduBytes[1] = byte(pduLength + 11)
 
 	buf.Write(pduBytes)
 
@@ -210,8 +213,8 @@ func marshalPDU(pdu *snmpPDU) ([]byte, error) {
 	// Mashal the PDU type into the appropriate BER
 	switch pdu.Type {
 	case Null:
-
 		pduBuf.Write([]byte{byte(Sequence), byte(len(oid) + 4)})
+		pduBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		pduBuf.Write(oid)
 		pduBuf.Write([]byte{Null, 0x00})
 	default:

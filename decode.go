@@ -124,7 +124,7 @@ func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
 	// Octet
 	case OctetString:
 		retVal.Type = OctetString
-		retVal.Value = data.FullBytes[2:]
+		retVal.Value = string(data.FullBytes[2:])
 	// Counter32
 	case Counter32:
 		ret, err := parseInt(data.FullBytes[2:])
