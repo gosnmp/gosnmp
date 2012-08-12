@@ -5,9 +5,9 @@
 package main
 
 import (
-	"./gosnmp"
 	"flag"
 	"fmt"
+	"github.com/alouca/gosnmp"
 )
 
 var (
@@ -25,6 +25,22 @@ func init() {
 
 func main() {
 	s := gosnmp.NewGoSNMP(cmdTarget, cmdCommunity, 1)
-	resp := s.Get(cmdOid)
-	fmt.Printf("%s -> %s\n", cmdOid, resp)
+	resp, err := s.Get(cmdOid)
+
+	if err != nil {
+		fmt.Printf("Error during SNMP GET: %s\n", err.Error())
+	} else {
+		fmt.Printf("%s -> ", cmdOid)
+		switch resp.Type {
+		case gosnmp.OctetString:
+			if s, ok := resp.Value.(string); ok {
+				fmt.Printf("%s\n", s)
+			} else {
+				fmt.Printf("Response is not a string\n")
+			}
+		default:
+			fmt.Printf("Type: %d\n", resp.Type)
+		}
+	}
+
 }
