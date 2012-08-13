@@ -22,7 +22,7 @@ Usage
 -----
 The library usage is pretty simple:
 
-    s := gosnmp.NewGoSNMP("192.168.0.1", "public", 1)
+    s := gosnmp.NewGoSNMP("192.168.0.1", "public", gosnmp.Version2c)
     resp, err := s.Get(".1.3.6.1.2.1.1.1.0")
     
     if err == nil {
