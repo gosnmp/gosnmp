@@ -62,7 +62,6 @@ func decode(data []byte) (*PDUResponse, error) {
 	m := Message{}
 	_, err := asn1.Unmarshal(data, &m)
 	if err != nil {
-		fmt.Printf("Unable to unmarshal first packet: %#v", data)
 		return nil, err
 	}
 	choice := m.Data.FullBytes[0]
@@ -76,8 +75,7 @@ func decode(data []byte) (*PDUResponse, error) {
 		m.Data.FullBytes[0] = 0x30
 		_, err = asn1.Unmarshal(m.Data.FullBytes, pdu)
 		if err != nil {
-			fmt.Printf("Error decoding pdu: %s\n", err.Error())
-			return nil, fmt.Errorf("%#v, %#v, %s", m.Data.FullBytes, pdu, err)
+			return nil, fmt.Errorf("Error decoding pdu: %#v, %#v, %s", m.Data.FullBytes, pdu, err)
 		}
 
 		// make response pdu
@@ -159,7 +157,7 @@ func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
 		retVal.Type = Counter64
 		retVal.Value = ret
 	default:
-		fmt.Printf("Unable to decode type %x\n", data.FullBytes[0])
+		err = fmt.Errorf("Unable to decode %x - not implemented", data.FullBytes[0])
 	}
 
 	return

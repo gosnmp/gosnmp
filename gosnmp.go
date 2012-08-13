@@ -27,8 +27,6 @@ func NewGoSNMP(target, community string, version uint8) *GoSNMP {
 func marshalOID(oid string) ([]byte, error) {
 	var err error
 
-	fmt.Printf("Marshalling: %s\n", oid)
-
 	// Encode the oid
 	oid = strings.Trim(oid, ".")
 	oidParts := strings.Split(oid, ".")
@@ -77,14 +75,6 @@ func (x *GoSNMP) Get(oid string) (*Variable, error) {
 		return nil, err
 	}
 
-	/*
-		for _, b := range fBuf {
-			fmt.Printf("%#x ", b)
-		}
-		fmt.Printf("\n")
-		fmt.Printf("Res: %d\n", buf.Len())
-	*/
-
 	// Send the packet!
 	_, err = conn.Write(fBuf)
 	if err != nil {
@@ -97,25 +87,12 @@ func (x *GoSNMP) Get(oid string) (*Variable, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error reading from UDP: %s\n", err.Error())
 	}
-	/*
-		for _, b := range resp[0:n] {
-			fmt.Printf("%#x ", b)
-		}
-		fmt.Printf("\n")
 
-		fmt.Printf("Read %d bytes (Size: %d) \n", n, resp[1])
-
-			if resp[0] == byte(0x30) && int(resp[1]) == n-2 {
-				fmt.Printf("Sanity of response confirmed\n")
-			}
-	*/
 	pdu, err := decode(resp[:n])
 
 	if err != nil {
 		return nil, fmt.Errorf("Unable to decode packet: %s\n", err.Error())
 	} else {
-		fmt.Printf("PDU Request ID %d - Error: %d - Responses: %d\n", pdu.RequestId, pdu.ErrorStatus, len(pdu.VarBindList))
-
 		if len(pdu.VarBindList) < 1 {
 			return nil, fmt.Errorf("No responses received.")
 		} else {
@@ -175,7 +152,6 @@ func (packet *snmpPacket) marshal() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("PDU Length: %d\n", len(pdu))
 		pduLength += len(pdu)
 		snmpPduBuf.Write(pdu)
 	}
