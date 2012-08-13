@@ -24,7 +24,7 @@ func init() {
 }
 
 func main() {
-	s := gosnmp.NewGoSNMP(cmdTarget, cmdCommunity, 1)
+	s := gosnmp.NewGoSNMP(cmdTarget, cmdCommunity, gosnmp.Version2c)
 	resp, err := s.Get(cmdOid)
 
 	if err != nil {

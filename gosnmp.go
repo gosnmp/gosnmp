@@ -15,10 +15,10 @@ import (
 type GoSNMP struct {
 	Target    string
 	Community string
-	Version   uint8
+	Version   SnmpVersion
 }
 
-func NewGoSNMP(target, community string, version uint8) *GoSNMP {
+func NewGoSNMP(target, community string, version SnmpVersion) *GoSNMP {
 	s := &GoSNMP{target, community, version}
 
 	return s
@@ -111,8 +111,15 @@ const (
 	SetRequest             = 0x1
 )
 
+type SnmpVersion uint8
+
+const (
+	Version1  SnmpVersion = 0x0
+	Version2c SnmpVersion = 0x1
+)
+
 type snmpPacket struct {
-	Version     uint8
+	Version     SnmpVersion
 	Community   string
 	RequestType MessageType
 	RequestID   uint8
@@ -133,7 +140,7 @@ func (packet *snmpPacket) marshal() ([]byte, error) {
 	buf := bytes.NewBuffer(buffer)
 
 	// Write the packet header (Message type 0x30) & Version = 2
-	buf.Write([]byte{byte(Sequence), 0, 2, 1, packet.Version})
+	buf.Write([]byte{byte(Sequence), 0, 2, 1, byte(packet.Version)})
 
 	// Write Community
 	buf.Write([]byte{4, uint8(len(packet.Community))})
