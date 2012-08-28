@@ -14,17 +14,25 @@ var (
 	cmdCommunity string
 	cmdTarget    string
 	cmdOid       string
+	cmdTimeout   int64
 )
 
 func init() {
 	flag.StringVar(&cmdTarget, "target", "", "Target SNMP Agent")
-	flag.StringVar(&cmdCommunity, "community", "", "SNNP Community")
+	flag.StringVar(&cmdCommunity, "community", "public", "SNNP Community")
 	flag.StringVar(&cmdOid, "oid", "", "OID")
+	flag.Int64Var(&cmdTimeout, "timeout", 5, "Set the timeout in seconds")
 	flag.Parse()
 }
 
 func main() {
-	s := gosnmp.NewGoSNMP(cmdTarget, cmdCommunity, gosnmp.Version2c)
+	if cmdTarget == "" || cmdOid == "" {
+		flag.PrintDefaults()
+		return
+	}
+
+	s := gosnmp.NewGoSNMP(cmdTarget, cmdCommunity, gosnmp.Version2c, cmdTimeout)
+	s.SetTimeout(cmdTimeout)
 	resp, err := s.Get(cmdOid)
 
 	if err != nil {
@@ -39,7 +47,7 @@ func main() {
 				fmt.Printf("Response is not a string\n")
 			}
 		default:
-			fmt.Printf("Type: %d\n", resp.Type)
+			fmt.Printf("Type: %d - Value: %v\n", resp.Type, resp.Value)
 		}
 	}
 
