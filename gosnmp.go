@@ -56,7 +56,21 @@ func (x *GoSNMP) SetTimeout(seconds int64) {
 	if seconds <= 0 {
 		seconds = 5
 	}
-	x.Timeout = seconds * time.Second
+	x.Timeout = time.Duration(seconds) * time.Second
+}
+
+// StreamWalk will start walking a specified OID, and push through a channel the results
+// as it receives them, without waiting for the whole process to finish to return the 
+// results
+func (x *GoSNMP) StreamWalk(oid string, c chan *Variable) error {
+
+	return nil
+}
+
+// Walk will SNMP walk the target, blocking until the process is complete
+func (x *GoSNMP) Walk(oid string) ([]*Variable, error) {
+
+	return nil, nil
 }
 
 func (x *GoSNMP) Get(oid string) (*Variable, error) {
