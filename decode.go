@@ -24,6 +24,8 @@ const (
 	NsapAddress              = 0x45
 	Counter64                = 0x46
 	Uinteger32               = 0x47
+	NoSuchObject             = 0x80
+	NoSuchInstance           = 0x81
 )
 
 // Different packet structure is needed during decode, to trick encoding/asn1 to decode the SNMP packet
@@ -156,6 +158,10 @@ func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
 
 		retVal.Type = Counter64
 		retVal.Value = ret
+	case NoSuchInstance:
+		return nil, fmt.Errorf("No such instace")
+	case NoSuchObject:
+		return nil, fmt.Errorf("No such object")
 	default:
 		err = fmt.Errorf("Unable to decode %x - not implemented", data.FullBytes[0])
 	}
