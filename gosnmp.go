@@ -18,12 +18,24 @@ type GoSNMP struct {
 	Community string
 	Version   SnmpVersion
 	Timeout   time.Duration
+	conn      net.Conn
 }
 
-func NewGoSNMP(target, community string, version SnmpVersion) *GoSNMP {
-	s := &GoSNMP{target, community, version, 5 * time.Second}
+func NewGoSNMP(target, community string, version SnmpVersion, timeout int64) (*GoSNMP, error) {
+	// Open a UDP connection to the target
+	conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:161", target), time.Duration(timeout)*time.Second)
 
-	return s
+	fmt.Printf("Type: %t\n", conn)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
+	}
+	var s *GoSNMP
+	//if c, ok := conn.(net.UDPConn); ok {
+	s = &GoSNMP{target, community, version, time.Duration(timeout) * time.Second, conn}
+	//	}
+
+	return s, nil
 }
 
 func marshalOID(oid string) ([]byte, error) {
@@ -59,6 +71,10 @@ func (x *GoSNMP) SetTimeout(seconds int64) {
 	x.Timeout = time.Duration(seconds) * time.Second
 }
 
+func (x *GoSNMP) Close() {
+	//x.conn.Close()
+}
+
 // StreamWalk will start walking a specified OID, and push through a channel the results
 // as it receives them, without waiting for the whole process to finish to return the 
 // results
@@ -73,20 +89,13 @@ func (x *GoSNMP) Walk(oid string) ([]*Variable, error) {
 	return nil, nil
 }
 
+// Sends an SNMP GET request to the target. Returns a Variable with the response or an error
 func (x *GoSNMP) Get(oid string) (*Variable, error) {
 	var err error
 
-	// Open a UDP connection to the target
-	conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:161", x.Target), x.Timeout)
-	defer conn.Close()
-
-	if err != nil {
-		return nil, fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
-	}
-
 	// Set timeouts on the connection
 	deadline := time.Now()
-	conn.SetDeadline(deadline.Add(x.Timeout))
+	x.conn.SetDeadline(deadline.Add(x.Timeout * time.Second))
 
 	packet := new(snmpPacket)
 
@@ -104,13 +113,13 @@ func (x *GoSNMP) Get(oid string) (*Variable, error) {
 	}
 
 	// Send the packet!
-	_, err = conn.Write(fBuf)
+	_, err = x.conn.Write(fBuf)
 	if err != nil {
 		return nil, fmt.Errorf("Error writing to socket: %s\n", err.Error())
 	}
 	// Try to read the response
 	resp := make([]byte, 2048, 2048)
-	n, err := conn.Read(resp)
+	n, err := x.conn.Read(resp)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error reading from UDP: %s\n", err.Error())
