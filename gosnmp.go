@@ -10,16 +10,18 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type GoSNMP struct {
 	Target    string
 	Community string
 	Version   SnmpVersion
+	Timeout   time.Duration
 }
 
 func NewGoSNMP(target, community string, version SnmpVersion) *GoSNMP {
-	s := &GoSNMP{target, community, version}
+	s := &GoSNMP{target, community, version, 10 * time.Second}
 
 	return s
 }
@@ -53,12 +55,16 @@ func (x *GoSNMP) Get(oid string) (*Variable, error) {
 	var err error
 
 	// Open a UDP connection to the target
-	conn, err := net.Dial("udp", fmt.Sprintf("%s:161", x.Target))
+	conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:161", x.Target), x.Timeout)
 	defer conn.Close()
 
 	if err != nil {
 		return nil, fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
+
+	// Set timeouts on the connection
+	deadline := time.Now()
+	conn.SetDeadline(deadline.Add(x.Timeout))
 
 	packet := new(snmpPacket)
 
