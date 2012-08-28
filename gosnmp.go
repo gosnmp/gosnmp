@@ -21,7 +21,7 @@ type GoSNMP struct {
 }
 
 func NewGoSNMP(target, community string, version SnmpVersion) *GoSNMP {
-	s := &GoSNMP{target, community, version, 10 * time.Second}
+	s := &GoSNMP{target, community, version, 5 * time.Second}
 
 	return s
 }
@@ -49,6 +49,14 @@ func marshalOID(oid string) ([]byte, error) {
 	}
 
 	return mOid, err
+}
+
+// Sets the timeout for network read/write functions. Defaults to 5 seconds.
+func (x *GoSNMP) SetTimeout(seconds int64) {
+	if seconds <= 0 {
+		seconds = 5
+	}
+	x.Timeout = seconds * time.Second
 }
 
 func (x *GoSNMP) Get(oid string) (*Variable, error) {
