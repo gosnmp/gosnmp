@@ -159,7 +159,7 @@ func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
 		retVal.Type = Counter64
 		retVal.Value = ret
 	case NoSuchInstance:
-		return nil, fmt.Errorf("No such instace")
+		return nil, fmt.Errorf("No such instance")
 	case NoSuchObject:
 		return nil, fmt.Errorf("No such object")
 	default:
