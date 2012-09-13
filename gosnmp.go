@@ -77,6 +77,11 @@ func (x *GoSNMP) Debug(data []byte) (*SnmpPacket, error) {
 // Sends an SNMP GET request to the target. Returns a Variable with the response or an error
 func (x *GoSNMP) Get(oid string) (*SnmpPacket, error) {
 	var err error
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("%v", e)
+		}
+	}()
 
 	// Set timeouts on the connection
 	deadline := time.Now()
