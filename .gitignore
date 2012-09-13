@@ -23,3 +23,6 @@ _testmain.go
 
 # Editor Files
 .*.sw*
+
+# Mac OS X crap
+.DS_Store

@@ -25,15 +25,10 @@ func NewGoSNMP(target, community string, version SnmpVersion, timeout int64) (*G
 	// Open a UDP connection to the target
 	conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:161", target), time.Duration(timeout)*time.Second)
 
-	fmt.Printf("Type: %t\n", conn)
-
 	if err != nil {
 		return nil, fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
-	var s *GoSNMP
-	//if c, ok := conn.(net.UDPConn); ok {
-	s = &GoSNMP{target, community, version, time.Duration(timeout) * time.Second, conn}
-	//	}
+	s := &GoSNMP{target, community, version, time.Duration(timeout) * time.Second, conn}
 
 	return s, nil
 }
@@ -71,10 +66,6 @@ func (x *GoSNMP) SetTimeout(seconds int64) {
 	x.Timeout = time.Duration(seconds) * time.Second
 }
 
-func (x *GoSNMP) Close() {
-	//x.conn.Close()
-}
-
 // StreamWalk will start walking a specified OID, and push through a channel the results
 // as it receives them, without waiting for the whole process to finish to return the 
 // results
@@ -89,13 +80,30 @@ func (x *GoSNMP) Walk(oid string) ([]*Variable, error) {
 	return nil, nil
 }
 
+// Debug function
+func (x *GoSNMP) Debug(packet []byte) (*Variable, error) {
+	pdu, err := decode(packet)
+
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decode packet: %s\n", err.Error())
+	} else {
+		if len(pdu.VarBindList) < 1 {
+			return nil, fmt.Errorf("No responses received.")
+		} else {
+			return pdu.VarBindList[0], nil
+		}
+	}
+
+	return nil, nil
+}
+
 // Sends an SNMP GET request to the target. Returns a Variable with the response or an error
 func (x *GoSNMP) Get(oid string) (*Variable, error) {
 	var err error
 
 	// Set timeouts on the connection
 	deadline := time.Now()
-	x.conn.SetDeadline(deadline.Add(x.Timeout * time.Second))
+	x.conn.SetDeadline(deadline.Add(x.Timeout))
 
 	packet := new(snmpPacket)
 
