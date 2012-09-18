@@ -31,7 +31,7 @@ const (
 // Different packet structure is needed during decode, to trick encoding/asn1 to decode the SNMP packet
 
 type Variable struct {
-	Name  asn1.ObjectIdentifier
+	Name  []int
 	Type  Asn1BER
 	Value interface{}
 }
@@ -92,7 +92,7 @@ func decode(data []byte) (*PDUResponse, error) {
 		// Decode all vars
 		for c, v := range pdu.VarBindList {
 
-			val, err := decodeValue(v.Value)
+			val, err := decodeValue(v.Value.FullBytes)
 			if err != nil {
 				return nil, err
 			} else {
@@ -108,14 +108,14 @@ func decode(data []byte) (*PDUResponse, error) {
 	return nil, fmt.Errorf("Unknown CHOICE: %x", choice)
 }
 
-func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
+func decodeValue(data []byte) (retVal *Variable, err error) {
 	retVal = new(Variable)
 
-	switch Asn1BER(data.FullBytes[0]) {
+	switch Asn1BER(data[0]) {
 
 	// Integer
 	case Integer:
-		ret, err := parseInt(data.FullBytes[2:])
+		ret, err := parseInt(data[2:])
 		if err != nil {
 			break
 		}
@@ -124,17 +124,17 @@ func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
 	// Octet
 	case OctetString:
 		retVal.Type = OctetString
-		retVal.Value = string(data.FullBytes[2:])
+		retVal.Value = string(data[2:])
 	// Counter32
 	case Counter32:
-		ret, err := parseInt(data.FullBytes[2:])
+		ret, err := parseInt(data[2:])
 		if err != nil {
 			break
 		}
 		retVal.Type = Counter32
 		retVal.Value = ret
 	case TimeTicks:
-		ret, err := parseInt(data.FullBytes[2:])
+		ret, err := parseInt(data[2:])
 		if err != nil {
 			break
 		}
@@ -142,14 +142,14 @@ func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
 		retVal.Value = ret
 	// Gauge32
 	case Gauge32:
-		ret, err := parseInt(data.FullBytes[2:])
+		ret, err := parseInt(data[2:])
 		if err != nil {
 			break
 		}
 		retVal.Type = Gauge32
 		retVal.Value = ret
 	case Counter64:
-		ret, err := parseInt64(data.FullBytes[2:])
+		ret, err := parseInt64(data[2:])
 
 		// Decode it
 		if err != nil {
@@ -163,8 +163,16 @@ func decodeValue(data asn1.RawValue) (retVal *Variable, err error) {
 	case NoSuchObject:
 		return nil, fmt.Errorf("No such object")
 	default:
-		err = fmt.Errorf("Unable to decode %x - not implemented", data.FullBytes[0])
+		err = fmt.Errorf("Unable to decode %x - not implemented", data[0])
 	}
 
 	return
+}
+
+// Parses UINT16
+func ParseUint16(content []byte) int {
+	number := uint8(content[1]) | uint8(content[0])<<8
+	//fmt.Printf("\t%d\n", number)
+
+	return int(number)
 }
