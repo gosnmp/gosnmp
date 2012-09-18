@@ -7,6 +7,7 @@ package gosnmp
 import (
 	"bytes"
 	"errors"
+	"fmt"
 )
 
 func marshalObjectIdentifier(oid []int) (ret []byte, err error) {
@@ -28,6 +29,56 @@ func marshalObjectIdentifier(oid []int) (ret []byte, err error) {
 
 	ret = out.Bytes()
 
+	return
+}
+
+// parseObjectIdentifier parses an OBJECT IDENTIFIER from the given bytes and
+// returns it. An object identifier is a sequence of variable length integers
+// that are assigned in a hierarchy.
+func parseObjectIdentifier(bytes []byte) (s []int, err error) {
+	if len(bytes) == 0 {
+		err = fmt.Errorf("zero length OBJECT IDENTIFIER")
+		return
+	}
+
+	// In the worst case, we get two elements from the first byte (which is
+	// encoded differently) and then every varint is a single byte long.
+	s = make([]int, len(bytes)+1)
+
+	// The first byte is 40*value1 + value2:
+	s[0] = int(bytes[0]) / 40
+	s[1] = int(bytes[0]) % 40
+	i := 2
+	for offset := 1; offset < len(bytes); i++ {
+		var v int
+		v, offset, err = parseBase128Int(bytes, offset)
+		if err != nil {
+			return
+		}
+		s[i] = v
+	}
+	s = s[0:i]
+	return
+}
+
+// parseBase128Int parses a base-128 encoded int from the given offset in the
+// given byte slice. It returns the value and the new offset.
+func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) {
+	offset = initOffset
+	for shifted := 0; offset < len(bytes); shifted++ {
+		if shifted > 4 {
+			err = fmt.Errorf("Structural Error: base 128 integer too large")
+			return
+		}
+		ret <<= 7
+		b := bytes[offset]
+		ret |= int(b & 0x7f)
+		offset++
+		if b&0x80 == 0 {
+			return
+		}
+	}
+	err = fmt.Errorf("Syntax Error: truncated base 128 integer")
 	return
 }
 
