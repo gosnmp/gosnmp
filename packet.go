@@ -186,7 +186,7 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 
 					log.Debug("PDU Value length: %d\n", pduLength)
 
-					v, err := decodeValue(packet[cursor : cursor+pduLength])
+					v, err := decodeValue(packet[cursor : cursor+pduLength+2])
 					if err != nil {
 						return nil, fmt.Errorf("Error parsing PDU Value: %s", err.Error())
 					}
