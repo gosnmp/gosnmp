@@ -27,6 +27,15 @@ const (
 	Version2c SnmpVersion = 0x1
 )
 
+func (s SnmpVersion) String() string {
+	if s == Version1 {
+		return "1"
+	} else if s == Version2c {
+		return "2c"
+	}
+	return "U"
+}
+
 type SnmpPacket struct {
 	Version     SnmpVersion
 	Community   string
