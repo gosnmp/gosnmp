@@ -8,11 +8,12 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"github.com/alouca/gosnmp"
+	"github.com/soniah/gosnmp"
 )
 
 var (
 	cmdCommunity string
+	cmdPort      uint
 	cmdTarget    string
 	cmdOid       string
 	cmdDebug     string
@@ -23,6 +24,7 @@ func init() {
 	flag.StringVar(&cmdDebug, "debug", "", "Debug flag expects byte array of raw packet to test decoding")
 
 	flag.StringVar(&cmdTarget, "target", "", "Target SNMP Agent")
+	flag.UintVar(&cmdPort, "port", 161, "Target Port")
 	flag.StringVar(&cmdCommunity, "community", "public", "SNNP Community")
 	flag.StringVar(&cmdOid, "oid", "", "OID")
 	flag.Int64Var(&cmdTimeout, "timeout", 5, "Set the timeout in seconds")
@@ -32,7 +34,7 @@ func init() {
 func main() {
 	if cmdDebug != "" {
 		fmt.Printf("Running in debug mode\n")
-		s, err := gosnmp.NewGoSNMP("", "", gosnmp.Version2c, 5)
+		s, err := gosnmp.NewGoSNMP("", 0, "", gosnmp.Version2c, 5)
 		s.SetDebug(true)
 		s.SetVerbose(true)
 		packet, err := hex.DecodeString(cmdDebug)
@@ -59,7 +61,7 @@ func main() {
 		return
 	}
 
-	s, err := gosnmp.NewGoSNMP(cmdTarget, cmdCommunity, gosnmp.Version2c, cmdTimeout)
+	s, err := gosnmp.NewGoSNMP(cmdTarget, uint16(cmdPort), cmdCommunity, gosnmp.Version2c, cmdTimeout)
 	s.SetDebug(true)
 	s.SetVerbose(true)
 	if err != nil {

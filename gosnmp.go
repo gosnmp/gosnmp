@@ -13,21 +13,22 @@ import (
 
 type GoSNMP struct {
 	Target    string
+	Port      uint16
 	Community string
 	Version   SnmpVersion
 	Timeout   time.Duration
-	conn      net.Conn
+	Conn      net.Conn
 	Log       *l.Logger
 }
 
-func NewGoSNMP(target, community string, version SnmpVersion, timeout int64) (*GoSNMP, error) {
+func NewGoSNMP(target string, port uint16, community string, version SnmpVersion, timeout int64) (*GoSNMP, error) {
 	// Open a UDP connection to the target
-	conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:161", target), time.Duration(timeout)*time.Second)
+	Conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:%d", target, port), time.Duration(timeout)*time.Second)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
-	s := &GoSNMP{target, community, version, time.Duration(timeout) * time.Second, conn, l.CreateLogger(false, false)}
+	s := &GoSNMP{target, port, community, version, time.Duration(timeout) * time.Second, Conn, l.CreateLogger(false, false)}
 
 	return s, nil
 }
@@ -75,57 +76,51 @@ func (x *GoSNMP) Debug(data []byte) (*SnmpPacket, error) {
 }
 
 // Sends an SNMP GET request to the target. Returns a Variable with the response or an error
-func (x *GoSNMP) Get(oid string) (*SnmpPacket, error) {
-	var err error
+func (x *GoSNMP) Get(oid string) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			err = fmt.Errorf("%v", e)
+			err = fmt.Errorf("recover: %v", e)
 		}
 	}()
 
-	// Set timeouts on the connection
-	deadline := time.Now()
-	x.conn.SetDeadline(deadline.Add(x.Timeout))
+	x.Conn.SetDeadline(time.Now().Add(x.Timeout)) // Set timeout on the connection
+	packet := &SnmpPacket{
+		Community:   x.Community,
+		Error:       0,
+		ErrorIndex:  0,
+		RequestType: GetRequest,
+		Version:     x.Version,
+		Variables:   []SnmpPDU{SnmpPDU{Name: oid, Type: Null}},
+	}
 
-	packet := new(SnmpPacket)
-
-	packet.Community = x.Community
-	packet.Error = 0
-	packet.ErrorIndex = 0
-	packet.RequestType = GetRequest
-	packet.Version = 1 // version 2
-	packet.Variables = []SnmpPDU{SnmpPDU{Name: oid, Type: Null}}
-
+	// Marshal and send the packet
 	fBuf, err := packet.marshal()
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal: %v", err)
 	}
 
-	// Send the packet!
-	_, err = x.conn.Write(fBuf)
+	_, err = x.Conn.Write(fBuf)
 	if err != nil {
-		return nil, fmt.Errorf("Error writing to socket: %s\n", err.Error())
+		return nil, fmt.Errorf("Error writing to socket: %s", err.Error())
 	}
-	// Try to read the response
+
+	// Read and unmarshal the response
 	resp := make([]byte, 2048, 2048)
-	n, err := x.conn.Read(resp)
-
+	n, err := x.Conn.Read(resp)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading from UDP: %s\n", err.Error())
+		return nil, fmt.Errorf("Error reading from UDP: %s", err.Error())
 	}
 
 	pdu, err := Unmarshal(resp[:n])
-
 	if err != nil {
-		return nil, fmt.Errorf("Unable to decode packet: %s\n", err.Error())
-	} else {
-		if len(pdu.Variables) < 1 {
-			return nil, fmt.Errorf("No responses received.")
-		} else {
-			return pdu, nil
-		}
+		return nil, fmt.Errorf("Unable to decode packet: %s", err.Error())
+	}
+	if pdu == nil {
+		return nil, fmt.Errorf("Unable to decode packet: nil")
+	}
+	if len(pdu.Variables) < 1 {
+		return nil, fmt.Errorf("No response received.")
 	}
 
-	return nil, nil
+	return pdu, nil
 }
