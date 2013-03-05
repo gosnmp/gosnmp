@@ -60,54 +60,6 @@ type Message struct {
 	Data      asn1.RawValue
 }
 
-func decode(data []byte) (*PDUResponse, error) {
-	m := Message{}
-	_, err := asn1.Unmarshal(data, &m)
-	if err != nil {
-		return nil, err
-	}
-	choice := m.Data.FullBytes[0]
-	switch choice {
-	// SNMP Response
-	case 0xa0, 0xa1, 0xa2:
-
-		pdu := new(PDU)
-
-		// hack ANY -> IMPLICIT SEQUENCE
-		m.Data.FullBytes[0] = 0x30
-		_, err = asn1.Unmarshal(m.Data.FullBytes, pdu)
-		if err != nil {
-			return nil, fmt.Errorf("Error decoding pdu: %#v, %#v, %s", m.Data.FullBytes, pdu, err)
-		}
-
-		// make response pdu
-		resp := new(PDUResponse)
-		// Copy values from parsed pdu
-		resp.RequestId = pdu.RequestId
-		resp.ErrorIndex = pdu.ErrorIndex
-		resp.ErrorStatus = pdu.ErrorStatus
-
-		resp.VarBindList = make([]*Variable, len(pdu.VarBindList))
-
-		// Decode all vars
-		for c, v := range pdu.VarBindList {
-
-			val, err := decodeValue(v.Value.FullBytes)
-			if err != nil {
-				return nil, err
-			} else {
-				val.Name = v.Name
-				resp.VarBindList[c] = val
-			}
-		}
-
-		return resp, nil
-	default:
-		return nil, fmt.Errorf("Unable to decode type: %#v\n", choice)
-	}
-	return nil, fmt.Errorf("Unknown CHOICE: %x", choice)
-}
-
 func decodeValue(data []byte) (retVal *Variable, err error) {
 	retVal = new(Variable)
 

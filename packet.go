@@ -62,150 +62,154 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 	cursor := 0
 
 	// First bytes should be 0x30
-	if MessageType(packet[0]) == Sequence {
-		// Parse packet length
-		var length int
-		// length of structure is spread over two bytes
-		if packet[1] == 0x82 {
-			length = int(packet[2])<<8 | int(packet[3])
-			length += 4 // account for header + length
-			cursor += 4
-
-		} else {
-			length = int(packet[1])
-			length += 2 // account for header + length
-			cursor += 2
-		}
-
-		if len(packet) == length {
-			log.Debug("Packet sanity verified, we got all the bytes (%d)\n", length)
-			// Parse SNMP Version
-			rawVersion, count, err := parseRawField(packet[cursor:])
-
-			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMP packet version: %s", err.Error())
-			}
-
-			cursor += count
-			if version, ok := rawVersion.(int); ok {
-				response.Version = SnmpVersion(version)
-			}
-
-			// Parse community
-			rawCommunity, count, err := parseRawField(packet[cursor:])
-			cursor += count
-			if community, ok := rawCommunity.(string); ok {
-				response.Community = community
-				log.Debug("Parsed community %s\n", community)
-			}
-
-			// Parse SNMP packet type
-			switch MessageType(packet[cursor]) {
-			case GetResponse:
-				log.Debug("SNMP Packet is get response\n")
-				response.RequestType = GetResponse
-
-				// Response length (dont really care what the length is)
-				if packet[cursor+1] == 0x82 {
-					cursor += 4
-				} else {
-					cursor += 2
-				}
-				log.Debug("Response length: %d\n", length)
-
-				// Parse Request ID
-				rawRequestId, count, err := parseRawField(packet[cursor:])
-
-				if err != nil {
-					return nil, fmt.Errorf("Error parsing SNMP packet request ID: %s", err.Error())
-				}
-
-				cursor += count
-				if requestid, ok := rawRequestId.(int); ok {
-					response.RequestID = uint8(requestid)
-				}
-
-				// Parse Error
-				rawError, count, err := parseRawField(packet[cursor:])
-
-				if err != nil {
-					return nil, fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
-				}
-
-				cursor += count
-				if errorNo, ok := rawError.(int); ok {
-					response.Error = uint8(errorNo)
-				}
-
-				// Parse Error Index
-				rawErrorIndex, count, err := parseRawField(packet[cursor:])
-
-				if err != nil {
-					return nil, fmt.Errorf("Error parsing SNMP packet error index: %s", err.Error())
-				}
-
-				cursor += count
-				if errorindex, ok := rawErrorIndex.(int); ok {
-					response.ErrorIndex = uint8(errorindex)
-				}
-
-				log.Debug("Request ID: %d Error: %d Error Index: %d\n", response.RequestID, response.Error, response.ErrorIndex)
-
-				// Varbind list
-				if packet[cursor] == 0x30 && packet[cursor+1] == 0x82 {
-					cursor += 4
-				} else {
-					cursor += 2
-				}
-
-				// Loop & parse Varbinds
-				for cursor < length {
-					log.Debug("Parsing var bind response (Cursor at %d/%d)", cursor, length)
-					if packet[cursor] == 0x30 && packet[cursor+1] == 0x82 {
-						cursor += 4
-						log.Debug("Padded Varbind length\n")
-					} else {
-						cursor += 2
-					}
-
-					// Parse OID
-					rawOid, count, err := parseRawField(packet[cursor:])
-					cursor += count
-					log.Debug("OID (%v) Field was %d bytes\n", rawOid, count)
-
-					var pduLength int
-					var paddedLength int = 0
-
-					if packet[cursor+1] == 0x81 {
-						pduLength = int(packet[cursor+2])
-						paddedLength = 1
-						log.Debug("Padded Variable length\n")
-					} else {
-						pduLength = int(packet[cursor+1])
-					}
-
-					log.Debug("PDU Value length: %d\n", pduLength)
-
-					v, err := decodeValue(packet[cursor : cursor+pduLength+2])
-					if err != nil {
-						return nil, fmt.Errorf("Error parsing PDU Value: %s", err.Error())
-					}
-					if oid, ok := rawOid.([]int); ok {
-						response.Variables = append(response.Variables, SnmpPDU{oidToString(oid), v.Type, v.Value})
-					}
-					cursor += pduLength + paddedLength + 2
-
-				}
-
-			}
-
-		} else {
-			return nil, fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
-		}
-	} else {
+	if MessageType(packet[0]) != Sequence {
 		return nil, fmt.Errorf("Invalid packet header\n")
 	}
 
+	// Parse packet length
+	var length int
+	// length of structure is spread over two bytes
+	if packet[1] == 0x82 {
+		length = int(packet[2])<<8 | int(packet[3])
+		length += 4 // account for header + length
+		cursor += 4
+
+	} else {
+		length = int(packet[1])
+		length += 2 // account for header + length
+		cursor += 2
+	}
+
+	if len(packet) != length {
+		return nil, fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
+	}
+	log.Debug("Packet sanity verified, we got all the bytes (%d)\n", length)
+
+	// Parse SNMP Version
+	rawVersion, count, err := parseRawField(packet[cursor:])
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing SNMP packet version: %s", err.Error())
+	}
+
+	cursor += count
+	if version, ok := rawVersion.(int); ok {
+		response.Version = SnmpVersion(version)
+	}
+
+	// Parse community
+	rawCommunity, count, err := parseRawField(packet[cursor:])
+	cursor += count
+	if community, ok := rawCommunity.(string); ok {
+		response.Community = community
+		log.Debug("Parsed community %s\n", community)
+	}
+
+	// Parse SNMP packet type
+	switch MessageType(packet[cursor]) {
+	case GetResponse:
+		response, err = unmarshalGetResponse(packet, cursor, response, log, length)
+	default:
+		return nil, fmt.Errorf("Unknown MessageType %#x")
+	}
+
+	return response, nil
+}
+
+func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *l.Logger, length int) (*SnmpPacket, error) {
+	log.Debug("SNMP Packet is get response\n")
+	response.RequestType = GetResponse
+
+	// Response length (dont really care what the length is)
+	if packet[cursor+1] == 0x82 {
+		cursor += 4
+	} else {
+		cursor += 2
+	}
+	log.Debug("Response length: %d\n", length)
+
+	// Parse Request ID
+	rawRequestId, count, err := parseRawField(packet[cursor:])
+
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing SNMP packet request ID: %s", err.Error())
+	}
+
+	cursor += count
+	if requestid, ok := rawRequestId.(int); ok {
+		response.RequestID = uint8(requestid)
+	}
+
+	// Parse Error
+	rawError, count, err := parseRawField(packet[cursor:])
+
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
+	}
+
+	cursor += count
+	if errorNo, ok := rawError.(int); ok {
+		response.Error = uint8(errorNo)
+	}
+
+	// Parse Error Index
+	rawErrorIndex, count, err := parseRawField(packet[cursor:])
+
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing SNMP packet error index: %s", err.Error())
+	}
+
+	cursor += count
+	if errorindex, ok := rawErrorIndex.(int); ok {
+		response.ErrorIndex = uint8(errorindex)
+	}
+
+	log.Debug("Request ID: %d Error: %d Error Index: %d\n", response.RequestID, response.Error, response.ErrorIndex)
+
+	// Varbind list
+	if packet[cursor] == 0x30 && packet[cursor+1] == 0x82 {
+		cursor += 4
+	} else {
+		cursor += 2
+	}
+
+	// Loop & parse Varbinds
+	for cursor < length {
+		log.Debug("Parsing var bind response (Cursor at %d/%d)", cursor, length)
+		if packet[cursor] == 0x30 && packet[cursor+1] == 0x82 {
+			cursor += 4
+			log.Debug("Padded Varbind length\n")
+		} else {
+			cursor += 2
+		}
+
+		// Parse OID
+		rawOid, count, err := parseRawField(packet[cursor:])
+		cursor += count
+		log.Debug("OID (%v) Field was %d bytes\n", rawOid, count)
+
+		var pduLength int
+		var paddedLength int = 0
+
+		if packet[cursor+1] == 0x81 {
+			pduLength = int(packet[cursor+2])
+			paddedLength = 1
+			log.Debug("Padded Variable length\n")
+		} else {
+			pduLength = int(packet[cursor+1])
+		}
+
+		log.Debug("PDU Value length: %d\n", pduLength)
+
+		v, err := decodeValue(packet[cursor : cursor+pduLength+2])
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing PDU Value: %s", err.Error())
+		}
+		if oid, ok := rawOid.([]int); ok {
+			response.Variables = append(response.Variables, SnmpPDU{oidToString(oid), v.Type, v.Value})
+		}
+		cursor += pduLength + paddedLength + 2
+
+	}
 	return response, nil
 }
 
