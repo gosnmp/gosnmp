@@ -88,7 +88,7 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 	log.Debug("Packet sanity verified, we got all the bytes (%d)\n", length)
 
 	// Parse SNMP Version
-	rawVersion, count, err := parseRawField(packet[cursor:])
+	rawVersion, count, err := parseRawField(packet[cursor:], log, "version")
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet version: %s", err.Error())
 	}
@@ -99,7 +99,7 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 	}
 
 	// Parse community
-	rawCommunity, count, err := parseRawField(packet[cursor:])
+	rawCommunity, count, err := parseRawField(packet[cursor:], log, "community")
 	cursor += count
 	if community, ok := rawCommunity.(string); ok {
 		response.Community = community
@@ -130,7 +130,7 @@ func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *
 	log.Debug("Response length: %d\n", length)
 
 	// Parse Request ID
-	rawRequestId, count, err := parseRawField(packet[cursor:])
+	rawRequestId, count, err := parseRawField(packet[cursor:], log, "request id")
 
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet request ID: %s", err.Error())
@@ -142,7 +142,7 @@ func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *
 	}
 
 	// Parse Error
-	rawError, count, err := parseRawField(packet[cursor:])
+	rawError, count, err := parseRawField(packet[cursor:], log, "error status")
 
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
@@ -154,7 +154,7 @@ func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *
 	}
 
 	// Parse Error Index
-	rawErrorIndex, count, err := parseRawField(packet[cursor:])
+	rawErrorIndex, count, err := parseRawField(packet[cursor:], log, "error index")
 
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet error index: %s", err.Error())
@@ -185,7 +185,7 @@ func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *
 		}
 
 		// Parse OID
-		rawOid, count, err := parseRawField(packet[cursor:])
+		rawOid, count, err := parseRawField(packet[cursor:], log, "OID")
 		cursor += count
 		log.Debug("OID (%v) Field was %d bytes\n", rawOid, count)
 
@@ -202,7 +202,8 @@ func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *
 
 		log.Debug("PDU Value length: %d\n", pduLength)
 
-		v, err := decodeValue(packet[cursor : cursor+pduLength+2])
+		v, err := decodeValue(packet[cursor:cursor+pduLength+2], log, "payload")
+		log.Debug("decodeValue returned |%v|", v)
 		if err != nil {
 			return nil, fmt.Errorf("Error parsing PDU Value: %s", err.Error())
 		}
@@ -215,7 +216,8 @@ func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *
 	return response, nil
 }
 
-func parseRawField(data []byte) (interface{}, int, error) {
+func parseRawField(data []byte, log *l.Logger, msg string) (interface{}, int, error) {
+	log.Debug("%s: parseRawField got bytes: % #x", msg, data)
 	switch Asn1BER(data[0]) {
 	case Integer:
 		length := int(data[1])

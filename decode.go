@@ -7,6 +7,7 @@ package gosnmp
 import (
 	"encoding/asn1"
 	"fmt"
+	l "github.com/alouca/gologger"
 )
 
 type Asn1BER byte
@@ -60,55 +61,52 @@ type Message struct {
 	Data      asn1.RawValue
 }
 
-func decodeValue(data []byte) (retVal *Variable, err error) {
+func decodeValue(data []byte, log *l.Logger, msg string) (retVal *Variable, err error) {
+	log.Debug("%s: decodeValue got bytes: % #x", msg, data)
 	retVal = new(Variable)
 
 	switch Asn1BER(data[0]) {
 
-	// Integer
 	case Integer:
+		// signed
+		retVal.Type = Integer
 		ret, err := parseInt(data[2:])
 		if err != nil {
 			break
 		}
-		retVal.Type = Integer
 		retVal.Value = ret
-	// Octet
 	case OctetString:
 		retVal.Type = OctetString
 		retVal.Value = string(data[2:])
-	// Counter32
 	case Counter32:
-		ret, err := parseInt(data[2:])
+		// unsigned
+		retVal.Type = Counter32
+		ret, err := parseUint(data[2:])
 		if err != nil {
 			break
 		}
-		retVal.Type = Counter32
 		retVal.Value = ret
 	case TimeTicks:
-		ret, err := parseInt(data[2:])
-		if err != nil {
-			break
-		}
 		retVal.Type = TimeTicks
-		retVal.Value = ret
-	// Gauge32
-	case Gauge32:
 		ret, err := parseInt(data[2:])
 		if err != nil {
 			break
 		}
+		retVal.Value = ret
+	case Gauge32:
+		// unsigned
 		retVal.Type = Gauge32
+		ret, err := parseUint(data[2:])
+		if err != nil {
+			break
+		}
 		retVal.Value = ret
 	case Counter64:
+		retVal.Type = Counter64
 		ret, err := parseInt64(data[2:])
-
-		// Decode it
 		if err != nil {
 			break
 		}
-
-		retVal.Type = Counter64
 		retVal.Value = ret
 	case NoSuchInstance:
 		return nil, fmt.Errorf("No such instance")

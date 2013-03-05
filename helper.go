@@ -140,6 +140,34 @@ func parseInt(bytes []byte) (int, error) {
 	return int(ret64), nil
 }
 
+// parseUint64 treats the given bytes as a big-endian, unsigned integer and returns
+// the result.
+func parseUint64(bytes []byte) (ret uint64, err error) {
+	if len(bytes) > 8 {
+		// We'll overflow a uint64 in this case.
+		err = errors.New("integer too large")
+		return
+	}
+	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
+		ret <<= 8
+		ret |= uint64(bytes[bytesRead])
+	}
+	return
+}
+
+// parseUint treats the given bytes as a big-endian, signed integer and returns
+// the result.
+func parseUint(bytes []byte) (uint, error) {
+	ret64, err := parseUint64(bytes)
+	if err != nil {
+		return 0, err
+	}
+	if ret64 != uint64(uint(ret64)) {
+		return 0, errors.New("integer too large")
+	}
+	return uint(ret64), nil
+}
+
 // BIT STRING
 
 // BitStringValue is the structure to use when you want an ASN.1 BIT STRING type. A
