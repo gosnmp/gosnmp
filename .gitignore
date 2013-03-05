@@ -25,4 +25,7 @@ _testmain.go
 .*.sw*
 
 # Mac OS X crap
-.DS_Store
+.DS_Store# On branch master
+
+# Verax testing symlinks
+device
