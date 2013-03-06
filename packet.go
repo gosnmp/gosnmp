@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	l "github.com/alouca/gologger"
+	"math"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -340,4 +342,66 @@ func marshalOID(oid string) ([]byte, error) {
 	}
 
 	return mOid, err
+}
+
+// ToBigInt converts SnmpPDU.Value to big.Int, or returns a zero big.Int for
+// non int-like types (eg strings).
+//
+// This is a convenience function to make working with SnmpPDU's easier - it
+// reduces the need for type assertions. A big.Int is convenient, as SNMP can
+// return int32, uint32, and uint64.
+func ToBigInt(value interface{}) *big.Int {
+	var val int64
+	switch value := value.(type) { // shadow
+	case int:
+		val = int64(value)
+	case int8:
+		val = int64(value)
+	case int16:
+		val = int64(value)
+	case int32:
+		val = int64(value)
+	case int64:
+		val = int64(value)
+	case uint:
+		val = int64(value)
+	case uint8:
+		val = int64(value)
+	case uint16:
+		val = int64(value)
+	case uint32:
+		val = int64(value)
+	case uint64:
+		return (uint64ToBigInt(value))
+	case string:
+		// for testing and other apps - numbers may appear as strings
+		var err error
+		if val, err = strconv.ParseInt(value, 10, 64); err != nil {
+			return new(big.Int)
+		}
+	default:
+		return new(big.Int)
+	}
+	return big.NewInt(val)
+}
+
+// Issue 4389: math/big: add SetUint64 and Uint64 functions to *Int
+//
+// uint64ToBigInt copied from: http://github.com/cznic/mathutil/blob/master/mathutil.go#L341
+//
+// replace with Uint64ToBigInt or equivalent when using Go 1.1
+
+var uint64ToBigIntDelta big.Int
+
+func init() {
+	uint64ToBigIntDelta.SetBit(&uint64ToBigIntDelta, 63, 1)
+}
+
+func uint64ToBigInt(n uint64) *big.Int {
+	if n <= math.MaxInt64 {
+		return big.NewInt(int64(n))
+	}
+
+	y := big.NewInt(int64(n - uint64(math.MaxInt64) - 1))
+	return y.Add(y, &uint64ToBigIntDelta)
 }
