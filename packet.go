@@ -68,24 +68,11 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 		return nil, fmt.Errorf("Invalid packet header\n")
 	}
 
-	// Parse packet length
-	var length int
-	// length of structure is spread over two bytes
-	if packet[1] == 0x82 {
-		length = int(packet[2])<<8 | int(packet[3])
-		length += 4 // account for header + length
-		cursor += 4
-
-	} else {
-		length = int(packet[1])
-		length += 2 // account for header + length
-		cursor += 2
-	}
-
+	length, cursor := calc_length(packet)
 	if len(packet) != length {
 		return nil, fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
 	}
-	log.Debug("Packet sanity verified, we got all the bytes (%d)\n", length)
+	log.Debug("Packet sanity verified, we got all the bytes (%d)", length)
 
 	// Parse SNMP Version
 	rawVersion, count, err := parseRawField(packet[cursor:], log, "version")
@@ -96,6 +83,7 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 	cursor += count
 	if version, ok := rawVersion.(int); ok {
 		response.Version = SnmpVersion(version)
+		log.Debug("Parsed version %d", version)
 	}
 
 	// Parse community
@@ -103,13 +91,13 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 	cursor += count
 	if community, ok := rawCommunity.(string); ok {
 		response.Community = community
-		log.Debug("Parsed community %s\n", community)
+		log.Debug("Parsed community %s", community)
 	}
 
 	// Parse SNMP packet type
 	switch MessageType(packet[cursor]) {
 	case GetResponse:
-		response, err = unmarshalGetResponse(packet, cursor, response, log, length)
+		response, err = unmarshalGetResponse(packet[cursor:], response, log, length)
 	default:
 		return nil, fmt.Errorf("Unknown MessageType %#x")
 	}
@@ -117,107 +105,97 @@ func Unmarshal(packet []byte) (*SnmpPacket, error) {
 	return response, nil
 }
 
-func unmarshalGetResponse(packet []byte, cursor int, response *SnmpPacket, log *l.Logger, length int) (*SnmpPacket, error) {
-	log.Debug("SNMP Packet is get response\n")
+func unmarshalGetResponse(packet []byte, response *SnmpPacket, log *l.Logger, length int) (*SnmpPacket, error) {
+	cursor := 0
+	log.Debug("SNMP Packet is GET RESPONSE, bytes are: % #x...", packet[:10])
 	response.RequestType = GetResponse
 
-	// Response length (dont really care what the length is)
-	if packet[cursor+1] == 0x82 {
-		cursor += 4
-	} else {
-		cursor += 2
+	getresponse_length, cursor := calc_length(packet)
+	if len(packet) != getresponse_length {
+		return nil, fmt.Errorf("Error verifying GetResponse sanity: Got %d Expected: %d\n", len(packet), getresponse_length)
 	}
-	log.Debug("Response length: %d\n", length)
+	log.Debug("getresponse_length: %d", getresponse_length)
 
-	// Parse Request ID
+	// Parse Request-ID
 	rawRequestId, count, err := parseRawField(packet[cursor:], log, "request id")
-
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet request ID: %s", err.Error())
 	}
-
 	cursor += count
 	if requestid, ok := rawRequestId.(int); ok {
 		response.RequestID = uint8(requestid)
+		log.Debug("request-id: %d", uint8(requestid))
 	}
 
-	// Parse Error
-	rawError, count, err := parseRawField(packet[cursor:], log, "error status")
-
+	// Parse Error-Status
+	rawError, count, err := parseRawField(packet[cursor:], log, "error-status")
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
 	}
-
 	cursor += count
-	if errorNo, ok := rawError.(int); ok {
-		response.Error = uint8(errorNo)
+	if error_status, ok := rawError.(int); ok {
+		response.Error = uint8(error_status)
+		log.Debug("error-status: %d", uint8(error_status))
 	}
 
-	// Parse Error Index
+	// Parse Error-Index
 	rawErrorIndex, count, err := parseRawField(packet[cursor:], log, "error index")
-
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet error index: %s", err.Error())
 	}
-
 	cursor += count
 	if errorindex, ok := rawErrorIndex.(int); ok {
 		response.ErrorIndex = uint8(errorindex)
+		log.Debug("error-index: %d", uint8(errorindex))
 	}
 
-	log.Debug("Request ID: %d Error: %d Error Index: %d\n", response.RequestID, response.Error, response.ErrorIndex)
+	return unmarshalVBL(packet[cursor:], response, log, length)
+}
 
-	// Varbind list
-	if packet[cursor] == 0x30 && packet[cursor+1] == 0x82 {
-		cursor += 4
-	} else {
-		cursor += 2
+// unmarshal a Varbind list
+func unmarshalVBL(packet []byte, response *SnmpPacket, log *l.Logger, length int) (*SnmpPacket, error) {
+	cursor := 0
+	log.Debug("unmarshalVBL(), bytes are: % #x...", packet[:10])
+	if packet[cursor] != 0x30 {
+		return nil, fmt.Errorf("Expected a sequence when unmarshalling a VBL, got %x", packet[cursor])
 	}
+
+	vbl_length, cursor := calc_length(packet)
+	if len(packet) != vbl_length {
+		return nil, fmt.Errorf("Error verifying GetResponse sanity: Got %d Expected: %d\n", len(packet), vbl_length)
+	}
+	log.Debug("vbl_length: %d", vbl_length)
 
 	// Loop & parse Varbinds
-	for cursor < length {
-		log.Debug("Parsing var bind response (Cursor at %d/%d)", cursor, length)
-		if packet[cursor] == 0x30 && packet[cursor+1] == 0x82 {
-			cursor += 4
-			log.Debug("Padded Varbind length\n")
-		} else {
-			cursor += 2
-		}
-
-		// Parse OID
-		rawOid, count, err := parseRawField(packet[cursor:], log, "OID")
-		cursor += count
-		log.Debug("OID (%v) Field was %d bytes\n", rawOid, count)
-
-		var pduLength int
-		var paddedLength int = 0
-
-		if packet[cursor+1] == 0x81 {
-			pduLength = int(packet[cursor+2])
-			paddedLength = 1
-			log.Debug("Padded Variable length\n")
-		} else {
-			pduLength = int(packet[cursor+1])
-		}
-
-		log.Debug("PDU Value length: %d\n", pduLength)
-
-		v, err := decodeValue(packet[cursor:cursor+pduLength+2], log, "payload")
-		log.Debug("decodeValue returned |%v|", v)
-		if err != nil {
-			return nil, fmt.Errorf("Error parsing PDU Value: %s", err.Error())
-		}
-		if oid, ok := rawOid.([]int); ok {
-			response.Variables = append(response.Variables, SnmpPDU{oidToString(oid), v.Type, v.Value})
-		}
-		cursor += pduLength + paddedLength + 2
-
+	// for cursor < vbl_length { // TODO hack - range error "packet[cursor] != 0x30"
+	if packet[cursor] != 0x30 {
+		return nil, fmt.Errorf("Expected a sequence when unmarshalling a VB, got %x", packet[cursor])
 	}
+	packet = packet[cursor:]
+	_, cursor = calc_length(packet)
+
+	// Parse OID
+	rawOid, oid_length, err := parseRawField(packet[cursor:], log, "OID")
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing OID Value: %s", err.Error())
+	}
+	log.Debug("OID (%v) Field was %d bytes", rawOid, oid_length)
+	cursor += oid_length
+
+	var oid []int
+	var ok bool
+	if oid, ok = rawOid.([]int); !ok {
+		return nil, fmt.Errorf("unable to type assert rawOid |%v| to []int", rawOid)
+	}
+
+	// Parse Value
+	v, err := decodeValue(packet[cursor:], log, "value")
+	response.Variables = append(response.Variables, SnmpPDU{oidToString(oid), v.Type, v.Value})
 	return response, nil
 }
 
 func parseRawField(data []byte, log *l.Logger, msg string) (interface{}, int, error) {
-	log.Debug("%s: parseRawField got bytes: % #x", msg, data)
+	log.Debug("%s: parseRawField got bytes: % #x...", msg, data[:10])
 	switch Asn1BER(data[0]) {
 	case Integer:
 		length := int(data[1])
@@ -228,8 +206,9 @@ func parseRawField(data []byte, log *l.Logger, msg string) (interface{}, int, er
 			return resp, 2 + length, err
 		}
 	case OctetString:
-		length := int(data[1])
-		return string(data[2 : 2+length]), length + 2, nil
+		//length := int(data[1])
+		length, cursor := calc_length(data)
+		return string(data[cursor:length]), length, nil
 	case ObjectIdentifier:
 		length := int(data[1])
 		oid, err := parseObjectIdentifier(data[2 : 2+length])
@@ -406,4 +385,33 @@ func uint64ToBigInt(n uint64) *big.Int {
 
 	y := big.NewInt(int64(n - uint64(math.MaxInt64) - 1))
 	return y.Add(y, &uint64ToBigIntDelta)
+}
+
+// calc_length parses and calculates an snmp packet length
+//
+// http://luca.ntop.org/Teaching/Appunti/asn1.html
+//
+// Length octets. There are two forms: short (for lengths between 0 and 127),
+// and long definite (for lengths between 0 and 2^1008 -1).
+//
+// * Short form. One octet. Bit 8 has value "0" and bits 7-1 give the length.
+// * Long form. Two to 127 octets. Bit 8 of first octet has value "1" and bits
+//   7-1 give the number of additional length octets. Second and following
+//   octets give the length, base 256, most significant digit first.
+func calc_length(bytes []byte) (length int, cursor int) {
+	// TODO some error checking would be nice....
+	if int(bytes[1]) <= 127 {
+		length = int(bytes[1])
+		length += 2
+		cursor += 2
+	} else {
+		num_octets := int(bytes[1]) & 127
+		for i := 0; i < num_octets; i++ {
+			length <<= 8
+			length += int(bytes[2+i])
+		}
+		length += 2 + num_octets
+		cursor += 2 + num_octets
+	}
+	return length, cursor
 }
