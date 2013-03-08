@@ -3,13 +3,32 @@ gosnmp
 
 GoSNMP is a simple SNMP client library, written fully in Go. Currently it supports only GetRequest (with the rest GetNextRequest, SetRequest in the pipe line). Support for traps is also in the plans.
 
+Info
+----
+
+Many, many thanks to Andreas Louca for writing **alouca/gosnmp**. The major
+difference between his version and **soniah/gosmp** is this version has
+tests written. (However the code could do with refactoring). The tests were
+used to find and correct errors in the following SNMP BER Types:
+
+* Counter32
+* Gauge32
+* Counter64
+* OctetString
+* ObjectIdentifier
+* IpAddress
+
+Also, this version contains functions for treating the returned snmp values as
+`*big.Int` (convenient, as SNMP can return int32, uint32, and uint64 values):
+
+    func ToBigInt(value interface{}) *big.Int
 
 Install
 -------
 
 The easiest way to install is via go get:
 
-    go get github.com/alouca/gosnmp
+    go get github.com/soniah/gosnmp
 
 License
 -------
@@ -71,45 +90,24 @@ SNMP BER Types can be one of the following:
 
 GoSNMP supports most of the above values, subsequent releases will support all of them.
 
-Testing
--------
-
-Many, many thanks to Andreas Louca for writing **alouca/gosnmp**. The major
-difference between his version and **soniah/gosnmp** is that the latter has
-tests written. (However the code could do with refactoring). The tests were
-used to find and correct errors in the following SNMP BER Types:
-
-* Counter32
-* Gauge32
-* Counter64
-* OctetString
-* ObjectIdentifier
-* IpAddress
-
-Also, this version contains functions for treating the returned snmp values as
-`*big.Int` (convenient, as SNMP can return int32, uint32, and uint64 values):
-
-    func ToBigInt(value interface{}) *big.Int
-
 Running the Tests
 -----------------
 
-The tests use the Verax Snmp Simulator [1]; setup Verax before running "go test":
+The tests use the Verax Snmp Simulator [1]: download, install and run it
+with the default configuration. Then, in the gosnmp directory, run these
+commands (or equivalents for your system):
 
-* download, install and run Verax with the default configuration
-
-* in the gosnmp directory, setup these symlinks (or equivalents for your system):
-
+    cd ~/go/src/github.com/soniah/gosnmp
     ln -s /usr/local/vxsnmpsimulator/device device
-    ln -s /usr/local/vxsnmpsimulator/conf/devices.conf.xml devices.conf.xml
 
-* remove randomising elements from Verax device files:
-
+    # remove randomising elements from Verax device files
     cd device/cisco
     sed -i -e 's!\/\/\$.*!!' -e 's!^M!!' cisco_router.txt
     sed -i -e 's/\/\/\^int.unq()\^\/\//2/' cisco_router.txt
     cd ../os
     sed -i -e 's!\/\/\$.*!!' -e 's!^M!!' os-linux-std.txt
     sed -i -e 's/\/\/\^int.unq()\^\/\//2/' os-linux-std.txt
+    cd ~/go/src/github.com/soniah/gosnmp
+    go test
 
 [1] http://www.veraxsystems.com/en/products/snmpsimulator
