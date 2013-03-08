@@ -1,5 +1,5 @@
-// Copyright 2012 Andreas Louca. All rights reserved.
-// Use of this source code is goverend by a BSD-style
+// Copyright 2012 Andreas Louca and Jon Auer, 2013 Sonia Hamilton. All
+// rights reserved.  Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package gosnmp

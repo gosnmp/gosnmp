@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Copyright 2012 Andreas Louca and Jon Auer, 2013 Sonia Hamilton. All
+// rights reserved.  Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package gosnmp
 
 import (
