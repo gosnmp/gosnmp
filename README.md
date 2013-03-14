@@ -41,7 +41,8 @@ Usage
 -----
 The library usage is pretty simple:
 
-    s := gosnmp.NewGoSNMP("192.168.0.1", "public", gosnmp.Version2c)
+    // Connect to 192.168.0.1:161, community public, version 2c, timeout 5s
+    s := gosnmp.NewGoSNMP("192.168.0.1", 161, "public", gosnmp.Version2c, 5)
     resp, err := s.Get(".1.3.6.1.2.1.1.1.0")
 
     if err == nil {
