@@ -1,0 +1,176 @@
+gosnmp
+======
+
+GoSNMP is a simple SNMP client library, written fully in Go. Currently
+it only supports **GetRequest**, with single or multiple OIDs.
+
+Introduction
+------------
+
+**soniah/gosmp** is based on **alouca/gosnmp** - many thanks to Andreas Louca
+for starting the project. My version has diverged markedly from Andreas'
+version:
+
+* the **Get** function now supports **multiple OIDs**, thus improving network
+  performance
+* GoSNMP no longer relies on **alouca/gologger** - you can use your logger if
+  it conforms to the simple interface (Print and Printf). Otherwise debugging
+  will be discarded (/dev/null).
+* the **ToBigInt** function - useful for treating the returned snmp
+  values as `*big.Int` (convenient, as SNMP can return int32, uint32, and
+  uint64 values)
+* the **Partition** function - useful when you have a large array of OIDs
+  to run Get() on
+* and the largest (but least obvious) feature - TDD (Test Driven Development)
+  was used to correct existing problems and for adding new features. I believe
+  this has improved gosnmp's accuracy and reliability
+
+Installation
+------------
+
+The easiest way to install is via **go get**:
+
+    go get github.com/soniah/gosnmp
+
+Usage
+-----
+
+Here is code from **example/example.go**, demonstrating how to use GoSNMP:
+
+    // DefaultGoSNMP is a pointer to a struct that contains
+    // sensible defaults eg port 161, community public, etc
+    g.DefaultGoSNMP.Target = "192.168.1.10"
+    err := g.DefaultGoSNMP.Connect()
+    if err != nil {
+        log.Fatalf("Connect() err: %v", err)
+    }
+    defer g.DefaultGoSNMP.Conn.Close()
+
+    oids := []string{"1.3.6.1.2.1.1.4.0", "1.3.6.1.2.1.1.7.0"}
+    result, err2 := g.DefaultGoSNMP.Get(oids) // Get() accepts up to g.MAX_OIDS
+    if err2 != nil {
+        log.Fatalf("Get() err: %v", err2)
+    }
+
+    for i, variable := range result.Variables {
+        fmt.Printf("%d: oid: %s ", i, variable.Name)
+
+        // the Value of each variable returned by Get() implements
+        // interface{}. You could do a type switch...
+        switch variable.Type {
+        case g.OctetString:
+            fmt.Printf("string: %s\n", variable.Value.(string))
+        default:
+            // ... or often you're just interested in numeric values.
+            // ToBigInt() will return the Value as a BigInt, for plugging
+            // into your calculations.
+            fmt.Printf("number: %d\n", g.ToBigInt(variable.Value))
+        }
+    }
+
+Running this example gives the following output (from my printer):
+
+    % go run example.go
+    0: oid: 1.3.6.1.2.1.1.4.0 string: Administrator
+    1: oid: 1.3.6.1.2.1.1.7.0 number: 104
+
+Bugs
+----
+
+The following BER types have been implemented:
+
+* 0x02 Integer
+* 0x04 OctetString
+* 0x06 ObjectIdentifier
+* 0x40 IpAddress
+* 0x41 Counter32
+* 0x42 Gauge32
+* 0x43 TimeTicks
+* 0x46 Counter64
+* 0x80 NoSuchObject
+* 0x81 NoSuchInstance
+
+The following (less common) BER types haven't been implemented, as I ran out of
+time or haven't been able to find example devices to query:
+
+* 0x00 EndOfContents
+* 0x01 Boolean
+* 0x03 BitString
+* 0x07 ObjectDescription
+* 0x44 Opaque
+* 0x45 NsapAddress
+* 0x47 Uinteger32
+
+Please email me at sonia@snowfrog.net with any bugs you find (pull
+requests welcome). It would help if you supplied the following
+information:
+
+Expected output, obtained via an **snmpget** command. For example:
+
+    % snmpget -On -v2c -c public 203.50.251.17 1.3.6.1.2.1.1.7.0 1.3.6.1.2.1.2.2.1.2.6 1.3.6.1.2.1.2.2.1.5.3
+    .1.3.6.1.2.1.1.7.0 = INTEGER: 78
+    .1.3.6.1.2.1.2.2.1.2.6 = STRING: GigabitEthernet0
+    .1.3.6.1.2.1.2.2.1.5.3 = Gauge32: 4294967295
+
+A packet capture, obtained while running the snmpget. For example:
+
+    sudo tcpdump -s 0 -i eth0 -w foo.pcap host 203.50.251.17 and port 161
+
+Running the Tests
+-----------------
+
+Some of the tests use the **Verax Snmp Simulator** [1]: download,
+install and run it with the default configuration. Then, in the gosnmp
+directory, run these commands (or equivalents for your system):
+
+    cd ~/go/src/github.com/soniah/gosnmp
+    ln -s /usr/local/vxsnmpsimulator/device device
+
+    # remove randomising elements from Verax device files
+    cd device/cisco
+    sed -i -e 's!\/\/\$.*!!' -e 's!^M!!' cisco_router.txt
+    sed -i -e 's/\/\/\^int.unq()\^\/\//2/' cisco_router.txt
+    cd ../os
+    sed -i -e 's!\/\/\$.*!!' -e 's!^M!!' os-linux-std.txt
+    sed -i -e 's/\/\/\^int.unq()\^\/\//2/' os-linux-std.txt
+    cd ~/go/src/github.com/soniah/gosnmp
+    go test
+
+To just run the non-Verax tests:
+
+    go test -run TestUnmarshal 2>&1 | less
+
+To just run the Verax tests:
+
+    go test -run TestVeraxGet 2>&1 | less
+
+To profile cpu usage:
+
+    go test -cpuprofile cpu.out
+    go test -c
+    go tool pprof gosnmp.test cpu.out
+
+To profile memory usage:
+
+    go test -memprofile mem.out
+    go test -c
+    go tool pprof gosnmp.test mem.out
+
+To check test coverage:
+
+    go get github.com/axw/gocov/gocov
+    go get github.com/matm/gocov-html
+    gocov test github.com/soniah/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
+
+[1] http://www.veraxsystems.com/en/products/snmpsimulator
+
+License
+-------
+
+Some parts of the code are borrowed by the Golang project (specifically
+some functions for unmarshaling BER responses), which are under the same
+terms and conditions as the Go language, which are marked appropriately
+in the source code. The rest of the code is under the BSD license.
+
+See the LICENSE file for more details.
+

@@ -13,6 +13,8 @@ import (
 	"testing"
 )
 
+type testResults map[string]SnmpPDU
+
 var veraxDevices = []struct {
 	path string
 	port uint16
@@ -21,7 +23,15 @@ var veraxDevices = []struct {
 	{"device/cisco/cisco_router.txt", 162},
 }
 
-func TestGet(t *testing.T) {
+// 1 <= PARTITION_SIZE <= MAX_OIDS - adjust as required
+const PARTITION_SIZE = 3
+
+// reduce OID_COUNT to speed up tests;
+// set to 1<<32 - 1 (MaxUint32) for everything
+const OID_COUNT = 1<<32 - 1
+
+func TestVeraxGet(t *testing.T) {
+
 	for i, test := range veraxDevices {
 		var err error
 
@@ -33,35 +43,41 @@ func TestGet(t *testing.T) {
 
 		// load gosnmp results
 		var gresults = make(testResults)
-		x, err := NewGoSNMP("127.0.0.1", test.port, "public", Version2c, 2)
+
+		DefaultGoSNMP.Target = "127.0.0.1"
+		DefaultGoSNMP.Port = test.port
+		// DefaultGoSNMP.Logger = log.New(os.Stdout, "", 0) // for verbose logging
+		err = DefaultGoSNMP.Connect()
 		if err != nil {
-			t.Errorf("%s, err |%s| NewGoSNMP()", test.path, err)
+			t.Errorf("%s, err |%s| Connect()", test.path, err)
 		} else {
-			defer x.Conn.Close()
+			defer DefaultGoSNMP.Conn.Close()
 		}
+
+		var oids []string
+		i := 0
+		oids_count := len(vresults)
 		for oid, _ := range vresults {
-			if packet, err := x.Get(oid); err == nil {
-				gresults[oid] = packet
-			} else {
-				t.Errorf("%s, err |%s| Get() for oid |%s|", test.path, err, oid)
+			oids = append(oids, oid)
+			i++
+			if Partition(i, PARTITION_SIZE, oids_count) {
+				if get_results, err := DefaultGoSNMP.Get(oids); err == nil {
+					for _, vb := range get_results.Variables {
+						gresults[vb.Name] = vb
+					}
+				} else {
+					t.Errorf("%s, err |%s| Get() for oids |%s|", test.path, err, oids)
+				}
+				i = 0
+				oids = nil // "truncate" oids
 			}
 		}
 
 		// compare results
-		for oid, vpacket := range vresults {
-			if len(vpacket.Variables) < 1 {
-				t.Errorf("%s, vpacket.Variables < 1 for oid |%s|", test.path, oid)
-			}
-			vpdu := vpacket.Variables[0]
+		for oid, vpdu := range vresults {
 			vtype := vpdu.Type
 			vvalue := vpdu.Value
-
-			gpacket := gresults[oid]
-			if gpacket == nil || len(gpacket.Variables) < 1 {
-				t.Errorf("%s, gpacket.Variables < 1 for oid |%s|", test.path, oid)
-				continue
-			}
-			gpdu := gpacket.Variables[0]
+			gpdu := gresults[oid]
 			gtype := gpdu.Type
 			gvalue := gpdu.Value
 
@@ -117,10 +133,9 @@ func TestGet(t *testing.T) {
 	}
 }
 
-type testResults map[string]*SnmpPacket
-
 func ReadVeraxResults(filename string) (results testResults, err error) {
 	var lines []byte
+	var oid_count int
 	if lines, err = ioutil.ReadFile(filename); err != nil {
 		return nil, fmt.Errorf("unable to open file %s", filename)
 	}
@@ -139,6 +154,10 @@ LINE:
 		// removing leading . first oid
 		if string(oid[0]) == "." {
 			oid = oid[1:]
+		}
+		oid_count++
+		if oid_count > OID_COUNT {
+			break LINE
 		}
 
 		var pdu SnmpPDU
@@ -166,6 +185,9 @@ LINE:
 
 		case "OID":
 			pdu.Type = ObjectIdentifier
+			if string(oidval[0]) == "." {
+				oidval = oidval[1:]
+			}
 			pdu.Value = oidval
 
 		case "BITS":
@@ -223,10 +245,7 @@ LINE:
 			panic(fmt.Sprintf("Unhandled type: %s, %s\n", oidtype, oidval))
 		}
 
-		packet := &SnmpPacket{
-			Variables: []SnmpPDU{pdu},
-		}
-		results[oid] = packet
+		results[oid] = pdu
 	}
 	return results, nil
 }

@@ -23,9 +23,19 @@ _testmain.go
 
 # Editor Files
 .*.sw*
+*.orig
 
 # Mac OS X crap
 .DS_Store# On branch master
 
 # Verax testing symlinks
 device
+
+# test coverage outputs
+coverage.json
+gosnmp.html
+
+# profiling outputs
+cpu.out
+mem.out
+gosnmp.test
