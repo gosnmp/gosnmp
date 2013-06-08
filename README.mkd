@@ -8,11 +8,13 @@ Introduction
 ------------
 
 **soniah/gosmp** is based on **alouca/gosnmp** - many thanks to Andreas Louca
-for starting the project. My version has diverged markedly from Andreas'
+for starting the project. My version has diverged significantly from Andreas'
 version:
 
-* the **Get** function now supports **multiple OIDs**, thus improving network
-  performance
+* the **Get** function now supports **multiple OIDs** (thus improving network
+  performance) and _has a different method signature_
+* the **NewGoSNMP** function has been removed, use **Connect** instead (see the
+  example below)
 * GoSNMP no longer relies on **alouca/gologger** - you can use your logger if
   it conforms to the simple interface (Print and Printf). Otherwise debugging
   will be discarded (/dev/null).
@@ -32,22 +34,24 @@ The easiest way to install is via **go get**:
 
     go get github.com/soniah/gosnmp
 
+The sourcecode is browseable at http://godoc.org/github.com/soniah/gosnmp.
+
 Usage
 -----
 
 Here is code from **example/example.go**, demonstrating how to use GoSNMP:
 
-    // DefaultGoSNMP is a pointer to a struct that contains
+    // Default is a pointer to a struct that contains
     // sensible defaults eg port 161, community public, etc
-    g.DefaultGoSNMP.Target = "192.168.1.10"
-    err := g.DefaultGoSNMP.Connect()
+    g.Default.Target = "192.168.1.10"
+    err := g.Default.Connect()
     if err != nil {
         log.Fatalf("Connect() err: %v", err)
     }
-    defer g.DefaultGoSNMP.Conn.Close()
+    defer g.Default.Conn.Close()
 
     oids := []string{"1.3.6.1.2.1.1.4.0", "1.3.6.1.2.1.1.7.0"}
-    result, err2 := g.DefaultGoSNMP.Get(oids) // Get() accepts up to g.MAX_OIDS
+    result, err2 := g.Default.Get(oids) // Get() accepts up to g.MAX_OIDS
     if err2 != nil {
         log.Fatalf("Get() err: %v", err2)
     }
@@ -101,9 +105,13 @@ time or haven't been able to find example devices to query:
 * 0x45 NsapAddress
 * 0x47 Uinteger32
 
-Please email me at sonia@snowfrog.net with any bugs you find (pull
-requests welcome). It would help if you supplied the following
-information:
+**Request for help**: please email me at sonia@snowfrog.net with packet
+captures containing samples of the missing BER types, or of any other bugs you
+find. Please include 2 or 3 examples of the missing/faulty BER type,
+interspersed with a couple of other common BER's eg an Integer, a Counter32 ie
+about 6 OIDs maximum.
+
+Create your packet captures in the following way:
 
 Expected output, obtained via an **snmpget** command. For example:
 
@@ -136,13 +144,23 @@ directory, run these commands (or equivalents for your system):
     cd ~/go/src/github.com/soniah/gosnmp
     go test
 
-To just run the non-Verax tests:
-
-    go test -run TestUnmarshal 2>&1 | less
-
-To just run the Verax tests:
+To run only the Verax tests:
 
     go test -run TestVeraxGet 2>&1 | less
+
+I have noticed that some of the Verax tests fail when using multi-OID Get()
+requests. I'm currently investigating whether these failures come from bugs in
+GoSNMP or Verax.
+
+To run non-Verax tests:
+
+    % grep -h '^func.*Test' *test.go
+    func TestEnmarshalVarbind(t *testing.T) {
+    func TestEnmarshalVBL(t *testing.T) {
+    ... <snip>
+
+    # for example
+    go test -run TestEnmarshalMsg
 
 To profile cpu usage:
 

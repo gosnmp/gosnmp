@@ -41,24 +41,24 @@ type SnmpPDU struct {
 type Asn1BER byte
 
 const (
-	EndOfContents    Asn1BER = 0x00
-	Boolean                  = 0x01
-	Integer                  = 0x02
-	BitString                = 0x03
-	OctetString              = 0x04
-	Null                     = 0x05
-	ObjectIdentifier         = 0x06
-	ObjectDescription        = 0x07
-	IpAddress                = 0x40
-	Counter32                = 0x41
-	Gauge32                  = 0x42
-	TimeTicks                = 0x43
-	Opaque                   = 0x44
-	NsapAddress              = 0x45
-	Counter64                = 0x46
-	Uinteger32               = 0x47
-	NoSuchObject             = 0x80
-	NoSuchInstance           = 0x81
+	EndOfContents     Asn1BER = 0x00
+	Boolean                   = 0x01
+	Integer                   = 0x02
+	BitString                 = 0x03
+	OctetString               = 0x04
+	Null                      = 0x05
+	ObjectIdentifier          = 0x06
+	ObjectDescription         = 0x07
+	IpAddress                 = 0x40
+	Counter32                 = 0x41
+	Gauge32                   = 0x42
+	TimeTicks                 = 0x43
+	Opaque                    = 0x44
+	NsapAddress               = 0x45
+	Counter64                 = 0x46
+	Uinteger32                = 0x47
+	NoSuchObject              = 0x80
+	NoSuchInstance            = 0x81
 )
 
 type Variable struct {

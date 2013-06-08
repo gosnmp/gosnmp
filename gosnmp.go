@@ -47,7 +47,7 @@ type GoSNMP struct {
 	Logger Logger
 }
 
-var DefaultGoSNMP = &GoSNMP{
+var Default = &GoSNMP{
 	Port:      161,
 	Community: "public",
 	Version:   Version2c,

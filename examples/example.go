@@ -12,17 +12,17 @@ import (
 
 func main() {
 
-	// DefaultGoSNMP is a pointer to a struct that contains
+	// Default is a pointer to a struct that contains
 	// sensible defaults eg port 161, community public, etc
-	g.DefaultGoSNMP.Target = "192.168.1.10"
-	err := g.DefaultGoSNMP.Connect()
+	g.Default.Target = "192.168.1.10"
+	err := g.Default.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)
 	}
-	defer g.DefaultGoSNMP.Conn.Close()
+	defer g.Default.Conn.Close()
 
 	oids := []string{"1.3.6.1.2.1.1.4.0", "1.3.6.1.2.1.1.7.0"}
-	result, err2 := g.DefaultGoSNMP.Get(oids) // Get() accepts up to g.MAX_OIDS
+	result, err2 := g.Default.Get(oids) // Get() accepts up to g.MAX_OIDS
 	if err2 != nil {
 		log.Fatalf("Get() err: %v", err2)
 	}

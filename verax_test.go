@@ -44,14 +44,14 @@ func TestVeraxGet(t *testing.T) {
 		// load gosnmp results
 		var gresults = make(testResults)
 
-		DefaultGoSNMP.Target = "127.0.0.1"
-		DefaultGoSNMP.Port = test.port
-		// DefaultGoSNMP.Logger = log.New(os.Stdout, "", 0) // for verbose logging
-		err = DefaultGoSNMP.Connect()
+		Default.Target = "127.0.0.1"
+		Default.Port = test.port
+		// Default.Logger = log.New(os.Stdout, "", 0) // for verbose logging
+		err = Default.Connect()
 		if err != nil {
 			t.Errorf("%s, err |%s| Connect()", test.path, err)
 		} else {
-			defer DefaultGoSNMP.Conn.Close()
+			defer Default.Conn.Close()
 		}
 
 		var oids []string
@@ -61,7 +61,7 @@ func TestVeraxGet(t *testing.T) {
 			oids = append(oids, oid)
 			i++
 			if Partition(i, PARTITION_SIZE, oids_count) {
-				if get_results, err := DefaultGoSNMP.Get(oids); err == nil {
+				if get_results, err := Default.Get(oids); err == nil {
 					for _, vb := range get_results.Variables {
 						gresults[vb.Name] = vb
 					}
