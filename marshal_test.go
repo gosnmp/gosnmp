@@ -260,7 +260,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  "1.3.6.1.2.1.2.2.1.5.3",
 					Type:  Gauge32,
-					Value: 4294967295,
+					Value: uint(4294967295),
 				},
 				{
 					Name:  "1.3.6.1.2.1.2.2.1.7.2",

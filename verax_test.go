@@ -135,7 +135,7 @@ func TestVeraxGet(t *testing.T) {
 
 func ReadVeraxResults(filename string) (results testResults, err error) {
 	var lines []byte
-	var oid_count int
+	var oid_count int64
 	if lines, err = ioutil.ReadFile(filename); err != nil {
 		return nil, fmt.Errorf("unable to open file %s", filename)
 	}
@@ -216,7 +216,7 @@ LINE:
 			}
 
 		case "Gauge32":
-			if value, err := strconv.ParseInt(oidval, 10, 64); err != nil {
+			if value, err := strconv.ParseUint(oidval, 10, 64); err != nil {
 				panic(fmt.Sprintf("Err converting integer. oid: %s err: %v", oid, err))
 			} else {
 				pdu.Type = Gauge32
