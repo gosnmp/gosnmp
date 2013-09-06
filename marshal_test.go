@@ -31,14 +31,17 @@ type testsEnmarshalVarbindPosition struct {
 	// and choose snmp. Click on each varbind and the "packet bytes" window
 	// will highlight the corresponding bytes, then the "eyeball tool" can be
 	// used to find the start and finish values...
-	start  int
-	finish int
+	start     int
+	finish    int
+	pdu_type  Asn1BER
+	pdu_value interface{}
 }
 
 type testsEnmarshal_t struct {
-	version   SnmpVersion
-	community string
-	requestid uint32
+	version      SnmpVersion
+	community    string
+	request_type MessageType
+	requestid    uint32
 	// function and function name returning bytes from tcpdump
 	good_bytes func() []byte
 	func_name  string // could do this via reflection
@@ -56,6 +59,7 @@ var testsEnmarshal = []testsEnmarshal_t{
 	{
 		Version2c,
 		"public",
+		GetRequest,
 		1871507044,
 		kyocera_request_bytes,
 		"kyocera_request",
@@ -63,14 +67,42 @@ var testsEnmarshal = []testsEnmarshal_t{
 		0x1d, // vbl start
 		0xa0, // finish
 		[]testsEnmarshalVarbindPosition{
-			{"1.3.6.1.2.1.1.7.0", 0x20, 0x2d},
-			{"1.3.6.1.2.1.2.2.1.10.1", 0x2e, 0x3d},
-			{"1.3.6.1.2.1.2.2.1.5.1", 0x3e, 0x4d},
-			{"1.3.6.1.2.1.1.4.0", 0x4e, 0x5b},
-			{"1.3.6.1.2.1.43.5.1.1.15.1", 0x5c, 0x6c},
-			{"1.3.6.1.2.1.4.21.1.1.127.0.0.1", 0x6d, 0x7f},
-			{"1.3.6.1.4.1.23.2.5.1.1.1.4.2", 0x80, 0x92},
-			{"1.3.6.1.2.1.1.3.0", 0x93, 0xa0},
+			{"1.3.6.1.2.1.1.7.0", 0x20, 0x2d, Null, nil},
+			{"1.3.6.1.2.1.2.2.1.10.1", 0x2e, 0x3d, Null, nil},
+			{"1.3.6.1.2.1.2.2.1.5.1", 0x3e, 0x4d, Null, nil},
+			{"1.3.6.1.2.1.1.4.0", 0x4e, 0x5b, Null, nil},
+			{"1.3.6.1.2.1.43.5.1.1.15.1", 0x5c, 0x6c, Null, nil},
+			{"1.3.6.1.2.1.4.21.1.1.127.0.0.1", 0x6d, 0x7f, Null, nil},
+			{"1.3.6.1.4.1.23.2.5.1.1.1.4.2", 0x80, 0x92, Null, nil},
+			{"1.3.6.1.2.1.1.3.0", 0x93, 0xa0, Null, nil},
+		},
+	},
+	{
+		Version1,
+		"privatelab",
+		SetRequest,
+		526895288,
+		port_on_outgoing1,
+		"port_on_outgoing1",
+		0x00, // pdu start TODO
+		0x00, // vbl start
+		0x00, // finish
+		[]testsEnmarshalVarbindPosition{
+			{"1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 1},
+		},
+	},
+	{
+		Version1,
+		"privatelab",
+		SetRequest,
+		1826072803,
+		port_off_outgoing1,
+		"port_off_outgoing1",
+		0x11, // pdu start
+		0x1f, // vbl start
+		0x36, // finish
+		[]testsEnmarshalVarbindPosition{
+			{"1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 2},
 		},
 	},
 }
@@ -120,8 +152,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vb_positions {
-
-			snmppdu := &SnmpPDU{Name: test2.oid, Type: Null}
+			snmppdu := &SnmpPDU{test2.oid, test2.pdu_type, test2.pdu_value}
 			test_bytes, err := marshalVarbind(snmppdu)
 			if err != nil {
 				t.Errorf("#%s:%d:%s err returned: %v",
@@ -315,6 +346,40 @@ var testsUnmarshal = []struct {
 					Name:  "1.3.6.1.2.1.1.2.0",
 					Type:  ObjectIdentifier,
 					Value: "1.3.6.1.4.1.9.1.1166",
+				},
+			},
+		},
+	},
+	{port_on_incoming1,
+		&SnmpPacket{
+			Version:    Version1,
+			Community:  "privatelab",
+			PDUType:    GetResponse,
+			RequestID:  526895288,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables: []SnmpPDU{
+				{
+					Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
+					Type:  Integer,
+					Value: 1,
+				},
+			},
+		},
+	},
+	{port_off_incoming1,
+		&SnmpPacket{
+			Version:    Version1,
+			Community:  "privatelab",
+			PDUType:    GetResponse,
+			RequestID:  1826072803,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables: []SnmpPDU{
+				{
+					Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
+					Type:  Integer,
+					Value: 2,
 				},
 			},
 		},
@@ -525,5 +590,111 @@ func kyocera_request_bytes() []byte {
 		0x01, 0x04, 0x01, 0x17, 0x02, 0x05, 0x01, 0x01, 0x01, 0x04, 0x02, 0x05,
 		0x00, 0x30, 0x0c, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x03,
 		0x00, 0x05, 0x00,
+	}
+}
+
+// === snmpset dumps ===
+
+/*
+port_on_*1() correspond to this snmpset and response:
+
+snmpset -v 1 -c privatelab 192.168.100.124 .1.3.6.1.4.1.318.1.1.4.4.2.1.3.5 i 1
+
+Simple Network Management Protocol
+  version: version-1 (0)
+  community: privatelab
+  data: set-request (3)
+    set-request
+      request-id: 526895288
+      error-status: noError (0)
+      error-index: 0
+      variable-bindings: 1 item
+        1.3.6.1.4.1.318.1.1.4.4.2.1.3.5:
+          Object Name: 1.3.6.1.4.1.318.1.1.4.4.2.1.3.5 (iso.3.6.1.4.1.318.1.1.4.4.2.1.3.5)
+          Value (Integer32): 1
+
+Simple Network Management Protocol
+  version: version-1 (0)
+  community: privatelab
+  data: get-response (2)
+    get-response
+      request-id: 526895288
+      error-status: noError (0)
+      error-index: 0
+      variable-bindings: 1 item
+        1.3.6.1.4.1.318.1.1.4.4.2.1.3.5:
+          Object Name: 1.3.6.1.4.1.318.1.1.4.4.2.1.3.5 (iso.3.6.1.4.1.318.1.1.4.4.2.1.3.5)
+          Value (Integer32): 1
+*/
+
+func port_on_outgoing1() []byte {
+	return []byte{
+		0x30, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0x6c, 0x61, 0x62, 0xa3, 0x24, 0x02, 0x04, 0x1f, 0x67, 0xc8,
+		0xb8, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x16, 0x30, 0x14, 0x06,
+		0x0f, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x3e, 0x01, 0x01, 0x04, 0x04,
+		0x02, 0x01, 0x03, 0x05, 0x02, 0x01, 0x01,
+	}
+}
+
+func port_on_incoming1() []byte {
+	return []byte{
+		0x30, 0x82, 0x00, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69,
+		0x76, 0x61, 0x74, 0x65, 0x6c, 0x61, 0x62, 0xa2, 0x24, 0x02, 0x04, 0x1f,
+		0x67, 0xc8, 0xb8, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x16, 0x30,
+		0x14, 0x06, 0x0f, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x3e, 0x01, 0x01,
+		0x04, 0x04, 0x02, 0x01, 0x03, 0x05, 0x02, 0x01, 0x01,
+	}
+}
+
+/*
+port_off_*1() correspond to this snmpset and response:
+
+snmpset -v 1 -c privatelab 192.168.100.124 .1.3.6.1.4.1.318.1.1.4.4.2.1.3.5 i 2
+
+Simple Network Management Protocol
+  version: version-1 (0)
+  community: privatelab
+  data: set-request (3)
+    set-request
+      request-id: 1826072803
+      error-status: noError (0)
+      error-index: 0
+      variable-bindings: 1 item
+        1.3.6.1.4.1.318.1.1.4.4.2.1.3.5:
+          Object Name: 1.3.6.1.4.1.318.1.1.4.4.2.1.3.5 (iso.3.6.1.4.1.318.1.1.4.4.2.1.3.5)
+          Value (Integer32): 2
+
+Simple Network Management Protocol
+  version: version-1 (0)
+  community: privatelab
+  data: get-response (2)
+    get-response
+      request-id: 1826072803
+      error-status: noError (0)
+      error-index: 0
+      variable-bindings: 1 item
+        1.3.6.1.4.1.318.1.1.4.4.2.1.3.5:
+          Object Name: 1.3.6.1.4.1.318.1.1.4.4.2.1.3.5 (iso.3.6.1.4.1.318.1.1.4.4.2.1.3.5)
+          Value (Integer32): 2
+*/
+
+func port_off_outgoing1() []byte {
+	return []byte{
+		0x30, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0x6c, 0x61, 0x62, 0xa3, 0x24, 0x02, 0x04, 0x6c, 0xd7, 0xa8,
+		0xe3, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x16, 0x30, 0x14, 0x06,
+		0x0f, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x3e, 0x01, 0x01, 0x04, 0x04,
+		0x02, 0x01, 0x03, 0x05, 0x02, 0x01, 0x02,
+	}
+}
+
+func port_off_incoming1() []byte {
+	return []byte{
+		0x30, 0x82, 0x00, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69,
+		0x76, 0x61, 0x74, 0x65, 0x6c, 0x61, 0x62, 0xa2, 0x24, 0x02, 0x04, 0x6c,
+		0xd7, 0xa8, 0xe3, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x16, 0x30,
+		0x14, 0x06, 0x0f, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x3e, 0x01, 0x01,
+		0x04, 0x04, 0x02, 0x01, 0x03, 0x05, 0x02, 0x01, 0x02,
 	}
 }
