@@ -54,6 +54,42 @@ var Default = &GoSNMP{
 	Timeout:   time.Duration(2) * time.Second,
 }
 
+// SnmpPDU will be used when doing SNMP Set's
+type SnmpPDU struct {
+
+	// Name is an oid in string format eg "1.3.6.1.4.9.27"
+	Name string
+
+	// The type of the value eg Integer
+	Type Asn1BER
+
+	// The value to be set by the SNMP set
+	Value interface{}
+}
+
+type Asn1BER byte
+
+const (
+	EndOfContents     Asn1BER = 0x00
+	Boolean                   = 0x01
+	Integer                   = 0x02
+	BitString                 = 0x03
+	OctetString               = 0x04
+	Null                      = 0x05
+	ObjectIdentifier          = 0x06
+	ObjectDescription         = 0x07
+	IpAddress                 = 0x40
+	Counter32                 = 0x41
+	Gauge32                   = 0x42
+	TimeTicks                 = 0x43
+	Opaque                    = 0x44
+	NsapAddress               = 0x45
+	Counter64                 = 0x46
+	Uinteger32                = 0x47
+	NoSuchObject              = 0x80
+	NoSuchInstance            = 0x81
+)
+
 //
 // Public Functions (main interface)
 //
@@ -70,17 +106,37 @@ func (x *GoSNMP) Connect() error {
 
 // Send an SNMP GET request
 func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err = fmt.Errorf("recover: %v", e)
-		}
-	}()
-
 	oid_count := len(oids)
 	if oid_count > MAX_OIDS {
 		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
 			oid_count, MAX_OIDS)
 	}
+	// convert oids slice to pdu slice
+	var pdus []SnmpPDU
+	for _, oid := range oids {
+		pdus = append(pdus, SnmpPDU{oid, Null, nil})
+	}
+	return x.send(pdus, GetRequest)
+}
+
+// Send an SNMP SET request
+func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
+	if len(pdus) != 1 {
+		return nil, fmt.Errorf("gosnmp currently only supports SNMP SETs for one oid")
+	}
+	if pdus[0].Type != Integer {
+		return nil, fmt.Errorf("gosnmp currently only supports SNMP SETs for Integers")
+	}
+	return x.send(pdus, SetRequest)
+}
+
+// generic "sender"
+func (x *GoSNMP) send(pdus []SnmpPDU, messagetype MessageType) (result *SnmpPacket, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("recover: %v", e)
+		}
+	}()
 
 	if x.Conn == nil {
 		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
@@ -101,7 +157,7 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 		Version:     x.Version,
 	}
 	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
-	fBuf, err := packet_out.marshalMsg(oids, 1)
+	fBuf, err := packet_out.marshalMsg(pdus, messagetype, 1)
 	if err != nil {
 		return nil, fmt.Errorf("marshal: %v", err)
 	}

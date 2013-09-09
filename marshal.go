@@ -32,35 +32,6 @@ type SnmpPacket struct {
 	Variables   []SnmpPDU
 }
 
-type SnmpPDU struct {
-	Name  string
-	Type  Asn1BER
-	Value interface{}
-}
-
-type Asn1BER byte
-
-const (
-	EndOfContents     Asn1BER = 0x00
-	Boolean                   = 0x01
-	Integer                   = 0x02
-	BitString                 = 0x03
-	OctetString               = 0x04
-	Null                      = 0x05
-	ObjectIdentifier          = 0x06
-	ObjectDescription         = 0x07
-	IpAddress                 = 0x40
-	Counter32                 = 0x41
-	Gauge32                   = 0x42
-	TimeTicks                 = 0x43
-	Opaque                    = 0x44
-	NsapAddress               = 0x45
-	Counter64                 = 0x46
-	Uinteger32                = 0x47
-	NoSuchObject              = 0x80
-	NoSuchInstance            = 0x81
-)
-
 type Variable struct {
 	Name  []int
 	Type  Asn1BER
@@ -104,7 +75,8 @@ var slog Logger
 // -- Marshalling Logic --------------------------------------------------------
 
 // marshal an SNMP message
-func (packet *SnmpPacket) marshalMsg(oids []string, requestid uint32) ([]byte, error) {
+func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
+	messagetype MessageType, requestid uint32) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// version
@@ -115,7 +87,7 @@ func (packet *SnmpPacket) marshalMsg(oids []string, requestid uint32) ([]byte, e
 	buf.WriteString(packet.Community)
 
 	// pdu
-	pdu, err := packet.marshalPDU(oids, requestid)
+	pdu, err := packet.marshalPDU(pdus, requestid)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +108,7 @@ func (packet *SnmpPacket) marshalMsg(oids []string, requestid uint32) ([]byte, e
 }
 
 // marshal a PDU
-func (packet *SnmpPacket) marshalPDU(oids []string, requestid uint32) ([]byte, error) {
+func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// requestid
@@ -153,15 +125,15 @@ func (packet *SnmpPacket) marshalPDU(oids []string, requestid uint32) ([]byte, e
 	buf.Write([]byte{2, 1, 0})
 
 	// varbind list
-	vbl, err := packet.marshalVBL(oids)
+	vbl, err := packet.marshalVBL(pdus)
 	if err != nil {
 		return nil, err
 	}
 	buf.Write(vbl)
 
-	// build up resulting pdu - GetRequest, length, then the tail (buf)
+	// build up resulting pdu - request type, length, then the tail (buf)
 	pdu := new(bytes.Buffer)
-	pdu.WriteByte(byte(GetRequest))
+	pdu.WriteByte(byte(packet.RequestType))
 
 	buf_length_bytes, err2 := marshalLength(buf.Len())
 	if err2 != nil {
@@ -174,12 +146,11 @@ func (packet *SnmpPacket) marshalPDU(oids []string, requestid uint32) ([]byte, e
 }
 
 // marshal a varbind list
-func (packet *SnmpPacket) marshalVBL(oids []string) ([]byte, error) {
+func (packet *SnmpPacket) marshalVBL(pdus []SnmpPDU) ([]byte, error) {
 
 	vbl_buf := new(bytes.Buffer)
-	for _, oid := range oids {
-		sp := &SnmpPDU{Name: oid, Type: Null}
-		vb, err := marshalVarbind(sp)
+	for _, pdu := range pdus {
+		vb, err := marshalVarbind(&pdu)
 		if err != nil {
 			return nil, err
 		}

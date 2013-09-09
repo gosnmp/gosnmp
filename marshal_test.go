@@ -84,9 +84,9 @@ var testsEnmarshal = []testsEnmarshal_t{
 		526895288,
 		port_on_outgoing1,
 		"port_on_outgoing1",
-		0x00, // pdu start TODO
-		0x00, // vbl start
-		0x00, // finish
+		0x11, // pdu start
+		0x1f, // vbl start
+		0x36, // finish
 		[]testsEnmarshalVarbindPosition{
 			{"1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 1},
 		},
@@ -109,10 +109,11 @@ var testsEnmarshal = []testsEnmarshal_t{
 
 // helpers for Enmarshal tests
 
-// vb_pos_oids returns a slice of oids in the given test
-func vb_pos_oids(test testsEnmarshal_t) (oids []string) {
+// vb_pos_pdus returns a slice of oids in the given test
+func vb_pos_pdus(test testsEnmarshal_t) (pdus []SnmpPDU) {
 	for _, vbp := range test.vb_positions {
-		oids = append(oids, vbp.oid)
+		pdu := SnmpPDU{vbp.oid, vbp.pdu_type, vbp.pdu_value}
+		pdus = append(pdus, pdu)
 	}
 	return
 }
@@ -176,9 +177,9 @@ func TestEnmarshalVBL(t *testing.T) {
 			RequestID: test.requestid,
 		}
 
-		oids := vb_pos_oids(test)
+		pdus := vb_pos_pdus(test)
 
-		test_bytes, err := x.marshalVBL(oids)
+		test_bytes, err := x.marshalVBL(pdus)
 		if err != nil {
 			t.Errorf("#%s: marshalVBL() err returned: %v", test.func_name, err)
 		}
@@ -194,13 +195,14 @@ func TestEnmarshalPDU(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
-			Community: test.community,
-			Version:   test.version,
-			RequestID: test.requestid,
+			Community:   test.community,
+			Version:     test.version,
+			RequestType: test.request_type,
+			RequestID:   test.requestid,
 		}
-		oids := vb_pos_oids(test)
+		pdus := vb_pos_pdus(test)
 
-		test_bytes, err := x.marshalPDU(oids, test.requestid)
+		test_bytes, err := x.marshalPDU(pdus, test.requestid)
 		if err != nil {
 			t.Errorf("#%s: marshalPDU() err returned: %v", test.func_name, err)
 		}
@@ -216,13 +218,15 @@ func TestEnmarshalMsg(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
-			Community: test.community,
-			Version:   test.version,
-			RequestID: test.requestid,
+			Community:   test.community,
+			Version:     test.version,
+			RequestType: test.request_type,
+			RequestID:   test.requestid,
 		}
-		oids := vb_pos_oids(test)
+		pdus := vb_pos_pdus(test)
 
-		test_bytes, err := x.marshalMsg(oids, test.requestid)
+		test_bytes, err := x.marshalMsg(pdus,
+			test.request_type, test.requestid)
 		if err != nil {
 			t.Errorf("#%s: marshal() err returned: %v", test.func_name, err)
 		}
@@ -352,12 +356,12 @@ var testsUnmarshal = []struct {
 	},
 	{port_on_incoming1,
 		&SnmpPacket{
-			Version:    Version1,
-			Community:  "privatelab",
-			PDUType:    GetResponse,
-			RequestID:  526895288,
-			Error:      0,
-			ErrorIndex: 0,
+			Version:     Version1,
+			Community:   "privatelab",
+			RequestType: GetResponse,
+			RequestID:   526895288,
+			Error:       0,
+			ErrorIndex:  0,
 			Variables: []SnmpPDU{
 				{
 					Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
@@ -369,12 +373,12 @@ var testsUnmarshal = []struct {
 	},
 	{port_off_incoming1,
 		&SnmpPacket{
-			Version:    Version1,
-			Community:  "privatelab",
-			PDUType:    GetResponse,
-			RequestID:  1826072803,
-			Error:      0,
-			ErrorIndex: 0,
+			Version:     Version1,
+			Community:   "privatelab",
+			RequestType: GetResponse,
+			RequestID:   1826072803,
+			Error:       0,
+			ErrorIndex:  0,
 			Variables: []SnmpPDU{
 				{
 					Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
