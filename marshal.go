@@ -206,16 +206,29 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		return nil, err
 	}
 	pduBuf := new(bytes.Buffer)
+	tmpBuf := new(bytes.Buffer)
 
-	// Mashal the PDU type into the appropriate BER
+	// Marshal the PDU type into the appropriate BER
 	switch pdu.Type {
 	case Null:
 		pduBuf.Write([]byte{byte(Sequence), byte(len(oid) + 4)})
 		pduBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		pduBuf.Write(oid)
 		pduBuf.Write([]byte{Null, 0x00})
+	case Integer:
+		// Oid
+		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
+		tmpBuf.Write(oid)
+		// Integer
+		int_bytes := []byte{byte(pdu.Value.(int))}
+		tmpBuf.Write([]byte{byte(Integer), byte(len(int_bytes))})
+		tmpBuf.Write(int_bytes)
+		// Sequence, length of oid + integer, then oid/integer data
+		pduBuf.WriteByte(byte(Sequence))
+		pduBuf.WriteByte(byte(len(oid) + len(int_bytes) + 4))
+		pduBuf.Write(tmpBuf.Bytes())
 	default:
-		return nil, fmt.Errorf("Unable to marshal PDU: uknown BER type %d", pdu.Type)
+		return nil, fmt.Errorf("Unable to marshal PDU: unknown BER type %d", pdu.Type)
 	}
 
 	return pduBuf.Bytes(), nil
