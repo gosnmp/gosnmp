@@ -10,8 +10,6 @@ package gosnmp
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"math/big"
 	"net"
 	"strconv"
@@ -128,63 +126,6 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 		return nil, fmt.Errorf("gosnmp currently only supports SNMP SETs for Integers")
 	}
 	return x.send(pdus, SetRequest)
-}
-
-// generic "sender"
-func (x *GoSNMP) send(pdus []SnmpPDU, pdutype PDUType) (result *SnmpPacket, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err = fmt.Errorf("recover: %v", e)
-		}
-	}()
-
-	if x.Conn == nil {
-		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
-	}
-	x.Conn.SetDeadline(time.Now().Add(x.Timeout))
-
-	if x.Logger == nil {
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	}
-	slog = x.Logger // global variable for debug logging
-
-	// Marshal and send the packet
-	packet_out := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    pdutype,
-		Version:    x.Version,
-	}
-	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
-	fBuf, err := packet_out.marshalMsg(pdus, pdutype, 1)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %v", err)
-	}
-	_, err = x.Conn.Write(fBuf)
-	if err != nil {
-		return nil, fmt.Errorf("Error writing to socket: %s", err.Error())
-	}
-
-	// Read and unmarshal the response
-	resp := make([]byte, 4096, 4096)
-	n, err := x.Conn.Read(resp)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading from UDP: %s", err.Error())
-	}
-
-	packet_in, err := unmarshal(resp[:n])
-	if err != nil {
-		return nil, fmt.Errorf("Unable to decode packet: %s", err.Error())
-	}
-	if packet_in == nil {
-		return nil, fmt.Errorf("Unable to decode packet: nil")
-	}
-	if len(packet_in.Variables) < 1 {
-		return nil, fmt.Errorf("No response received.")
-	}
-
-	return packet_in, nil
 }
 
 //
