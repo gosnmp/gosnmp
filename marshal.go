@@ -23,13 +23,13 @@ const (
 )
 
 type SnmpPacket struct {
-	Version     SnmpVersion
-	Community   string
-	RequestType MessageType
-	RequestID   uint32
-	Error       uint8
-	ErrorIndex  uint8
-	Variables   []SnmpPDU
+	Version    SnmpVersion
+	Community  string
+	PDUType    PDUType
+	RequestID  uint32
+	Error      uint8
+	ErrorIndex uint8
+	Variables  []SnmpPDU
 }
 
 type Variable struct {
@@ -43,16 +43,16 @@ type VarBind struct {
 	Value asn1.RawValue
 }
 
-type MessageType byte
+type PDUType byte
 
 const (
-	Sequence       MessageType = 0x30
-	GetRequest     MessageType = 0xa0
-	GetNextRequest             = 0xa1
-	GetResponse                = 0xa2
-	SetRequest                 = 0xa3
-	Trap                       = 0xa4
-	GetBulkRequest             = 0xa5
+	Sequence       PDUType = 0x30
+	GetRequest     PDUType = 0xa0
+	GetNextRequest         = 0xa1
+	GetResponse            = 0xa2
+	SetRequest             = 0xa3
+	Trap                   = 0xa4
+	GetBulkRequest         = 0xa5
 )
 
 // Logger is an interface used for debugging. Both Print and
@@ -76,7 +76,7 @@ var slog Logger
 
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
-	messagetype MessageType, requestid uint32) ([]byte, error) {
+	pdutype PDUType, requestid uint32) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// version
@@ -133,7 +133,7 @@ func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU, requestid uint32) ([]byte, 
 
 	// build up resulting pdu - request type, length, then the tail (buf)
 	pdu := new(bytes.Buffer)
-	pdu.WriteByte(byte(packet.RequestType))
+	pdu.WriteByte(byte(packet.PDUType))
 
 	buf_length_bytes, err2 := marshalLength(buf.Len())
 	if err2 != nil {
@@ -215,7 +215,7 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	cursor := 0
 
 	// First bytes should be 0x30
-	if MessageType(packet[0]) != Sequence {
+	if PDUType(packet[0]) != Sequence {
 		return nil, fmt.Errorf("Invalid packet header\n")
 	}
 
@@ -246,11 +246,11 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	}
 
 	// Parse SNMP packet type
-	switch MessageType(packet[cursor]) {
+	switch PDUType(packet[cursor]) {
 	case GetResponse:
 		response, err = unmarshalGetResponse(packet[cursor:], response, length)
 	default:
-		return nil, fmt.Errorf("Unknown MessageType %#x")
+		return nil, fmt.Errorf("Unknown PDUType %#x")
 	}
 
 	return response, nil
@@ -259,7 +259,7 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 func unmarshalGetResponse(packet []byte, response *SnmpPacket, length int) (*SnmpPacket, error) {
 	cursor := 0
 	dumpBytes1(packet, "SNMP Packet is GET RESPONSE", 16)
-	response.RequestType = GetResponse
+	response.PDUType = GetResponse
 
 	getresponse_length, cursor := parseLength(packet)
 	if len(packet) != getresponse_length {

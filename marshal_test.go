@@ -40,7 +40,7 @@ type testsEnmarshalVarbindPosition struct {
 type testsEnmarshal_t struct {
 	version      SnmpVersion
 	community    string
-	request_type MessageType
+	request_type PDUType
 	requestid    uint32
 	// function and function name returning bytes from tcpdump
 	good_bytes func() []byte
@@ -195,10 +195,10 @@ func TestEnmarshalPDU(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
-			Community:   test.community,
-			Version:     test.version,
-			RequestType: test.request_type,
-			RequestID:   test.requestid,
+			Community: test.community,
+			Version:   test.version,
+			PDUType:   test.request_type,
+			RequestID: test.requestid,
 		}
 		pdus := vb_pos_pdus(test)
 
@@ -218,10 +218,10 @@ func TestEnmarshalMsg(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
-			Community:   test.community,
-			Version:     test.version,
-			RequestType: test.request_type,
-			RequestID:   test.requestid,
+			Community: test.community,
+			Version:   test.version,
+			PDUType:   test.request_type,
+			RequestID: test.requestid,
 		}
 		pdus := vb_pos_pdus(test)
 
@@ -242,12 +242,12 @@ var testsUnmarshal = []struct {
 }{
 	{kyocera_response_bytes,
 		&SnmpPacket{
-			Version:     Version2c,
-			Community:   "public",
-			RequestType: GetResponse,
-			RequestID:   1066889284,
-			Error:       0,
-			ErrorIndex:  0,
+			Version:    Version2c,
+			Community:  "public",
+			PDUType:    GetResponse,
+			RequestID:  1066889284,
+			Error:      0,
+			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
 					Name:  "1.3.6.1.2.1.1.7.0",
@@ -294,12 +294,12 @@ var testsUnmarshal = []struct {
 	},
 	{cisco_response_bytes,
 		&SnmpPacket{
-			Version:     Version2c,
-			Community:   "public",
-			RequestType: GetResponse,
-			RequestID:   4876669,
-			Error:       0,
-			ErrorIndex:  0,
+			Version:    Version2c,
+			Community:  "public",
+			PDUType:    GetResponse,
+			RequestID:  4876669,
+			Error:      0,
+			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
 					Name:  "1.3.6.1.2.1.1.7.0",
@@ -358,7 +358,7 @@ var testsUnmarshal = []struct {
 		&SnmpPacket{
 			Version:     Version1,
 			Community:   "privatelab",
-			RequestType: GetResponse,
+			PDUType:     GetResponse,
 			RequestID:   526895288,
 			Error:       0,
 			ErrorIndex:  0,
@@ -375,7 +375,7 @@ var testsUnmarshal = []struct {
 		&SnmpPacket{
 			Version:     Version1,
 			Community:   "privatelab",
-			RequestType: GetResponse,
+			PDUType: GetResponse,
 			RequestID:   1826072803,
 			Error:       0,
 			ErrorIndex:  0,
@@ -415,8 +415,8 @@ SANITY:
 		if res.Community != test.out.Community {
 			t.Errorf("#%d Community result: %v, test: %v", i, res.Community, test.out.Community)
 		}
-		if res.RequestType != test.out.RequestType {
-			t.Errorf("#%d RequestType result: %v, test: %v", i, res.RequestType, test.out.RequestType)
+		if res.PDUType != test.out.PDUType {
+			t.Errorf("#%d PDUType result: %v, test: %v", i, res.PDUType, test.out.PDUType)
 		}
 		if res.RequestID != test.out.RequestID {
 			t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
