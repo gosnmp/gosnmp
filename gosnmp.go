@@ -191,6 +191,69 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	return packet_in, nil
 }
 
+// send an SNMP GETBULK request
+func (x *GoSNMP) GetBulk(oids []string, non_repeaters uint8, max_repetitions uint8) (result *SnmpPacket, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("recover: %v", e)
+		}
+	}()
+
+	oid_count := len(oids)
+	if oid_count > MAX_OIDS {
+		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
+			oid_count, MAX_OIDS)
+	}
+
+	if x.Conn == nil {
+		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
+	}
+	x.Conn.SetDeadline(time.Now().Add(x.Timeout))
+
+	if x.Logger == nil {
+		x.Logger = log.New(ioutil.Discard, "", 0)
+	}
+	slog = x.Logger // global variable for debug logging
+
+	// Marshal and send the packet
+	packet_out := &SnmpPacket{
+		Community:      x.Community,
+		RequestType:    GetBulkRequest,
+		Version:        x.Version,
+		NonRepeaters:   non_repeaters,
+		MaxRepetitions: max_repetitions,
+	}
+	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
+	fBuf, err := packet_out.marshalMsg(oids, 1)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %v", err)
+	}
+	_, err = x.Conn.Write(fBuf)
+	if err != nil {
+		return nil, fmt.Errorf("Error writing to socket: %s", err.Error())
+	}
+
+	// Read and unmarshal the response
+	resp := make([]byte, 4096, 4096)
+	n, err := x.Conn.Read(resp)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading from UDP: %s", err.Error())
+	}
+
+	packet_in, err := unmarshal(resp[:n])
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decode packet: %s", err.Error())
+	}
+	if packet_in == nil {
+		return nil, fmt.Errorf("Unable to decode packet: nil")
+	}
+	if len(packet_in.Variables) < 1 {
+		return nil, fmt.Errorf("No response received.")
+	}
+
+	return packet_in, nil
+}
+
 //
 // Public Functions (helpers) - in alphabetical order
 //
