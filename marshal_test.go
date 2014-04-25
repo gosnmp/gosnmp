@@ -114,6 +114,10 @@ func check_byte_equality(t *testing.T, test testsEnmarshal_t, test_bytes []byte,
 // ie check each varbind is working, then the varbind list, etc
 
 func TestEnmarshalVarbind(t *testing.T) {
+
+	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	slog = log.New(ioutil.Discard, "", 0)
+
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vb_positions {
 
@@ -130,6 +134,10 @@ func TestEnmarshalVarbind(t *testing.T) {
 }
 
 func TestEnmarshalVBL(t *testing.T) {
+
+	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	slog = log.New(ioutil.Discard, "", 0)
+
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
 			Community: test.community,
@@ -149,6 +157,10 @@ func TestEnmarshalVBL(t *testing.T) {
 }
 
 func TestEnmarshalPDU(t *testing.T) {
+
+	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	slog = log.New(ioutil.Discard, "", 0)
+
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
 			Community: test.community,
@@ -167,6 +179,10 @@ func TestEnmarshalPDU(t *testing.T) {
 }
 
 func TestEnmarshalMsg(t *testing.T) {
+
+	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	slog = log.New(ioutil.Discard, "", 0)
+
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
 			Community: test.community,
