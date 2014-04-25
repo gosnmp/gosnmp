@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"testing"
 )
 
 var _ = fmt.Sprintf("dummy") // dummy
+var _ = ioutil.Discard       // dummy
+var _ = os.DevNull           // dummy
 
 // Tests in alphabetical order of function being tested
 
