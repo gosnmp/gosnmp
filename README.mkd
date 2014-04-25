@@ -2,7 +2,8 @@ gosnmp
 ======
 
 GoSNMP is a simple SNMP client library, written fully in Go. Currently
-it only supports **GetRequest**s with single or multiple OIDs.
+it supports GetRequest with single or multiple OIDs, and
+SetRequest (beta, see below).
 
 About
 -----
@@ -13,6 +14,9 @@ version:
 
 * the **Get** function now supports **multiple OIDs** (thus improving network
   performance) and _has a different method signature_
+* _new_ in v1.2 - a **Set** function. This is beta - it currently only
+  supports setting one _integer_ PDU - please send sample packet
+  captures of other types of set (see below **Packet Captures**)
 * the **NewGoSNMP** function has been removed, use **Connect** instead (see Usage
   below)
 * GoSNMP no longer relies on **alouca/gologger** - you can use your logger if
@@ -36,7 +40,7 @@ There are two branches on github:
 * **master** - safe to pull from
 * **dev** - unsafe to pull from, as I regularly rewrite history
 
-Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
+Sonia Hamilton, sonia@snowfrog.net, http://blog.snowfrog.net.
 
 Installation
 ------------
@@ -126,6 +130,9 @@ time or haven't been able to find example devices to query:
 * 0x44 Opaque
 * 0x45 NsapAddress
 * 0x47 Uinteger32
+
+Packet Captures
+---------------
 
 **Please email me** at sonia@snowfrog.net with packet captures containing
 samples of the missing BER types, or of any other bugs you find. Please include
