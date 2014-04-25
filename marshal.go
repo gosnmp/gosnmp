@@ -26,13 +26,15 @@ const (
 )
 
 type SnmpPacket struct {
-	Version    SnmpVersion
-	Community  string
-	PDUType    PDUType
-	RequestID  uint32
-	Error      uint8
-	ErrorIndex uint8
-	Variables  []SnmpPDU
+	Version        SnmpVersion
+	Community      string
+	PDUType        PDUType
+	RequestID      uint32
+	Error          uint8
+	ErrorIndex     uint8
+	NonRepeaters   uint8
+	MaxRepetitions uint8
+	Variables      []SnmpPDU
 }
 
 type Variable struct {
@@ -178,11 +180,20 @@ func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU, requestid uint32) ([]byte, 
 		return nil, err
 	}
 
-	// error
-	buf.Write([]byte{2, 1, 0})
+	if packet.PDUType == GetBulkRequest {
+		// non repeaters
+		buf.Write([]byte{2, 1, packet.NonRepeaters})
 
-	// error index
-	buf.Write([]byte{2, 1, 0})
+		// max repetitions
+		buf.Write([]byte{2, 1, packet.MaxRepetitions})
+	} else { // get and getnext have same packet format
+
+		// error
+		buf.Write([]byte{2, 1, 0})
+
+		// error index
+		buf.Write([]byte{2, 1, 0})
+	}
 
 	// varbind list
 	vbl, err := packet.marshalVBL(pdus)
@@ -306,24 +317,28 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	}
 
 	// Parse SNMP packet type
-	switch PDUType(packet[cursor]) {
-	case GetResponse:
-		response, err = unmarshalGetResponse(packet[cursor:], response, length)
+	request_type := PDUType(packet[cursor])
+	switch request_type {
+	// known, supported types
+	case GetResponse, GetNextRequest, GetBulkRequest:
+		response, err = unmarshalResponse(packet[cursor:], response, length, request_type)
+		if err != nil {
+			return nil, fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
+		}
 	default:
 		return nil, fmt.Errorf("Unknown PDUType %#x")
 	}
-
 	return response, nil
 }
 
-func unmarshalGetResponse(packet []byte, response *SnmpPacket, length int) (*SnmpPacket, error) {
+func unmarshalResponse(packet []byte, response *SnmpPacket, length int, request_type PDUType) (*SnmpPacket, error) {
 	cursor := 0
 	dumpBytes1(packet, "SNMP Packet is GET RESPONSE", 16)
-	response.PDUType = GetResponse
+	response.PDUType = request_type
 
 	getresponse_length, cursor := parseLength(packet)
 	if len(packet) != getresponse_length {
-		return nil, fmt.Errorf("Error verifying GetResponse sanity: Got %d Expected: %d\n", len(packet), getresponse_length)
+		return nil, fmt.Errorf("Error verifying Response sanity: Got %d Expected: %d\n", len(packet), getresponse_length)
 	}
 	slog.Printf("getresponse_length: %d", getresponse_length)
 
@@ -338,26 +353,48 @@ func unmarshalGetResponse(packet []byte, response *SnmpPacket, length int) (*Snm
 		slog.Printf("request-id: %d", response.RequestID)
 	}
 
-	// Parse Error-Status
-	rawError, count, err := parseRawField(packet[cursor:], "error-status")
-	if err != nil {
-		return nil, fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
-	}
-	cursor += count
-	if error_status, ok := rawError.(int); ok {
-		response.Error = uint8(error_status)
-		slog.Printf("error-status: %d", uint8(error_status))
-	}
+	if response.PDUType == GetBulkRequest {
+		// Parse Non Repeaters
+		rawNonRepeaters, count, err := parseRawField(packet[cursor:], "non repeaters")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMP packet non repeaters: %s", err.Error())
+		}
+		cursor += count
+		if non_repeaters, ok := rawNonRepeaters.(int); ok {
+			response.NonRepeaters = uint8(non_repeaters)
+		}
 
-	// Parse Error-Index
-	rawErrorIndex, count, err := parseRawField(packet[cursor:], "error index")
-	if err != nil {
-		return nil, fmt.Errorf("Error parsing SNMP packet error index: %s", err.Error())
-	}
-	cursor += count
-	if errorindex, ok := rawErrorIndex.(int); ok {
-		response.ErrorIndex = uint8(errorindex)
-		slog.Printf("error-index: %d", uint8(errorindex))
+		// Parse Max Repetitions
+		rawMaxRepetitions, count, err := parseRawField(packet[cursor:], "max repetitions")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMP packet max repetitions: %s", err.Error())
+		}
+		cursor += count
+		if max_repetitions, ok := rawMaxRepetitions.(int); ok {
+			response.MaxRepetitions = uint8(max_repetitions)
+		}
+	} else {
+		// Parse Error-Status
+		rawError, count, err := parseRawField(packet[cursor:], "error-status")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
+		}
+		cursor += count
+		if error_status, ok := rawError.(int); ok {
+			response.Error = uint8(error_status)
+			slog.Printf("error-status: %d", uint8(error_status))
+		}
+
+		// Parse Error-Index
+		rawErrorIndex, count, err := parseRawField(packet[cursor:], "error index")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMP packet error index: %s", err.Error())
+		}
+		cursor += count
+		if errorindex, ok := rawErrorIndex.(int); ok {
+			response.ErrorIndex = uint8(errorindex)
+			slog.Printf("error-index: %d", uint8(errorindex))
+		}
 	}
 
 	return unmarshalVBL(packet[cursor:], response, length)
