@@ -169,10 +169,9 @@ To run only the Verax tests:
 
     go test -run TestVeraxGet 2>&1 | less
 
-I have noticed that some of the Verax tests randomly fail when using multi-OID
-Get() requests. I believe these bugs come from Verax not GoSNMP.
-
-To run non-Verax tests:
+I have noticed that the Verax tests randomly fail when using multi-OID
+Get() requests. I believe these bugs come from Verax not GoSNMP. To run
+non-Verax tests:
 
     % grep -h '^func.*Test' *test.go
     func TestEnmarshalVarbind(t *testing.T) {
@@ -181,6 +180,9 @@ To run non-Verax tests:
 
     # for example
     go test -run TestEnmarshalMsg
+
+    # or use the helpful shell script
+    ./non-verax-tests.sh
 
 To profile cpu usage:
 
