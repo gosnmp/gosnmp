@@ -28,7 +28,7 @@ const PARTITION_SIZE = 3
 
 // reduce OID_COUNT to speed up tests;
 // set to 1<<32 - 1 (MaxUint32) for everything
-const OID_COUNT = 1<<32 - 1
+const OID_COUNT = 1<<16 - 1
 
 func TestVeraxGet(t *testing.T) {
 
@@ -130,6 +130,476 @@ func TestVeraxGet(t *testing.T) {
 			}
 
 		}
+	}
+}
+
+func TestVeraxGetNext(t *testing.T) {
+
+	for i, test := range veraxDevices {
+		var err error
+
+		oid_map := getnext_expected(test.port)
+
+		// load gosnmp results
+		var gresults = make(testResults)
+
+		Default.Target = "127.0.0.1"
+		Default.Port = test.port
+		// Default.Logger = log.New(os.Stdout, "", 0) // for verbose logging
+		err = Default.Connect()
+		if err != nil {
+			t.Errorf("%s, err |%s| Connect()", test.path, err)
+		} else {
+			defer Default.Conn.Close()
+		}
+
+		var oids []string
+		oids_count := len(oid_map)
+		for oid, snmp_packet := range oid_map {
+			oids = append(oids, oid)
+			if Partition(i, PARTITION_SIZE, oids_count) {
+				if get_results, err := Default.GetNext(oids); err == nil {
+					for _, vb := range get_results.Variables {
+						gresults[vb.Name] = vb
+					}
+				} else {
+					t.Errorf("%s, err |%s| Get() for oids |%s|", test.path, err, oids)
+				}
+				i = 0
+				oids = nil // "truncate" oids
+			}
+
+			// compare results
+			i := 0
+			for oid, gpdu := range gresults {
+				vpdu := snmp_packet.Variables[i]
+				vtype := vpdu.Type
+				vvalue := vpdu.Value
+				gtype := gpdu.Type
+				gvalue := gpdu.Value
+				i++
+	
+				// the actual comparison testing
+				if vtype != gtype {
+					t.Errorf("vtype |%#x| doesn't match gtype |%#x| for oid |%s|", vtype, gtype, oid)
+					continue
+				}
+	
+				switch vtype {
+				case Integer, Gauge32, Counter32, TimeTicks, Counter64:
+					vval := ToBigInt(vvalue)
+					gval := ToBigInt(gvalue)
+					if vval.Cmp(gval) != 0 {
+						t.Errorf("vvalue |%v|%s| doesn't match gvalue |%v|%s| for type |%#x| oid |%s|",
+							vvalue, vval, gvalue, gval, vtype, oid)
+					}
+				case OctetString:
+					var vval, gval string
+					var ok bool
+					if vval, ok = vvalue.(string); !ok {
+						t.Errorf("failed string assert vvalue |%v|", vval)
+					} else if gval, ok = gvalue.(string); !ok {
+						t.Errorf("failed string assert gvalue |%v|", gval)
+	
+					} else if strings.HasPrefix(vval, "2010-") {
+						// skip weird Verax encoded hex strings
+						continue
+					} else if strings.HasPrefix(vval, "2011-") {
+						// skip weird Verax encoded hex strings
+						continue
+					} else if vval != gval && oid != "1.3.6.1.2.1.1.1.0" {
+						// Verax mishandles 1.3.6.1.2.1.1.1.0 on Cisco device
+						t.Errorf("failed string comparison\nVVAL |%s|\nGVAL |%s|\ntype |%#x| oid |%s|",
+							vval, gval, vtype, oid)
+					}
+				case ObjectIdentifier, IpAddress:
+					var vval, gval string
+					var ok bool
+					if vval, ok = vvalue.(string); !ok {
+						t.Errorf("failed string assert vvalue |%v|", vval)
+					} else if gval, ok = gvalue.(string); !ok {
+						t.Errorf("failed string assert gvalue |%v|", gval)
+					} else if vval != gval {
+						t.Errorf("failed comparison\nVVAL |%s|\nGVAL |%s|\ntype |%#x| oid |%s|",
+							vval, gval, vtype, oid)
+					}
+				default:
+					t.Errorf("unhandled case: vtype |%#x| vvalue |%v| oid |%s|", vtype, vvalue, oid)
+				}
+			}
+		}
+	}
+}
+
+func TestVeraxGetBulk(t *testing.T) {
+
+	for i, test := range veraxDevices {
+		var err error
+
+		oid_map := getbulk_expected(test.port)
+
+		// load gosnmp results
+		var gresults = make(testResults)
+
+		Default.Target = "127.0.0.1"
+		Default.Port = test.port
+		// Default.Logger = log.New(os.Stdout, "", 0) // for verbose logging
+		err = Default.Connect()
+		if err != nil {
+			t.Errorf("%s, err |%s| Connect()", test.path, err)
+		} else {
+			defer Default.Conn.Close()
+		}
+
+		var oids []string
+		oids_count := len(oid_map)
+		for oid, snmp_packet := range oid_map {
+			oids = append(oids, oid)
+			if Partition(i, PARTITION_SIZE, oids_count) {
+				if get_results, err := Default.GetBulk(oids, 0, 10); err == nil {
+					for _, vb := range get_results.Variables {
+						gresults[vb.Name] = vb
+					}
+				} else {
+					t.Errorf("%s, err |%s| Get() for oids |%s|", test.path, err, oids)
+				}
+				i = 0
+				oids = nil // "truncate" oids
+			}
+
+			// compare results
+			i := 0
+			for oid, gpdu := range gresults {
+				vpdu := snmp_packet.Variables[i]
+				vname := vpdu.Name
+				// doesn't always come back in order'
+				for i := 0; vname != gpdu.Name; i++ {
+					vpdu = snmp_packet.Variables[i]
+					vname = vpdu.Name
+				}
+				vtype := vpdu.Type
+				vvalue := vpdu.Value
+				gtype := gpdu.Type
+				gvalue := gpdu.Value
+				i++
+	
+				// the actual comparison testing
+				if vtype != gtype {
+					t.Errorf("vtype |%#x| doesn't match gtype |%#x| for oid |%s|", vtype, gtype, oid)
+					continue
+				}
+	
+				switch vtype {
+				case Integer, Gauge32, Counter32, TimeTicks, Counter64:
+					vval := ToBigInt(vvalue)
+					gval := ToBigInt(gvalue)
+					if vval.Cmp(gval) != 0 {
+						t.Errorf("vvalue |%v|%s| doesn't match gvalue |%v|%s| for type |%#x| oid |%s|",
+							vvalue, vval, gvalue, gval, vtype, oid)
+					}
+				case OctetString:
+					var vval, gval string
+					var ok bool
+					if vval, ok = vvalue.(string); !ok {
+						t.Errorf("failed string assert vvalue |%v|", vval)
+					} else if gval, ok = gvalue.(string); !ok {
+						t.Errorf("failed string assert gvalue |%v|", gval)
+	
+					} else if strings.HasPrefix(vval, "2010-") {
+						// skip weird Verax encoded hex strings
+						continue
+					} else if strings.HasPrefix(vval, "2011-") {
+						// skip weird Verax encoded hex strings
+						continue
+					} else if vval != gval && oid != "1.3.6.1.2.1.1.1.0" {
+						// Verax mishandles 1.3.6.1.2.1.1.1.0 on Cisco device
+						t.Errorf("failed string comparison\nVVAL |%s|\nGVAL |%s|\ntype |%#x| oid |%s|",
+							vval, gval, vtype, oid)
+					}
+				case ObjectIdentifier, IpAddress:
+					var vval, gval string
+					var ok bool
+					if vval, ok = vvalue.(string); !ok {
+						t.Errorf("failed string assert vvalue |%v|", vval)
+					} else if gval, ok = gvalue.(string); !ok {
+						t.Errorf("failed string assert gvalue |%v|", gval)
+					} else if vval != gval {
+						t.Errorf("failed comparison\nVVAL |%s|\nGVAL |%s|\ntype |%#x| oid |%s|",
+							vval, gval, vtype, oid)
+					}
+				default:
+					t.Errorf("unhandled case: vtype |%#x| vvalue |%v| oid |%s|", vtype, vvalue, oid)
+				}
+			}
+		}
+	}
+}
+
+func getnext_expected(port uint16) map[string]*SnmpPacket {
+	// maps a an oid string to an SnmpPacket
+	switch port{
+	case 161:
+		return map[string]*SnmpPacket {
+			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.2.1.0",
+						Type:  Integer,
+						Value: 3,
+					},
+				},
+			},
+			"1.3.6.1.2.1.92.1.2": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.92.1.2.1.0",
+						Type:  Counter32,
+						Value: 0,
+					},
+				},
+			},
+			"1.3.6.1.2.1.1.9.1.3.52": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.1.9.1.4.1",
+						Type:  TimeTicks,
+						Value: 21,
+					},
+				},
+			},
+			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.2",
+						Type:  IpAddress,
+						Value: "192.168.104.2",
+					},
+				},
+			},
+		}
+	case 162:
+		return map[string]*SnmpPacket {
+			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.3.1.1.3.9.1.192.168.1.250",
+						Type:  IpAddress,
+						Value: "192.168.1.250",
+					},
+				},
+			},
+			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.1.9.1.4.9",
+						Type:  TimeTicks,
+						Value: 0,
+					},
+				},
+			},
+			"1.3.6.1.2.1.92.1.2": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.92.1.2.1.0",
+						Type:  Counter32,
+						Value: 0,
+					},
+				},
+			},
+			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				Error:       0,
+				ErrorIndex:  0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.2.1.0",
+						Type:  Integer,
+						Value: 30,
+					},
+				},
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+func getbulk_expected(port uint16) map[string]*SnmpPacket {
+	// maps a an oid string to an SnmpPacket
+	switch port{
+	case 161:
+		return map[string]*SnmpPacket {
+			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				NonRepeaters: 0,
+				MaxRepetitions: 0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.2.1.0",
+						Type:  Integer,
+						Value: 3,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.1",
+						Type:  Integer,
+						Value: 1,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.2",
+						Type:  Integer,
+						Value: 2,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.3",
+						Type:  Integer,
+						Value: 3,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.2.1",
+						Type:  OctetString,
+						Value: "lo",
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.2.2",
+						Type:  OctetString,
+						Value: "eth0",
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.2.3",
+						Type:  OctetString,
+						Value: "sit0",
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.3.1",
+						Type:  Integer,
+						Value: 24,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.3.2",
+						Type:  Integer,
+						Value: 6,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.3.3",
+						Type:  Integer,
+						Value: 131,
+					},
+				},
+			},
+		}
+		case 162:
+		return map[string]*SnmpPacket {
+			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket {
+				Version:     Version2c,
+				Community:   "public",
+				RequestType: GetResponse,
+				RequestID:   0,
+				NonRepeaters: 0,
+				MaxRepetitions: 0,
+				Variables: []SnmpPDU{
+					{
+						Name:  "1.3.6.1.2.1.2.1.0",
+						Type:  Integer,
+						Value: 30,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.1",
+						Type:  Integer,
+						Value: 1,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.2",
+						Type:  Integer,
+						Value: 2,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.3",
+						Type:  Integer,
+						Value: 3,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.4",
+						Type:  Integer,
+						Value: 4,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.5",
+						Type:  Integer,
+						Value: 5,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.6",
+						Type:  Integer,
+						Value: 6,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.7",
+						Type:  Integer,
+						Value: 7,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.8",
+						Type:  Integer,
+						Value: 8,
+					},
+					{
+						Name:  "1.3.6.1.2.1.2.2.1.1.9",
+						Type:  Integer,
+						Value: 9,
+					},
+				},
+			},
+		}
+	default:
+		return nil
 	}
 }
 
