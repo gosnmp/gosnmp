@@ -343,7 +343,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -358,7 +358,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.92.1.2": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -373,7 +373,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.1.9.1.3.52": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -388,7 +388,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -406,7 +406,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -421,7 +421,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -436,7 +436,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.92.1.2": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -451,7 +451,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
-				RequestType: GetResponse,
+				PDUType: GetResponse,
 				RequestID:   0,
 				Error:       0,
 				ErrorIndex:  0,
@@ -477,7 +477,7 @@ func getbulk_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket{
 				Version:        Version2c,
 				Community:      "public",
-				RequestType:    GetResponse,
+				PDUType:    GetResponse,
 				RequestID:      0,
 				NonRepeaters:   0,
 				MaxRepetitions: 0,
@@ -540,7 +540,7 @@ func getbulk_expected(port uint16) map[string]*SnmpPacket {
 			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket{
 				Version:        Version2c,
 				Community:      "public",
-				RequestType:    GetResponse,
+				PDUType:    GetResponse,
 				RequestID:      0,
 				NonRepeaters:   0,
 				MaxRepetitions: 0,

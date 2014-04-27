@@ -78,7 +78,7 @@ type Logger interface {
 var slog Logger
 
 // generic "sender"
-func (x *GoSNMP) send(pdus []SnmpPDU, pdutype PDUType) (result *SnmpPacket, err error) {
+func (x *GoSNMP) send(pdus []SnmpPDU, packet_out *SnmpPacket) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("recover: %v", e)
@@ -95,16 +95,8 @@ func (x *GoSNMP) send(pdus []SnmpPDU, pdutype PDUType) (result *SnmpPacket, err 
 	}
 	slog = x.Logger // global variable for debug logging
 
-	// Marshal and send the packet
-	packet_out := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    pdutype,
-		Version:    x.Version,
-	}
 	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
-	fBuf, err := packet_out.marshalMsg(pdus, pdutype, 1)
+	fBuf, err := packet_out.marshalMsg(pdus, packet_out.PDUType, 1)
 	if err != nil {
 		return nil, fmt.Errorf("marshal: %v", err)
 	}

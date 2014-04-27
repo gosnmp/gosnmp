@@ -392,7 +392,7 @@ var testsUnmarshal = []struct {
 		&SnmpPacket{
 			Version:     Version2c,
 			Community:   "public",
-			RequestType: GetResponse,
+			PDUType: GetResponse,
 			RequestID:   1528674030,
 			Error:       0,
 			ErrorIndex:  0,
@@ -434,7 +434,7 @@ var testsUnmarshal = []struct {
 		&SnmpPacket{
 			Version:        Version2c,
 			Community:      "public",
-			RequestType:    GetResponse,
+			PDUType:    GetResponse,
 			RequestID:      250000266,
 			NonRepeaters:   0,
 			MaxRepetitions: 10,

@@ -114,7 +114,15 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 	for _, oid := range oids {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
-	return x.send(pdus, GetRequest)
+	// build up SnmpPacket
+	packet_out := &SnmpPacket{
+		Community:  x.Community,
+		Error:      0,
+		ErrorIndex: 0,
+		PDUType:    GetRequest,
+		Version:    x.Version,
+	}
+	return x.send(pdus, packet_out)
 }
 
 // Send an SNMP SET request
@@ -125,133 +133,66 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	if pdus[0].Type != Integer {
 		return nil, fmt.Errorf("gosnmp currently only supports SNMP SETs for Integers")
 	}
-	return x.send(pdus, SetRequest)
+	// build up SnmpPacket
+	packet_out := &SnmpPacket{
+		Community:  x.Community,
+		Error:      0,
+		ErrorIndex: 0,
+		PDUType:    SetRequest,
+		Version:    x.Version,
+	}
+	return x.send(pdus, packet_out)
 }
 
 // Send an SNMP GETNEXT request
 func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err = fmt.Errorf("recover: %v", e)
-		}
-	}()
-
 	oid_count := len(oids)
 	if oid_count > MAX_OIDS {
 		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
 			oid_count, MAX_OIDS)
 	}
-
-	if x.Conn == nil {
-		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
+	
+	// convert oids slice to pdu slice
+	var pdus []SnmpPDU
+	for _, oid := range oids {
+		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
-	x.Conn.SetDeadline(time.Now().Add(x.Timeout))
-
-	if x.Logger == nil {
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	}
-	slog = x.Logger // global variable for debug logging
 
 	// Marshal and send the packet
 	packet_out := &SnmpPacket{
 		Community:   x.Community,
 		Error:       0,
 		ErrorIndex:  0,
-		RequestType: GetNextRequest,
+		PDUType:     GetNextRequest,
 		Version:     x.Version,
 	}
-	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
-	fBuf, err := packet_out.marshalMsg(oids, 1)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %v", err)
-	}
-	_, err = x.Conn.Write(fBuf)
-	if err != nil {
-		return nil, fmt.Errorf("Error writing to socket: %s", err.Error())
-	}
-
-	// Read and unmarshal the response
-	resp := make([]byte, 4096, 4096)
-	n, err := x.Conn.Read(resp)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading from UDP: %s", err.Error())
-	}
-
-	packet_in, err := unmarshal(resp[:n])
-	if err != nil {
-		return nil, fmt.Errorf("Unable to decode packet: %s", err.Error())
-	}
-	if packet_in == nil {
-		return nil, fmt.Errorf("Unable to decode packet: nil")
-	}
-	if len(packet_in.Variables) < 1 {
-		return nil, fmt.Errorf("No response received.")
-	}
-
-	return packet_in, nil
+	
+	return x.send(pdus, packet_out)
 }
 
 // send an SNMP GETBULK request
 func (x *GoSNMP) GetBulk(oids []string, non_repeaters uint8, max_repetitions uint8) (result *SnmpPacket, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err = fmt.Errorf("recover: %v", e)
-		}
-	}()
-
 	oid_count := len(oids)
 	if oid_count > MAX_OIDS {
 		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
 			oid_count, MAX_OIDS)
 	}
-
-	if x.Conn == nil {
-		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
+	
+	// convert oids slice to pdu slice
+	var pdus []SnmpPDU
+	for _, oid := range oids {
+		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
-	x.Conn.SetDeadline(time.Now().Add(x.Timeout))
-
-	if x.Logger == nil {
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	}
-	slog = x.Logger // global variable for debug logging
 
 	// Marshal and send the packet
 	packet_out := &SnmpPacket{
 		Community:      x.Community,
-		RequestType:    GetBulkRequest,
+		PDUType:        GetBulkRequest,
 		Version:        x.Version,
 		NonRepeaters:   non_repeaters,
 		MaxRepetitions: max_repetitions,
 	}
-	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
-	fBuf, err := packet_out.marshalMsg(oids, 1)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %v", err)
-	}
-	_, err = x.Conn.Write(fBuf)
-	if err != nil {
-		return nil, fmt.Errorf("Error writing to socket: %s", err.Error())
-	}
-
-	// Read and unmarshal the response
-	resp := make([]byte, 4096, 4096)
-	n, err := x.Conn.Read(resp)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading from UDP: %s", err.Error())
-	}
-
-	packet_in, err := unmarshal(resp[:n])
-	if err != nil {
-		return nil, fmt.Errorf("Unable to decode packet: %s", err.Error())
-	}
-	if packet_in == nil {
-		return nil, fmt.Errorf("Unable to decode packet: nil")
-	}
-	if len(packet_in.Variables) < 1 {
-		return nil, fmt.Errorf("No response received.")
-	}
-
-	return packet_in, nil
+	return x.send(pdus, packet_out)
 }
 
 //
