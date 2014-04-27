@@ -178,13 +178,13 @@ func TestVeraxGetNext(t *testing.T) {
 				gtype := gpdu.Type
 				gvalue := gpdu.Value
 				i++
-	
+
 				// the actual comparison testing
 				if vtype != gtype {
 					t.Errorf("vtype |%#x| doesn't match gtype |%#x| for oid |%s|", vtype, gtype, oid)
 					continue
 				}
-	
+
 				switch vtype {
 				case Integer, Gauge32, Counter32, TimeTicks, Counter64:
 					vval := ToBigInt(vvalue)
@@ -200,7 +200,7 @@ func TestVeraxGetNext(t *testing.T) {
 						t.Errorf("failed string assert vvalue |%v|", vval)
 					} else if gval, ok = gvalue.(string); !ok {
 						t.Errorf("failed string assert gvalue |%v|", gval)
-	
+
 					} else if strings.HasPrefix(vval, "2010-") {
 						// skip weird Verax encoded hex strings
 						continue
@@ -282,13 +282,13 @@ func TestVeraxGetBulk(t *testing.T) {
 				gtype := gpdu.Type
 				gvalue := gpdu.Value
 				i++
-	
+
 				// the actual comparison testing
 				if vtype != gtype {
 					t.Errorf("vtype |%#x| doesn't match gtype |%#x| for oid |%s|", vtype, gtype, oid)
 					continue
 				}
-	
+
 				switch vtype {
 				case Integer, Gauge32, Counter32, TimeTicks, Counter64:
 					vval := ToBigInt(vvalue)
@@ -304,7 +304,7 @@ func TestVeraxGetBulk(t *testing.T) {
 						t.Errorf("failed string assert vvalue |%v|", vval)
 					} else if gval, ok = gvalue.(string); !ok {
 						t.Errorf("failed string assert gvalue |%v|", gval)
-	
+
 					} else if strings.HasPrefix(vval, "2010-") {
 						// skip weird Verax encoded hex strings
 						continue
@@ -337,10 +337,10 @@ func TestVeraxGetBulk(t *testing.T) {
 
 func getnext_expected(port uint16) map[string]*SnmpPacket {
 	// maps a an oid string to an SnmpPacket
-	switch port{
+	switch port {
 	case 161:
-		return map[string]*SnmpPacket {
-			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket {
+		return map[string]*SnmpPacket{
+			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -355,7 +355,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 					},
 				},
 			},
-			"1.3.6.1.2.1.92.1.2": &SnmpPacket {
+			"1.3.6.1.2.1.92.1.2": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -370,7 +370,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 					},
 				},
 			},
-			"1.3.6.1.2.1.1.9.1.3.52": &SnmpPacket {
+			"1.3.6.1.2.1.1.9.1.3.52": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -385,7 +385,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 					},
 				},
 			},
-			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket {
+			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -402,8 +402,8 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 			},
 		}
 	case 162:
-		return map[string]*SnmpPacket {
-			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket {
+		return map[string]*SnmpPacket{
+			"1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.1": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -418,7 +418,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 					},
 				},
 			},
-			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket {
+			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -433,7 +433,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 					},
 				},
 			},
-			"1.3.6.1.2.1.92.1.2": &SnmpPacket {
+			"1.3.6.1.2.1.92.1.2": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -448,7 +448,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 					},
 				},
 			},
-			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket {
+			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket{
 				Version:     Version2c,
 				Community:   "public",
 				RequestType: GetResponse,
@@ -471,15 +471,15 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 
 func getbulk_expected(port uint16) map[string]*SnmpPacket {
 	// maps a an oid string to an SnmpPacket
-	switch port{
+	switch port {
 	case 161:
-		return map[string]*SnmpPacket {
-			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket {
-				Version:     Version2c,
-				Community:   "public",
-				RequestType: GetResponse,
-				RequestID:   0,
-				NonRepeaters: 0,
+		return map[string]*SnmpPacket{
+			"1.3.6.1.2.1.1.9.1.4.8": &SnmpPacket{
+				Version:        Version2c,
+				Community:      "public",
+				RequestType:    GetResponse,
+				RequestID:      0,
+				NonRepeaters:   0,
 				MaxRepetitions: 0,
 				Variables: []SnmpPDU{
 					{
@@ -535,14 +535,14 @@ func getbulk_expected(port uint16) map[string]*SnmpPacket {
 				},
 			},
 		}
-		case 162:
-		return map[string]*SnmpPacket {
-			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket {
-				Version:     Version2c,
-				Community:   "public",
-				RequestType: GetResponse,
-				RequestID:   0,
-				NonRepeaters: 0,
+	case 162:
+		return map[string]*SnmpPacket{
+			"1.3.6.1.2.1.1.9.1.5": &SnmpPacket{
+				Version:        Version2c,
+				Community:      "public",
+				RequestType:    GetResponse,
+				RequestID:      0,
+				NonRepeaters:   0,
 				MaxRepetitions: 0,
 				Variables: []SnmpPDU{
 					{
