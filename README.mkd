@@ -1,44 +1,46 @@
 gosnmp
 ======
 
-GoSNMP is a simple SNMP client library, written fully in Go. Currently
-it supports GetRequest with single or multiple OIDs, and
-SetRequest (beta, see below).
+GoSNMP is an SNMP client library written fully in Go. Currently it
+supports GetRequest, GetNext, GetBulk, and SetRequest (beta, see below).
 
 About
 -----
 
-**soniah/gosmp** is based on **alouca/gosnmp** - many thanks to Andreas Louca
-for starting the project. My version has diverged significantly from Andreas'
-version:
+**soniah/gosmp** is based on **alouca/gosnmp** - many thanks to Andreas
+Louca for starting the project. Thanks also to the following who have
+contributed:
 
-* the **Get** function now supports **multiple OIDs** (thus improving network
-  performance) and _has a different method signature_
-* _new_ in v1.2 - a **Set** function. This is beta - it currently only
-  supports setting one _integer_ PDU - please send sample packet
-  captures of other types of set (see below **Packet Captures**)
-* the **NewGoSNMP** function has been removed, use **Connect** instead (see Usage
-  below)
-* GoSNMP no longer relies on **alouca/gologger** - you can use your logger if
-  it conforms to the simple interface - **Print** and **Printf**. Otherwise
-  debugging will be discarded (/dev/null).
-* the **ToBigInt** function - useful for treating the returned snmp
-  values as `*big.Int` (convenient, as SNMP can return int32, uint32, and
-  uint64 values)
-* the **Partition** function - useful when you have a large array of OIDs
-  to run Get() on
-* and the largest (but least obvious) feature - **TDD** (Test Driven Development)
-  was used to correct existing problems and for adding new features. I believe
-  this has improved gosnmp's accuracy and reliability
+* Jacob Dubinsky - all of GetNext and GetBulk
+* Jon Auer - fixes
 
-GoSNMP is still under development, therefore API's may change and bugs will be
-squashed. You can help by sending packet captures (see Bugs below) or pull
-requests.
+Overview
+--------
 
-There are two branches on github:
+GoSNMP has the following public functions:
 
-* **master** - safe to pull from
-* **dev** - unsafe to pull from, as I regularly rewrite history
+* **Get** (single or multiple OIDs)
+* **GetNext**
+* **GetBulk**
+* **Set** (beta - only supports setting one integer OID)
+* **ToBigInt** - treat returned values as `*big.Int`
+* **Partition** - facilitates dividing up large slices of OIDs
+
+**soniah/gosmp** has diverged from **alouca/gosnmp** - your existing
+code will require slight modification:
+
+* the **Get** function has a different method signature
+* the **NewGoSNMP** function has been removed, use **Connect** instead
+  (see Usage below)
+* GoSNMP no longer relies on **alouca/gologger** - you can use your
+  logger if it conforms to the simple interface (Print and Printf).
+  Otherwise debugging will be discarded (/dev/null).
+
+GoSNMP is still under development, therefore API's may change and bugs
+will be squashed. Test Driven Development is used - you can help by
+sending packet captures (see Packet Captures below). There may be more
+than one branch on github. **master** is safe to pull from, other
+branches unsafe as history may be rewritten.
 
 Sonia Hamilton, sonia@snowfrog.net, http://blog.snowfrog.net.
 
@@ -52,8 +54,8 @@ Install via **go get**:
 Documentation
 -------------
 
-See http://godoc.org/github.com/soniah/gosnmp or your local
-go doc server for full documentation:
+See http://godoc.org/github.com/soniah/gosnmp or your local go doc
+server for full documentation, as well as the examples.
 
     cd $GOPATH
     godoc -http=:6060 &
@@ -137,13 +139,14 @@ Packet Captures
 **Please email me** at sonia@snowfrog.net with packet captures containing
 samples of the missing BER types, or of any other bugs you find. Please include
 2 or 3 examples of the missing/faulty BER type, interspersed with a couple of
-other common BER's eg an Integer, a Counter32 ie about 6 OIDs maximum.
+other common BER's eg an Integer, a Counter32 ie about 6-8 OIDs.
 
 Create your packet captures in the following way:
 
-Expected output, obtained via an **snmpget** command. For example:
+Expected output, obtained via an **snmp** command. For example:
 
-    % snmpget -On -v2c -c public 203.50.251.17 1.3.6.1.2.1.1.7.0 1.3.6.1.2.1.2.2.1.2.6 1.3.6.1.2.1.2.2.1.5.3
+    % snmpget -On -v2c -c public 203.50.251.17 1.3.6.1.2.1.1.7.0 \
+      1.3.6.1.2.1.2.2.1.2.6 1.3.6.1.2.1.2.2.1.5.3
     .1.3.6.1.2.1.1.7.0 = INTEGER: 78
     .1.3.6.1.2.1.2.2.1.2.6 = STRING: GigabitEthernet0
     .1.3.6.1.2.1.2.2.1.5.3 = Gauge32: 4294967295
