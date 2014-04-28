@@ -151,7 +151,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
 			oid_count, MAX_OIDS)
 	}
-	
+
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
 	for _, oid := range oids {
@@ -160,13 +160,13 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 
 	// Marshal and send the packet
 	packet_out := &SnmpPacket{
-		Community:   x.Community,
-		Error:       0,
-		ErrorIndex:  0,
-		PDUType:     GetNextRequest,
-		Version:     x.Version,
+		Community:  x.Community,
+		Error:      0,
+		ErrorIndex: 0,
+		PDUType:    GetNextRequest,
+		Version:    x.Version,
 	}
-	
+
 	return x.send(pdus, packet_out)
 }
 
@@ -177,7 +177,7 @@ func (x *GoSNMP) GetBulk(oids []string, non_repeaters uint8, max_repetitions uin
 		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
 			oid_count, MAX_OIDS)
 	}
-	
+
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
 	for _, oid := range oids {

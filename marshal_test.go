@@ -390,12 +390,12 @@ var testsUnmarshal = []struct {
 	},
 	{cisco_getnext_response_bytes,
 		&SnmpPacket{
-			Version:     Version2c,
-			Community:   "public",
-			PDUType: GetResponse,
-			RequestID:   1528674030,
-			Error:       0,
-			ErrorIndex:  0,
+			Version:    Version2c,
+			Community:  "public",
+			PDUType:    GetResponse,
+			RequestID:  1528674030,
+			Error:      0,
+			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
 					Name:  "1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.2",
@@ -434,7 +434,7 @@ var testsUnmarshal = []struct {
 		&SnmpPacket{
 			Version:        Version2c,
 			Community:      "public",
-			PDUType:    GetResponse,
+			PDUType:        GetResponse,
 			RequestID:      250000266,
 			NonRepeaters:   0,
 			MaxRepetitions: 10,
