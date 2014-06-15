@@ -31,13 +31,14 @@ func decodeValue(data []byte, msg string) (retVal *Variable, err error) {
 		// 0x02. signed
 		slog.Print("decodeValue: type is Integer")
 		length, cursor := parseLength(data)
-		if ret, err := parseInt(data[cursor:length]); err != nil {
+		var ret int
+		var err error
+		if ret, err = parseInt(data[cursor:length]); err != nil {
 			slog.Printf("%v:", err)
 			return retVal, fmt.Errorf("bytes: % x err: %v", data, err)
-		} else {
-			retVal.Type = Integer
-			retVal.Value = ret
 		}
+		retVal.Type = Integer
+		retVal.Value = ret
 	case OctetString:
 		// 0x04
 		slog.Print("decodeValue: type is OctetString")
@@ -138,9 +139,15 @@ func decodeValue(data []byte, msg string) (retVal *Variable, err error) {
 		slog.Print("decodeValue: type is NoSuchInstance")
 		retVal.Type = NoSuchInstance
 		retVal.Value = nil
+	case EndOfMibView:
+		// 0x82
+		slog.Print("decodeValue: type is EndOfMibView")
+		retVal.Type = EndOfMibView
+		retVal.Value = nil
 	default:
-		slog.Print("decodeValue: type isn't implemented")
-		err = fmt.Errorf("Unable to decode %x - not implemented", data[0])
+		slog.Print("decodeValue: type %x isn't implemented", data[0])
+		retVal.Type = UnknownType
+		retVal.Value = nil
 	}
 
 	slog.Printf("decodeValue: value is %#v", retVal.Value)
@@ -433,12 +440,11 @@ func parseRawField(data []byte, msg string) (interface{}, int, error) {
 
 	switch Asn1BER(data[0]) {
 	case Integer:
-		length := int(data[1])
-		if length == 1 {
-			return int(data[2]), 3, nil
+		length, cursor := parseLength(data)
+		if i, err := parseInt(data[cursor:length]); err != nil {
+			return nil, 0, fmt.Errorf("Unable to parse raw INTEGER: %x err: %v", data, err)
 		} else {
-			resp, err := parseUint(data[2:(2 + length)])
-			return resp, 2 + length, err
+			return i, length, nil
 		}
 	case OctetString:
 		length, cursor := parseLength(data)
