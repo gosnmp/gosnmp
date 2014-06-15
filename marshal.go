@@ -96,6 +96,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packet_out *SnmpPacket) (result *SnmpPacke
 	slog = x.Logger // global variable for debug logging
 
 	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
+	// FIXME: Should be an atomic counter (started at a random value)
 	fBuf, err := packet_out.marshalMsg(pdus, packet_out.PDUType, 1)
 	if err != nil {
 		return nil, fmt.Errorf("marshal: %v", err)
@@ -122,6 +123,12 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packet_out *SnmpPacket) (result *SnmpPacke
 	if len(packet_in.Variables) < 1 {
 		return nil, fmt.Errorf("No response received.")
 	}
+
+	// FIXME: We should check that our request id matches, and if it fails
+	// jump back up to our read gain (i.e. handle late arriving 'dropped' packet)
+	//if packet_in.RequestID != requestID {
+	//	Try again!
+	//}
 
 	return packet_in, nil
 }
@@ -340,7 +347,7 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, request_
 		return nil, fmt.Errorf("Error parsing SNMP packet request ID: %s", err.Error())
 	}
 	cursor += count
-	if requestid, ok := rawRequestId.(uint); ok {
+	if requestid, ok := rawRequestId.(int); ok {
 		response.RequestID = uint32(requestid)
 		slog.Printf("request-id: %d", response.RequestID)
 	}
@@ -437,6 +444,9 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 
 		// Parse Value
 		v, err := decodeValue(packet[cursor:], "value")
+		if err != nil {
+			return nil, fmt.Errorf("Error decoding value: %v", err)
+		}
 		value_length, _ := parseLength(packet[cursor:])
 		cursor += value_length
 		response.Variables = append(response.Variables, SnmpPDU{oidToString(oid), v.Type, v.Value})

@@ -69,6 +69,7 @@ type Asn1BER byte
 
 const (
 	EndOfContents     Asn1BER = 0x00
+	UnknownType               = 0x00
 	Boolean                   = 0x01
 	Integer                   = 0x02
 	BitString                 = 0x03
@@ -86,6 +87,7 @@ const (
 	Uinteger32                = 0x47
 	NoSuchObject              = 0x80
 	NoSuchInstance            = 0x81
+	EndOfMibView              = 0x82
 )
 
 //

@@ -138,9 +138,15 @@ func decodeValue(data []byte, msg string) (retVal *Variable, err error) {
 		slog.Print("decodeValue: type is NoSuchInstance")
 		retVal.Type = NoSuchInstance
 		retVal.Value = nil
+	case EndOfMibView:
+		// 0x82
+		slog.Print("decodeValue: type is EndOfMibView")
+		retVal.Type = EndOfMibView
+		retVal.Value = nil
 	default:
-		slog.Print("decodeValue: type isn't implemented")
-		err = fmt.Errorf("Unable to decode %x - not implemented", data[0])
+		slog.Print("decodeValue: type %x isn't implemented", data[0])
+		retVal.Type = UnknownType
+		retVal.Value = nil
 	}
 
 	slog.Printf("decodeValue: value is %#v", retVal.Value)
