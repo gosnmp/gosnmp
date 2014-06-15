@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/codedance/gosnmp"
 )
@@ -32,6 +33,7 @@ func main() {
 	}
 
 	gosnmp.Default.Target = target
+	gosnmp.Default.Timeout = time.Duration(10 * time.Second) // Timeout better suited to walking
 	err := gosnmp.Default.Connect()
 	if err != nil {
 		fmt.Printf("Connect err: %v\n", err)
