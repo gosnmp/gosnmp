@@ -31,13 +31,14 @@ func decodeValue(data []byte, msg string) (retVal *Variable, err error) {
 		// 0x02. signed
 		slog.Print("decodeValue: type is Integer")
 		length, cursor := parseLength(data)
-		if ret, err := parseInt(data[cursor:length]); err != nil {
+		var ret int
+		var err error
+		if ret, err = parseInt(data[cursor:length]); err != nil {
 			slog.Printf("%v:", err)
 			return retVal, fmt.Errorf("bytes: % x err: %v", data, err)
-		} else {
-			retVal.Type = Integer
-			retVal.Value = ret
 		}
+		retVal.Type = Integer
+		retVal.Value = ret
 	case OctetString:
 		// 0x04
 		slog.Print("decodeValue: type is OctetString")
