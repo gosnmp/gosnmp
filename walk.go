@@ -16,42 +16,8 @@ const (
 )
 
 //
-// SNMP Walk functions - Analogous to net-snmp's snmpwalk commands
+// SNMP walk functions - Analogous to net-snmp's snmpwalk commands
 //
-
-// WalkFunc is the type of the function called for each data unit visited
-// by the Walk function.  If an error is returned processing stops.
-type WalkFunc func(dataUnit SnmpPDU) error
-
-// BulkWalk retrieves a subtree of values using GETBULK. As the tree is
-// walked walkFn is called for each new value. The function immediately returns
-// an error if either there is an underlaying SNMP error (e.g. GetBulk fails),
-// or if walkFn returns an error.
-func (x *GoSNMP) BulkWalk(rootOid string, walkFn WalkFunc) error {
-	return x.walk(GetBulkRequest, rootOid, walkFn)
-}
-
-// Similar to BulkWalk but returns a filled array of all values rather than
-// using a callback function to stream results.
-func (x *GoSNMP) BulkWalkAll(rootOid string) (results []SnmpPDU, err error) {
-	return x.walkAll(GetBulkRequest, rootOid)
-}
-
-// Walk retrieves a subtree of values using GETNEXT - a request is made for each
-// value, unlike BulkWalk which does this operation in batches. As the tree is
-// walked walkFn is called for each new value. The function immediately returns
-// an error if either there is an underlaying SNMP error (e.g. GetNext fails),
-// or if walkFn returns an error.
-func (x *GoSNMP) Walk(rootOid string, walkFn WalkFunc) error {
-	return x.walk(GetNextRequest, rootOid, walkFn)
-}
-
-// Similar to Walk but returns a filled array of all values rather than
-// using a callback function to stream results.
-func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
-	return x.walkAll(GetNextRequest, rootOid)
-}
-
 func (x *GoSNMP) walk(getRequestType byte, rootOid string, walkFn WalkFunc) error {
 	if rootOid == "" || rootOid == "." {
 		rootOid = baseOid
