@@ -11,6 +11,7 @@ package gosnmp
 import (
 	"fmt"
 	"math/big"
+	"math/rand"
 	"net"
 	"strconv"
 	"time"
@@ -36,6 +37,9 @@ type GoSNMP struct {
 	// Timeout is the timeout for the SNMP Query
 	Timeout time.Duration
 
+	// Set the number of retries to attempt within timeout.
+	Retries int
+
 	// Conn is net connection to use, typically establised using GoSNMP.Connect()
 	Conn net.Conn
 
@@ -43,6 +47,9 @@ type GoSNMP struct {
 	// output will be discarded (/dev/null). For verbose logging to stdout:
 	// x.Logger = log.New(os.Stdout, "", 0)
 	Logger Logger
+
+	// Internal - used to sync requests to responses
+	requestID uint32
 }
 
 var Default = &GoSNMP{
@@ -50,6 +57,7 @@ var Default = &GoSNMP{
 	Community: "public",
 	Version:   Version2c,
 	Timeout:   time.Duration(2) * time.Second,
+	Retries:   3,
 }
 
 // SnmpPDU will be used when doing SNMP Set's
@@ -101,6 +109,7 @@ func (x *GoSNMP) Connect() error {
 	} else {
 		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
+	x.requestID = rand.Uint32()
 	return nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"sync/atomic"
 	"time"
 )
 
@@ -78,7 +79,7 @@ type Logger interface {
 var slog Logger
 
 // generic "sender"
-func (x *GoSNMP) send(pdus []SnmpPDU, packet_out *SnmpPacket) (result *SnmpPacket, err error) {
+func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("recover: %v", e)
@@ -88,49 +89,84 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packet_out *SnmpPacket) (result *SnmpPacke
 	if x.Conn == nil {
 		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
 	}
-	x.Conn.SetDeadline(time.Now().Add(x.Timeout))
 
 	if x.Logger == nil {
 		x.Logger = log.New(ioutil.Discard, "", 0)
 	}
 	slog = x.Logger // global variable for debug logging
 
-	// RequestID is only used during tests, therefore use an arbitrary uint32 ie 1
-	// FIXME: Should be an atomic counter (started at a random value)
-	fBuf, err := packet_out.marshalMsg(pdus, packet_out.PDUType, 1)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %v", err)
+	finalDeadline := time.Now().Add(x.Timeout)
+
+	if x.Retries < 0 {
+		x.Retries = 0
 	}
-	_, err = x.Conn.Write(fBuf)
-	if err != nil {
-		return nil, fmt.Errorf("Error writing to socket: %s", err.Error())
+	allReqIDs := make([]uint32, 0, x.Retries+1)
+	for retries := 0; ; retries++ {
+		if retries > 0 {
+			if retries > x.Retries || time.Now().After(finalDeadline) {
+				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
+				break
+			}
+			slog.Printf("Retry number %d. Last error was: %v", retries, err)
+		}
+		err = nil
+
+		reqDeadline := time.Now().Add(x.Timeout / time.Duration(x.Retries+1))
+		x.Conn.SetDeadline(reqDeadline)
+
+		// Request ID is an atomic counter (started at a random value)
+		reqID := atomic.AddUint32(&(x.requestID), 1)
+		allReqIDs = append(allReqIDs, reqID)
+
+		var outBuf []byte
+		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType, reqID)
+		if err != nil {
+			// Don't retry - not going to get any better!
+			err = fmt.Errorf("marshal: %v", err)
+			break
+		}
+		_, err = x.Conn.Write(outBuf)
+		if err != nil {
+			err = fmt.Errorf("Error writing to socket: %s", err.Error())
+			continue
+		}
+
+		// Read and unmarshal the response
+		resp := make([]byte, 4096, 4096)
+		var n int
+		n, err = x.Conn.Read(resp)
+		if err != nil {
+			err = fmt.Errorf("Error reading from UDP: %s", err.Error())
+			continue
+		}
+
+		result, err = unmarshal(resp[:n])
+		if err != nil {
+			err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+			continue
+		}
+		if result == nil || len(result.Variables) < 1 {
+			err = fmt.Errorf("Unable to decode packet: nil")
+			continue
+		}
+
+		validID := false
+		for _, id := range allReqIDs {
+			if id == result.RequestID {
+				validID = true
+			}
+		}
+		if !validID {
+			err = fmt.Errorf("Out of order response")
+			continue
+		}
+
+		// Success!
+		return result, nil
 	}
 
-	// Read and unmarshal the response
-	resp := make([]byte, 4096, 4096)
-	n, err := x.Conn.Read(resp)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading from UDP: %s", err.Error())
-	}
-
-	packet_in, err := unmarshal(resp[:n])
-	if err != nil {
-		return nil, fmt.Errorf("Unable to decode packet: %s", err.Error())
-	}
-	if packet_in == nil {
-		return nil, fmt.Errorf("Unable to decode packet: nil")
-	}
-	if len(packet_in.Variables) < 1 {
-		return nil, fmt.Errorf("No response received.")
-	}
-
-	// FIXME: We should check that our request id matches, and if it fails
-	// jump back up to our read gain (i.e. handle late arriving 'dropped' packet)
-	//if packet_in.RequestID != requestID {
-	//	Try again!
-	//}
-
-	return packet_in, nil
+	// Return last error
+	return nil, err
 }
 
 // -- Marshalling Logic --------------------------------------------------------
