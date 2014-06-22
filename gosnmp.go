@@ -61,6 +61,7 @@ type GoSNMP struct {
 
 	// Internal - used to sync requests to responses
 	requestID uint32
+	random    *rand.Rand
 }
 
 var Default = &GoSNMP{
@@ -120,7 +121,10 @@ func (x *GoSNMP) Connect() error {
 	} else {
 		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
-	x.requestID = rand.Uint32()
+	if x.random == nil {
+		x.random = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	}
+	x.requestID = x.random.Uint32()
 	return nil
 }
 
