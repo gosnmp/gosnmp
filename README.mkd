@@ -13,6 +13,7 @@ contributed:
 
 * Jacob Dubinsky - all of GetNext and GetBulk
 * Jon Auer - fixes
+* [Chris Dance](https://github.com/codedance) - Walk, retry support, and various fixes
 
 Overview
 --------
@@ -23,6 +24,8 @@ GoSNMP has the following public functions:
 * **GetNext**
 * **GetBulk**
 * **Set** (beta - only supports setting one integer OID)
+* **Walk** - retrieves a subtree of values using GETNEXT. 
+* **BulkWalk** - retrieves a subtree of values using GETBULK. 
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
@@ -105,6 +108,8 @@ Running this example gives the following output (from my printer):
 
 **example/example2.go** is similar to example.go, however is uses a custom
 &GoSNMP rather than **g.Default**.
+
+**example/walkexample.go** demonstrates using ```BulkWalk```.
 
 Bugs
 ----
