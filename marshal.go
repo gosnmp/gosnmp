@@ -61,6 +61,10 @@ const (
 	GetBulkRequest         = 0xa5
 )
 
+const (
+	rxBufSize = 65536
+)
+
 // Logger is an interface used for debugging. Both Print and
 // Printf have the same interfaces as Package Log in the std library. The
 // Logger interface is small to give you flexibility in how you do
@@ -131,8 +135,10 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			continue
 		}
 
-		// Read and unmarshal the response
-		resp := make([]byte, 4096, 4096)
+		// FIXME: If our packet exceeds our buf size we'll get a partial read
+		// and this request, and the next will fail. The correct logic would be
+		// to realloc and read more if pack len > buff size.
+		resp := make([]byte, rxBufSize, rxBufSize)
 		var n int
 		n, err = x.Conn.Read(resp)
 		if err != nil {
