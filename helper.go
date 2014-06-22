@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net"
 	"strconv"
 	"strings"
 )
@@ -73,18 +74,23 @@ func decodeValue(data []byte, msg string) (retVal *Variable, err error) {
 	case IpAddress:
 		// 0x40
 		slog.Print("decodeValue: type is IpAddress")
-		// total hack - IPv6? What IPv6...
-		if len(data) < 6 {
-			return nil, fmt.Errorf("not enough data for ipaddress: % x", data)
-		} else if data[1] != 4 {
-			return nil, fmt.Errorf("got ipaddress len %d, expected 4", data[1])
-		}
 		retVal.Type = IpAddress
-		var ipv4 string
-		for i := 2; i < 6; i++ {
-			ipv4 += fmt.Sprintf(".%d", data[i])
+		switch data[1] {
+		case 4: // IPv4
+			if len(data) < 6 {
+				return nil, fmt.Errorf("not enough data for ipv4 address: %x", data)
+			}
+			retVal.Value = net.IPv4(data[2], data[3], data[4], data[5]).String()
+		case 16: // IPv6
+			if len(data) < 18 {
+				return nil, fmt.Errorf("not enough data for ipv6 address: %x", data)
+			}
+			d := make(net.IP, 16)
+			copy(d, data[2:17])
+			retVal.Value = d.String()
+		default:
+			return nil, fmt.Errorf("got ipaddress len %d, expected 4 or 16", data[1])
 		}
-		retVal.Value = ipv4[1:]
 	case Counter32:
 		// 0x41. unsigned
 		slog.Print("decodeValue: type is Counter32")
