@@ -1,6 +1,6 @@
-// Copyright 2012 Andreas Louca, 2013 Sonia Hamilton. All rights reserved.  Use
-// of this source code is governed by a BSD-style license that can be found in
-// the LICENSE file.
+// Copyright 2012 Andreas Louca, 2013 Sonia Hamilton, 2014 Chris Dance.
+// All rights reserved.  Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -16,8 +16,19 @@ import (
 	"time"
 )
 
-// MAX_OIDS is the maximum number of oids allowed in a Get()
-const MAX_OIDS = 60
+const (
+	// MAX_OIDS is the maximum number of oids allowed in a Get()
+	MAX_OIDS = 60
+
+	// Base OID for MIB-2 defined SNMP variables
+	baseOid = "1.3.6.1.2.1"
+
+	// Java SNMP uses 50, snmp-net uses 10
+	defaultMaxRepetitions = 50
+
+	// TODO comment
+	defaultNonRepeaters = 0
+)
 
 type GoSNMP struct {
 
@@ -195,6 +206,43 @@ func (x *GoSNMP) GetBulk(oids []string, non_repeaters uint8, max_repetitions uin
 		MaxRepetitions: max_repetitions,
 	}
 	return x.send(pdus, packet_out)
+}
+
+//
+// SNMP Walk functions - Analogous to net-snmp's snmpwalk commands
+//
+
+// WalkFunc is the type of the function called for each data unit visited
+// by the Walk function.  If an error is returned processing stops.
+type WalkFunc func(dataUnit SnmpPDU) error
+
+// BulkWalk retrieves a subtree of values using GETBULK. As the tree is
+// walked walkFn is called for each new value. The function immediately returns
+// an error if either there is an underlaying SNMP error (e.g. GetBulk fails),
+// or if walkFn returns an error.
+func (x *GoSNMP) BulkWalk(rootOid string, walkFn WalkFunc) error {
+	return x.walk(GetBulkRequest, rootOid, walkFn)
+}
+
+// Similar to BulkWalk but returns a filled array of all values rather than
+// using a callback function to stream results.
+func (x *GoSNMP) BulkWalkAll(rootOid string) (results []SnmpPDU, err error) {
+	return x.walkAll(GetBulkRequest, rootOid)
+}
+
+// Walk retrieves a subtree of values using GETNEXT - a request is made for each
+// value, unlike BulkWalk which does this operation in batches. As the tree is
+// walked walkFn is called for each new value. The function immediately returns
+// an error if either there is an underlaying SNMP error (e.g. GetNext fails),
+// or if walkFn returns an error.
+func (x *GoSNMP) Walk(rootOid string, walkFn WalkFunc) error {
+	return x.walk(GetNextRequest, rootOid, walkFn)
+}
+
+// Similar to Walk but returns a filled array of all values rather than
+// using a callback function to stream results.
+func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
+	return x.walkAll(GetNextRequest, rootOid)
 }
 
 //
