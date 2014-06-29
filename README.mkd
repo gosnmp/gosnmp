@@ -174,7 +174,22 @@ A packet capture, obtained while running the snmpget. For example:
 Running the Tests
 -----------------
 
-Some of the tests use the **Verax Snmp Simulator** [1]: download,
+Tests are grouped as follows:
+
+* Unit tests (validating data packing and marshalling):
+   * `marshal_test.go`
+   * `misc_test.go`
+* Public API consistency tests:
+   * `gosnmp_api_test.go`
+* End-to-end integration tests:
+   * `generic_e2e_test.go`
+   * `verax_test.go`
+ 
+The generic end-to-end integration test `generic_e2e_test.go` should 
+work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
+To use, edit your host file so `gosnmp-test-host` resolves to the system's IP.
+
+The other integration test uses the **Verax Snmp Simulator** [1]: download,
 install and run it with the default configuration. Then, in the gosnmp
 directory, run these commands (or equivalents for your system):
 
