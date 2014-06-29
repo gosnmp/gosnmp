@@ -130,8 +130,8 @@ func TestGenericFailureUnknownHost(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected connection failure due to unknown host")
 	}
-	if !strings.Contains(err.Error(), "no such host") {
-		t.Fatalf("Expected connection error of type 'no such host'!")
+	if !strings.Contains(strings.ToLower(err.Error()), "no such host") {
+		t.Fatalf("Expected connection error of type 'no such host'! Got => %v", err)
 	}
 	_, err = Default.Get([]string{"1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
@@ -165,7 +165,7 @@ func TestGenericFailureConnectionRefused(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected Get() to fail due to invalid port")
 	}
-	if !strings.Contains(err.Error(), "connection refused") {
+	if !(strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "forcibly closed")) {
 		t.Fatalf("Expected connection refused error. Got => %v", err)
 	}
 }
