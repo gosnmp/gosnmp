@@ -9,15 +9,6 @@ import (
 	"strings"
 )
 
-const (
-	baseOid               = "1.3.6.1.2.1" // Base OID for MIB-2 defined SNMP variables
-	defaultMaxRepetitions = 50            // Java SNMP uses 50, snmp-net uses 10
-	defaultNonRepeaters   = 0
-)
-
-//
-// SNMP walk functions - Analogous to net-snmp's snmpwalk commands
-//
 func (x *GoSNMP) walk(getRequestType byte, rootOid string, walkFn WalkFunc) error {
 	if rootOid == "" || rootOid == "." {
 		rootOid = baseOid

@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/codedance/gosnmp"
+	"github.com/soniah/gosnmp"
 )
 
 func usage() {
-	fmt.Println("\nUsage:\n\n")
+	fmt.Println("Usage:")
 	fmt.Printf("   %s host [oid]\n", filepath.Base(os.Args[0]))
 	fmt.Println("     host - the host to walk/scan")
 	fmt.Println("     oid  - the MIB/Oid defining a subtree of values")

@@ -107,11 +107,15 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	for retries := 0; ; retries++ {
 		if retries > 0 {
-			if retries > x.Retries || time.Now().After(finalDeadline) {
+			slog.Printf("Retry number %d. Last error was: %v", retries, err)
+			if time.Now().After(finalDeadline) {
 				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
 				break
 			}
-			slog.Printf("Retry number %d. Last error was: %v", retries, err)
+			if retries > x.Retries {
+				// Report last error
+				break
+			}
 		}
 		err = nil
 

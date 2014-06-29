@@ -1,6 +1,6 @@
-// Copyright 2012 Andreas Louca, 2013 Sonia Hamilton. All rights reserved.  Use
-// of this source code is governed by a BSD-style license that can be found in
-// the LICENSE file.
+// Copyright 2012 Andreas Louca, 2013 Sonia Hamilton, 2014 Chris Dance.
+// All rights reserved.  Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -17,8 +17,19 @@ import (
 	"time"
 )
 
-// MAX_OIDS is the maximum number of oids allowed in a Get()
-const MAX_OIDS = 60
+const (
+	// MAX_OIDS is the maximum number of oids allowed in a Get()
+	MAX_OIDS = 60
+
+	// Base OID for MIB-2 defined SNMP variables
+	baseOid = "1.3.6.1.2.1"
+
+	// Java SNMP uses 50, snmp-net uses 10
+	defaultMaxRepetitions = 50
+
+	// TODO comment
+	defaultNonRepeaters = 0
+)
 
 type GoSNMP struct {
 

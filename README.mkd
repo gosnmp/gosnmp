@@ -1,35 +1,44 @@
 gosnmp
 ======
+[![Build Status](https://travis-ci.org/soniah/gosnmp.svg?branch=master)](https://travis-ci.org/soniah/gosnmp)
+[![Coverage](http://gocover.io/_badge/github.com/soniah/gosnmp)](http://gocover.io/github.com/soniah/gosnmp)
+[![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
+
 
 GoSNMP is an SNMP client library written fully in Go. Currently it
-supports GetRequest, GetNext, GetBulk, and SetRequest (beta, see below).
+supports GetRequest, GetNext, GetBulk, Walk (beta, see below), and SetRequest (beta, see below).
 
 About
 -----
 
-**soniah/gosmp** is based on **alouca/gosnmp** - many thanks to Andreas
+**soniah/gosnmp** is based on **alouca/gosnmp** - many thanks to Andreas
 Louca for starting the project. Thanks also to the following who have
 contributed:
 
-* Jacob Dubinsky - all of GetNext and GetBulk
-* Jon Auer - fixes
-* [Chris Dance](https://github.com/codedance) - Walk, retry support, and various fixes
+* Chris Dance (@codedance) - Fixes, SNMP Walk functionality and examples, Retry Support
+* Nathan Owens (@virtuallynathan) - Fixes / Changes
+* Jacob Dubinsky (@jdubinsky) - All of GetNext and GetBulk
+* Jon Auer (@jda) - Data truncation fix
+* Andreas Louca (@alouca) - Original library
 
 Overview
 --------
 
-GoSNMP has the following public functions:
+GoSNMP has the following SNMP functions:
 
 * **Get** (single or multiple OIDs)
 * **GetNext**
 * **GetBulk**
+* **Walk** - retrieves a subtree of values using GETNEXT.
+* **BulkWalk** - retrieves a subtree of values using GETBULK.
 * **Set** (beta - only supports setting one integer OID)
-* **Walk** - retrieves a subtree of values using GETNEXT. 
-* **BulkWalk** - retrieves a subtree of values using GETBULK. 
+
+GoSNMP also has the following helper functions:
+
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
-**soniah/gosmp** has diverged from **alouca/gosnmp** - your existing
+**soniah/gosnmp** has diverged from **alouca/gosnmp** - your existing
 code will require slight modification:
 
 * the **Get** function has a different method signature
@@ -39,7 +48,7 @@ code will require slight modification:
   logger if it conforms to the simple interface (Print and Printf).
   Otherwise debugging will be discarded (/dev/null).
 
-GoSNMP is still under development, therefore API's may change and bugs
+gosnmp is still under development, therefore API's may change and bugs
 will be squashed. Test Driven Development is used - you can help by
 sending packet captures (see Packet Captures below). There may be more
 than one branch on github. **master** is safe to pull from, other
@@ -69,6 +78,7 @@ Usage
 
 Here is code from **example/example.go**, demonstrating how to use GoSNMP:
 
+```go
     // Default is a pointer to a GoSNMP struct that contains sensible defaults
     // eg port 161, community public, etc
     g.Default.Target = "192.168.1.10"
@@ -99,7 +109,7 @@ Here is code from **example/example.go**, demonstrating how to use GoSNMP:
             fmt.Printf("number: %d\n", g.ToBigInt(variable.Value))
         }
     }
-
+```
 Running this example gives the following output (from my printer):
 
     % go run example.go
@@ -119,13 +129,14 @@ The following BER types have been implemented:
 * 0x02 Integer
 * 0x04 OctetString
 * 0x06 ObjectIdentifier
-* 0x40 IpAddress
+* 0x40 IPAddress (IPv4 & IPv6)
 * 0x41 Counter32
 * 0x42 Gauge32
 * 0x43 TimeTicks
 * 0x46 Counter64
 * 0x80 NoSuchObject
 * 0x81 NoSuchInstance
+* 0x82 EndOfMibView
 
 The following (less common) BER types haven't been implemented, as I ran out of
 time or haven't been able to find example devices to query:
@@ -141,7 +152,7 @@ time or haven't been able to find example devices to query:
 Packet Captures
 ---------------
 
-**Please email me** at sonia@snowfrog.net with packet captures containing
+Please create an issue on GitHub with packet captures (upload them somewhere) containing
 samples of the missing BER types, or of any other bugs you find. Please include
 2 or 3 examples of the missing/faulty BER type, interspersed with a couple of
 other common BER's eg an Integer, a Counter32 ie about 6-8 OIDs.
@@ -163,7 +174,22 @@ A packet capture, obtained while running the snmpget. For example:
 Running the Tests
 -----------------
 
-Some of the tests use the **Verax Snmp Simulator** [1]: download,
+Tests are grouped as follows:
+
+* Unit tests (validating data packing and marshalling):
+   * `marshal_test.go`
+   * `misc_test.go`
+* Public API consistency tests:
+   * `gosnmp_api_test.go`
+* End-to-end integration tests:
+   * `generic_e2e_test.go`
+   * `verax_test.go`
+ 
+The generic end-to-end integration test `generic_e2e_test.go` should 
+work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
+To use, edit your host file so `gosnmp-test-host` resolves to the system's IP.
+
+The other integration test uses the **Verax Snmp Simulator** [1]: download,
 install and run it with the default configuration. Then, in the gosnmp
 directory, run these commands (or equivalents for your system):
 
