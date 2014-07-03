@@ -276,7 +276,7 @@ var testsUnmarshal = []struct {
 				},
 				{
 					Name:  "1.3.6.1.2.1.4.21.1.1.127.0.0.1",
-					Type:  IpAddress,
+					Type:  IPAddress,
 					Value: "127.0.0.1",
 				},
 				{
@@ -333,12 +333,12 @@ var testsUnmarshal = []struct {
 				},
 				{
 					Name:  "1.3.6.1.2.1.3.1.1.3.10.1.10.11.0.2",
-					Type:  IpAddress,
+					Type:  IPAddress,
 					Value: "10.11.0.2",
 				},
 				{
 					Name:  "1.3.6.1.2.1.4.20.1.1.110.143.197.1",
-					Type:  IpAddress,
+					Type:  IPAddress,
 					Value: "110.143.197.1",
 				},
 				{
@@ -399,7 +399,7 @@ var testsUnmarshal = []struct {
 			Variables: []SnmpPDU{
 				{
 					Name:  "1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.2",
-					Type:  IpAddress,
+					Type:  IPAddress,
 					Value: "192.168.104.2",
 				},
 				{
@@ -554,7 +554,7 @@ SANITY:
 				if vbval.Cmp(vbrval) != 0 {
 					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 				}
-			case OctetString, IpAddress, ObjectIdentifier:
+			case OctetString, IPAddress, ObjectIdentifier:
 				if vb.Value != vbr.Value {
 					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 				}
@@ -635,7 +635,7 @@ cisco_response_bytes corresponds to the response section of this snmpget:
 .1.3.6.1.2.1.2.2.1.9.3 = Timeticks: (2970) 0:00:29.70
 .1.3.6.1.2.1.3.1.1.2.10.1.10.11.0.17 = Hex-STRING: 00 07 7D 4D 09 00
 .1.3.6.1.2.1.3.1.1.3.10.1.10.11.0.2 = Network Address: 0A:0B:00:02
-.1.3.6.1.2.1.4.20.1.1.110.143.197.1 = IpAddress: 110.143.197.1
+.1.3.6.1.2.1.4.20.1.1.110.143.197.1 = IPAddress: 110.143.197.1
 .1.3.6.1.66.1 = No Such Object available on this agent at this OID
 .1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.9.1.1166
 */
@@ -676,7 +676,7 @@ snmpget -On -v2c -c public 192.168.1.10 1.3.6.1.2.1.1.7.0 1.3.6.1.2.1.2.2.1.10.1
 .1.3.6.1.2.1.2.2.1.5.1 = Gauge32: 100000000
 .1.3.6.1.2.1.1.4.0 = STRING: "Administrator"
 .1.3.6.1.2.1.43.5.1.1.15.1 = NULL
-.1.3.6.1.2.1.4.21.1.1.127.0.0.1 = IpAddress: 127.0.0.1
+.1.3.6.1.2.1.4.21.1.1.127.0.0.1 = IPAddress: 127.0.0.1
 .1.3.6.1.4.1.23.2.5.1.1.1.4.2 = Hex-STRING: 00 15 99 37 76 2B
 .1.3.6.1.2.1.1.3.0 = Timeticks: (120394900) 13 days, 22:25:49.00
 */

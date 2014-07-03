@@ -23,7 +23,7 @@ var veraxDevices = []struct {
 	{"device/cisco/cisco_router.txt", 162},
 }
 
-// 1 <= PARTITION_SIZE <= MAX_OIDS - adjust as required
+// 1 <= PARTITION_SIZE <= maxOids - adjust as required
 const PARTITION_SIZE = 3
 
 // reduce OID_COUNT to speed up tests;
@@ -114,7 +114,7 @@ func TestVeraxGet(t *testing.T) {
 					t.Errorf("failed string comparison\nVVAL |%s|\nGVAL |%s|\ntype |%#x| oid |%s|",
 						vval, gval, vtype, oid)
 				}
-			case ObjectIdentifier, IpAddress:
+			case ObjectIdentifier, IPAddress:
 				var vval, gval string
 				var ok bool
 				if vval, ok = vvalue.(string); !ok {
@@ -212,7 +212,7 @@ func TestVeraxGetNext(t *testing.T) {
 						t.Errorf("failed string comparison\nVVAL |%s|\nGVAL |%s|\ntype |%#x| oid |%s|",
 							vval, gval, vtype, oid)
 					}
-				case ObjectIdentifier, IpAddress:
+				case ObjectIdentifier, IPAddress:
 					var vval, gval string
 					var ok bool
 					if vval, ok = vvalue.(string); !ok {
@@ -316,7 +316,7 @@ func TestVeraxGetBulk(t *testing.T) {
 						t.Errorf("failed string comparison\nVVAL |%s|\nGVAL |%s|\ntype |%#x| oid |%s|",
 							vval, gval, vtype, oid)
 					}
-				case ObjectIdentifier, IpAddress:
+				case ObjectIdentifier, IPAddress:
 					var vval, gval string
 					var ok bool
 					if vval, ok = vvalue.(string); !ok {
@@ -395,7 +395,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 				Variables: []SnmpPDU{
 					{
 						Name:  "1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.2",
-						Type:  IpAddress,
+						Type:  IPAddress,
 						Value: "192.168.104.2",
 					},
 				},
@@ -413,7 +413,7 @@ func getnext_expected(port uint16) map[string]*SnmpPacket {
 				Variables: []SnmpPDU{
 					{
 						Name:  "1.3.6.1.2.1.3.1.1.3.9.1.192.168.1.250",
-						Type:  IpAddress,
+						Type:  IPAddress,
 						Value: "192.168.1.250",
 					},
 				},
@@ -664,11 +664,11 @@ LINE:
 			// TODO - ran out of time...
 			continue LINE
 
-		case "IpAddress", "Network Address":
-			pdu.Type = IpAddress
+		case "IPAddress", "Network Address":
+			pdu.Type = IPAddress
 			pdu.Value = oidval
 			if strings.Contains(oidval, ":") {
-				// IpAddress is in "C0:A8:C4:01" format
+				// IPAddress is in "C0:A8:C4:01" format
 				octets := strings.Split(oidval, ":")
 				for i, octet := range octets {
 					n, _ := strconv.ParseUint(octet, 16, 8)

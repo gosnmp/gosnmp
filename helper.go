@@ -71,10 +71,10 @@ func decodeValue(data []byte, msg string) (retVal *Variable, err error) {
 		}
 		retVal.Type = ObjectIdentifier
 		retVal.Value = oidToString(oid)
-	case IpAddress:
+	case IPAddress:
 		// 0x40
-		slog.Print("decodeValue: type is IpAddress")
-		retVal.Type = IpAddress
+		slog.Print("decodeValue: type is IPAddress")
+		retVal.Type = IPAddress
 		switch data[1] {
 		case 4: // IPv4
 			if len(data) < 6 {

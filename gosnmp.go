@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	// MAX_OIDS is the maximum number of oids allowed in a Get()
-	MAX_OIDS = 60
+	// maxOids is the maximum number of oids allowed in a Get()
+	maxOids = 60
 
 	// Base OID for MIB-2 defined SNMP variables
 	baseOid = "1.3.6.1.2.1"
@@ -31,6 +31,7 @@ const (
 	defaultNonRepeaters = 0
 )
 
+// GoSNMP represents GoSNMP library state
 type GoSNMP struct {
 
 	// Target is an ipv4 address
@@ -64,6 +65,7 @@ type GoSNMP struct {
 	random    *rand.Rand
 }
 
+// The default connection settings
 var Default = &GoSNMP{
 	Port:      161,
 	Community: "public",
@@ -85,8 +87,10 @@ type SnmpPDU struct {
 	Value interface{}
 }
 
+// Asn1BER is the type of the SNMP PDU
 type Asn1BER byte
 
+// Asn1BER's - http://www.ietf.org/rfc/rfc1442.txt
 const (
 	EndOfContents     Asn1BER = 0x00
 	UnknownType               = 0x00
@@ -97,7 +101,7 @@ const (
 	Null                      = 0x05
 	ObjectIdentifier          = 0x06
 	ObjectDescription         = 0x07
-	IpAddress                 = 0x40
+	IPAddress                 = 0x40
 	Counter32                 = 0x41
 	Gauge32                   = 0x42
 	TimeTicks                 = 0x43
@@ -114,6 +118,7 @@ const (
 // Public Functions (main interface)
 //
 
+// Connect initiates a connection to the target host
 func (x *GoSNMP) Connect() error {
 	Conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:%d", x.Target, x.Port), x.Timeout)
 	if err == nil {
@@ -128,12 +133,12 @@ func (x *GoSNMP) Connect() error {
 	return nil
 }
 
-// Send an SNMP GET request
+// Get sends an SNMP GET request
 func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
-	oid_count := len(oids)
-	if oid_count > MAX_OIDS {
-		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
-			oid_count, MAX_OIDS)
+	oidCount := len(oids)
+	if oidCount > maxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
+			oidCount, maxOids)
 	}
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
@@ -141,17 +146,17 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
 	// build up SnmpPacket
-	packet_out := &SnmpPacket{
+	packetOut := &SnmpPacket{
 		Community:  x.Community,
 		Error:      0,
 		ErrorIndex: 0,
 		PDUType:    GetRequest,
 		Version:    x.Version,
 	}
-	return x.send(pdus, packet_out)
+	return x.send(pdus, packetOut)
 }
 
-// Send an SNMP SET request
+// Set sends an SNMP SET request
 func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	if len(pdus) != 1 {
 		return nil, fmt.Errorf("gosnmp currently only supports SNMP SETs for one oid")
@@ -160,22 +165,22 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 		return nil, fmt.Errorf("gosnmp currently only supports SNMP SETs for Integers")
 	}
 	// build up SnmpPacket
-	packet_out := &SnmpPacket{
+	packetOut := &SnmpPacket{
 		Community:  x.Community,
 		Error:      0,
 		ErrorIndex: 0,
 		PDUType:    SetRequest,
 		Version:    x.Version,
 	}
-	return x.send(pdus, packet_out)
+	return x.send(pdus, packetOut)
 }
 
-// Send an SNMP GETNEXT request
+// GetNext sends an SNMP GETNEXT request
 func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
-	oid_count := len(oids)
-	if oid_count > MAX_OIDS {
-		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
-			oid_count, MAX_OIDS)
+	oidCount := len(oids)
+	if oidCount > maxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
+			oidCount, maxOids)
 	}
 
 	// convert oids slice to pdu slice
@@ -185,7 +190,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	}
 
 	// Marshal and send the packet
-	packet_out := &SnmpPacket{
+	packetOut := &SnmpPacket{
 		Community:  x.Community,
 		Error:      0,
 		ErrorIndex: 0,
@@ -193,15 +198,15 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 		Version:    x.Version,
 	}
 
-	return x.send(pdus, packet_out)
+	return x.send(pdus, packetOut)
 }
 
-// send an SNMP GETBULK request
-func (x *GoSNMP) GetBulk(oids []string, non_repeaters uint8, max_repetitions uint8) (result *SnmpPacket, err error) {
-	oid_count := len(oids)
-	if oid_count > MAX_OIDS {
-		return nil, fmt.Errorf("oid count (%d) is greater than MAX_OIDS (%d)",
-			oid_count, MAX_OIDS)
+// GetBulk sends an SNMP GETBULK request
+func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8) (result *SnmpPacket, err error) {
+	oidCount := len(oids)
+	if oidCount > maxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
+			oidCount, maxOids)
 	}
 
 	// convert oids slice to pdu slice
@@ -211,14 +216,14 @@ func (x *GoSNMP) GetBulk(oids []string, non_repeaters uint8, max_repetitions uin
 	}
 
 	// Marshal and send the packet
-	packet_out := &SnmpPacket{
+	packetOut := &SnmpPacket{
 		Community:      x.Community,
 		PDUType:        GetBulkRequest,
 		Version:        x.Version,
-		NonRepeaters:   non_repeaters,
-		MaxRepetitions: max_repetitions,
+		NonRepeaters:   nonRepeaters,
+		MaxRepetitions: maxRepetitions,
 	}
-	return x.send(pdus, packet_out)
+	return x.send(pdus, packetOut)
 }
 
 //
@@ -237,8 +242,8 @@ func (x *GoSNMP) BulkWalk(rootOid string, walkFn WalkFunc) error {
 	return x.walk(GetBulkRequest, rootOid, walkFn)
 }
 
-// Similar to BulkWalk but returns a filled array of all values rather than
-// using a callback function to stream results.
+// BulkWalkAll is similar to BulkWalk but returns a filled array of all values
+// rather than using a callback function to stream results.
 func (x *GoSNMP) BulkWalkAll(rootOid string) (results []SnmpPDU, err error) {
 	return x.walkAll(GetBulkRequest, rootOid)
 }
@@ -252,8 +257,8 @@ func (x *GoSNMP) Walk(rootOid string, walkFn WalkFunc) error {
 	return x.walk(GetNextRequest, rootOid, walkFn)
 }
 
-// Similar to Walk but returns a filled array of all values rather than
-// using a callback function to stream results.
+// WalkAll is similar to Walk but returns a filled array of all values rather
+// than using a callback function to stream results.
 func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
 	return x.walkAll(GetNextRequest, rootOid)
 }
@@ -274,8 +279,8 @@ func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
 // 0  1  2  3  4  5  6  7
 //       T        T     T
 //
-func Partition(current_position, partition_size, slice_length int) bool {
-	if current_position < 0 || current_position >= slice_length {
+func Partition(current_position, partition_size, sliceLength int) bool {
+	if current_position < 0 || current_position >= sliceLength {
 		return false
 	}
 	if partition_size == 1 { // redundant, but an obvious optimisation
@@ -284,7 +289,7 @@ func Partition(current_position, partition_size, slice_length int) bool {
 	if current_position%partition_size == partition_size-1 {
 		return true
 	}
-	if current_position == slice_length-1 {
+	if current_position == sliceLength-1 {
 		return true
 	}
 	return false

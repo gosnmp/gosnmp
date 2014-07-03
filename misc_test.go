@@ -42,7 +42,7 @@ func TestMarshalLength(t *testing.T) {
 var testsPartition = []struct {
 	current_position int
 	partition_size   int
-	slice_length     int
+	sliceLength     int
 	ok               bool
 }{
 	{-1, 3, 8, false}, // test out of range
@@ -64,7 +64,7 @@ var testsPartition = []struct {
 
 func TestPartition(t *testing.T) {
 	for i, test := range testsPartition {
-		ok := Partition(test.current_position, test.partition_size, test.slice_length)
+		ok := Partition(test.current_position, test.partition_size, test.sliceLength)
 		if ok != test.ok {
 			t.Errorf("#%d: Bad result: %v (expected %v)", i, ok, test.ok)
 		}

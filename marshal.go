@@ -405,8 +405,8 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, request_
 			return nil, fmt.Errorf("Error parsing SNMP packet non repeaters: %s", err.Error())
 		}
 		cursor += count
-		if non_repeaters, ok := rawNonRepeaters.(int); ok {
-			response.NonRepeaters = uint8(non_repeaters)
+		if nonRepeaters, ok := rawNonRepeaters.(int); ok {
+			response.NonRepeaters = uint8(nonRepeaters)
 		}
 
 		// Parse Max Repetitions
@@ -415,8 +415,8 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, request_
 			return nil, fmt.Errorf("Error parsing SNMP packet max repetitions: %s", err.Error())
 		}
 		cursor += count
-		if max_repetitions, ok := rawMaxRepetitions.(int); ok {
-			response.MaxRepetitions = uint8(max_repetitions)
+		if maxRepetitions, ok := rawMaxRepetitions.(int); ok {
+			response.MaxRepetitions = uint8(maxRepetitions)
 		}
 	} else {
 		// Parse Error-Status
