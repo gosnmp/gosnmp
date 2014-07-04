@@ -40,7 +40,7 @@ type testsEnmarshalVarbindPosition struct {
 type testsEnmarshal_t struct {
 	version      SnmpVersion
 	community    string
-	request_type PDUType
+	requestType PDUType
 	requestid    uint32
 	// function and function name returning bytes from tcpdump
 	good_bytes func() []byte
@@ -197,7 +197,7 @@ func TestEnmarshalPDU(t *testing.T) {
 		x := &SnmpPacket{
 			Community: test.community,
 			Version:   test.version,
-			PDUType:   test.request_type,
+			PDUType:   test.requestType,
 			RequestID: test.requestid,
 		}
 		pdus := vb_pos_pdus(test)
@@ -220,13 +220,13 @@ func TestEnmarshalMsg(t *testing.T) {
 		x := &SnmpPacket{
 			Community: test.community,
 			Version:   test.version,
-			PDUType:   test.request_type,
+			PDUType:   test.requestType,
 			RequestID: test.requestid,
 		}
 		pdus := vb_pos_pdus(test)
 
 		test_bytes, err := x.marshalMsg(pdus,
-			test.request_type, test.requestid)
+			test.requestType, test.requestid)
 		if err != nil {
 			t.Errorf("#%s: marshal() err returned: %v", test.func_name, err)
 		}

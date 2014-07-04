@@ -20,11 +20,18 @@ import (
 	"strings"
 )
 
+// variable struct is used by decodeValue(), which is used for debugging
+type variable struct {
+	Name  []int
+	Type  Asn1BER
+	Value interface{}
+}
+
 // -- helper functions (mostly) in alphabetical order --------------------------
 
-func decodeValue(data []byte, msg string) (retVal *Variable, err error) {
+func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 	dumpBytes1(data, fmt.Sprintf("decodeValue: %s", msg), 16)
-	retVal = new(Variable)
+	retVal = new(variable)
 
 	switch Asn1BER(data[0]) {
 

@@ -17,15 +17,21 @@ import (
 
 //
 // Remaining globals and definitions located here.
+// See http://www.rane.com/note161.html for a succint description of the SNMP
+// protocol.
 //
 
+// SnmpVersion 1 and 2c implemented, 3 planned
 type SnmpVersion uint8
 
+// SnmpVersion 1 and 2c implemented, 3 planned
 const (
 	Version1  SnmpVersion = 0x0
 	Version2c SnmpVersion = 0x1
 )
 
+// SnmpPacket struct represents the entire SNMP Message or Sequence at the
+// application layer.
 type SnmpPacket struct {
 	Version        SnmpVersion
 	Community      string
@@ -38,25 +44,22 @@ type SnmpPacket struct {
 	Variables      []SnmpPDU
 }
 
-type Variable struct {
-	Name  []int
-	Type  Asn1BER
-	Value interface{}
-}
-
+// VarBind struct represents an SNMP Varbind.
 type VarBind struct {
 	Name  asn1.ObjectIdentifier
 	Value asn1.RawValue
 }
 
+// PDUType describes which SNMP Protocol Data Unit is being sent.
 type PDUType byte
 
+// The currently supported PDUType's
 const (
 	Sequence       PDUType = 0x30
 	GetRequest     PDUType = 0xa0
-	GetNextRequest         = 0xa1
-	GetResponse            = 0xa2
-	SetRequest             = 0xa3
+	GetNextRequest         = 0xa1 // TODO these should all be of tupe PDUType.
+	GetResponse            = 0xa2 // However, tests fail if changed. See for example
+	SetRequest             = 0xa3 // http://stackoverflow.com/questions/5037610/typed-constant-declaration-list.
 	Trap                   = 0xa4
 	GetBulkRequest         = 0xa5
 )
@@ -73,7 +76,6 @@ const (
 // For verbose logging to stdout:
 //
 //     gosnmp_logger = log.New(os.Stdout, "", 0)
-
 type Logger interface {
 	Print(v ...interface{})
 	Printf(format string, v ...interface{})
@@ -204,11 +206,11 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	msg := new(bytes.Buffer)
 	msg.WriteByte(byte(Sequence))
 
-	buf_length_bytes, err2 := marshalLength(buf.Len())
+	bufLengthBytes, err2 := marshalLength(buf.Len())
 	if err2 != nil {
 		return nil, err2
 	}
-	msg.Write(buf_length_bytes)
+	msg.Write(bufLengthBytes)
 
 	buf.WriteTo(msg) // reverse logic - want to do msg.Write(buf)
 	return msg.Bytes(), nil
@@ -251,11 +253,11 @@ func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU, requestid uint32) ([]byte, 
 	pdu := new(bytes.Buffer)
 	pdu.WriteByte(byte(packet.PDUType))
 
-	buf_length_bytes, err2 := marshalLength(buf.Len())
+	bufLengthBytes, err2 := marshalLength(buf.Len())
 	if err2 != nil {
 		return nil, err2
 	}
-	pdu.Write(buf_length_bytes)
+	pdu.Write(bufLengthBytes)
 
 	buf.WriteTo(pdu) // reverse logic - want to do pdu.Write(buf)
 	return pdu.Bytes(), nil
@@ -264,25 +266,25 @@ func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU, requestid uint32) ([]byte, 
 // marshal a varbind list
 func (packet *SnmpPacket) marshalVBL(pdus []SnmpPDU) ([]byte, error) {
 
-	vbl_buf := new(bytes.Buffer)
+	vblBuf := new(bytes.Buffer)
 	for _, pdu := range pdus {
 		vb, err := marshalVarbind(&pdu)
 		if err != nil {
 			return nil, err
 		}
-		vbl_buf.Write(vb)
+		vblBuf.Write(vb)
 	}
 
-	vbl_bytes := vbl_buf.Bytes()
-	vbl_length_bytes, err := marshalLength(len(vbl_bytes))
+	vblBytes := vblBuf.Bytes()
+	vblLengthBytes, err := marshalLength(len(vblBytes))
 	if err != nil {
 		return nil, err
 	}
 
 	// FIX does bytes.Buffer give better performance than byte slices?
 	result := []byte{byte(Sequence)}
-	result = append(result, vbl_length_bytes...)
-	result = append(result, vbl_bytes...)
+	result = append(result, vblLengthBytes...)
+	result = append(result, vblBytes...)
 	return result, nil
 }
 
@@ -307,12 +309,12 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
 		// Integer
-		int_bytes := []byte{byte(pdu.Value.(int))}
-		tmpBuf.Write([]byte{byte(Integer), byte(len(int_bytes))})
-		tmpBuf.Write(int_bytes)
+		intBytes := []byte{byte(pdu.Value.(int))}
+		tmpBuf.Write([]byte{byte(Integer), byte(len(intBytes))})
+		tmpBuf.Write(intBytes)
 		// Sequence, length of oid + integer, then oid/integer data
 		pduBuf.WriteByte(byte(Sequence))
-		pduBuf.WriteByte(byte(len(oid) + len(int_bytes) + 4))
+		pduBuf.WriteByte(byte(len(oid) + len(intBytes) + 4))
 		pduBuf.Write(tmpBuf.Bytes())
 	default:
 		return nil, fmt.Errorf("Unable to marshal PDU: unknown BER type %d", pdu.Type)
@@ -362,11 +364,11 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	}
 
 	// Parse SNMP packet type
-	request_type := PDUType(packet[cursor])
-	switch request_type {
+	requestType := PDUType(packet[cursor])
+	switch requestType {
 	// known, supported types
 	case GetResponse, GetNextRequest, GetBulkRequest:
-		response, err = unmarshalResponse(packet[cursor:], response, length, request_type)
+		response, err = unmarshalResponse(packet[cursor:], response, length, requestType)
 		if err != nil {
 			return nil, fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
 		}
@@ -376,24 +378,24 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	return response, nil
 }
 
-func unmarshalResponse(packet []byte, response *SnmpPacket, length int, request_type PDUType) (*SnmpPacket, error) {
+func unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestType PDUType) (*SnmpPacket, error) {
 	cursor := 0
 	dumpBytes1(packet, "SNMP Packet is GET RESPONSE", 16)
-	response.PDUType = request_type
+	response.PDUType = requestType
 
-	getresponse_length, cursor := parseLength(packet)
-	if len(packet) != getresponse_length {
-		return nil, fmt.Errorf("Error verifying Response sanity: Got %d Expected: %d\n", len(packet), getresponse_length)
+	getResponseLength, cursor := parseLength(packet)
+	if len(packet) != getResponseLength {
+		return nil, fmt.Errorf("Error verifying Response sanity: Got %d Expected: %d\n", len(packet), getResponseLength)
 	}
-	slog.Printf("getresponse_length: %d", getresponse_length)
+	slog.Printf("getResponseLength: %d", getResponseLength)
 
 	// Parse Request-ID
-	rawRequestId, count, err := parseRawField(packet[cursor:], "request id")
+	rawRequestID, count, err := parseRawField(packet[cursor:], "request id")
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SNMP packet request ID: %s", err.Error())
 	}
 	cursor += count
-	if requestid, ok := rawRequestId.(int); ok {
+	if requestid, ok := rawRequestID.(int); ok {
 		response.RequestID = uint32(requestid)
 		slog.Printf("request-id: %d", response.RequestID)
 	}
@@ -425,9 +427,9 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, request_
 			return nil, fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
 		}
 		cursor += count
-		if error_status, ok := rawError.(int); ok {
-			response.Error = uint8(error_status)
-			slog.Printf("error-status: %d", uint8(error_status))
+		if errorStatus, ok := rawError.(int); ok {
+			response.Error = uint8(errorStatus)
+			slog.Printf("error-status: %d", uint8(errorStatus))
 		}
 
 		// Parse Error-Index
@@ -450,36 +452,36 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 	length int) (*SnmpPacket, error) {
 
 	dumpBytes1(packet, "\n=== unmarshalVBL()", 32)
-	var cursor, cursor_inc int
-	var vbl_length int
+	var cursor, cursorInc int
+	var vblLength int
 	if packet[cursor] != 0x30 {
 		return nil, fmt.Errorf("Expected a sequence when unmarshalling a VBL, got %x",
 			packet[cursor])
 	}
 
-	vbl_length, cursor = parseLength(packet)
-	if len(packet) != vbl_length {
+	vblLength, cursor = parseLength(packet)
+	if len(packet) != vblLength {
 		return nil, fmt.Errorf("Error verifying: packet length %d vbl length %d\n",
-			len(packet), vbl_length)
+			len(packet), vblLength)
 	}
-	slog.Printf("vbl_length: %d", vbl_length)
+	slog.Printf("vblLength: %d", vblLength)
 
 	// Loop & parse Varbinds
-	for cursor < vbl_length {
+	for cursor < vblLength {
 		dumpBytes1(packet[cursor:], fmt.Sprintf("\nSTARTING a varbind. Cursor %d", cursor), 32)
 		if packet[cursor] != 0x30 {
 			return nil, fmt.Errorf("Expected a sequence when unmarshalling a VB, got %x", packet[cursor])
 		}
 
-		_, cursor_inc = parseLength(packet[cursor:])
-		cursor += cursor_inc
+		_, cursorInc = parseLength(packet[cursor:])
+		cursor += cursorInc
 
 		// Parse OID
-		rawOid, oid_length, err := parseRawField(packet[cursor:], "OID")
+		rawOid, oidLength, err := parseRawField(packet[cursor:], "OID")
 		if err != nil {
 			return nil, fmt.Errorf("Error parsing OID Value: %s", err.Error())
 		}
-		cursor += oid_length
+		cursor += oidLength
 
 		var oid []int
 		var ok bool
@@ -493,8 +495,8 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 		if err != nil {
 			return nil, fmt.Errorf("Error decoding value: %v", err)
 		}
-		value_length, _ := parseLength(packet[cursor:])
-		cursor += value_length
+		valueLength, _ := parseLength(packet[cursor:])
+		cursor += valueLength
 		response.Variables = append(response.Variables, SnmpPDU{oidToString(oid), v.Type, v.Value})
 	}
 	return response, nil
