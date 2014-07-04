@@ -268,28 +268,28 @@ func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
 //
 
 // Partition - returns true when dividing a slice into
-// partition_size lengths, including last partition which may be smaller
-// than partition_size. This is useful when you have a large array of OIDs
+// partitionSize lengths, including last partition which may be smaller
+// than partitionSize. This is useful when you have a large array of OIDs
 // to run Get() on. See the tests for example usage.
 //
 // For example for a slice of 8 items to be broken into partitions of
-// length 3, Partition returns true for the current_position having
+// length 3, Partition returns true for the currentPosition having
 // the following values:
 //
 // 0  1  2  3  4  5  6  7
 //       T        T     T
 //
-func Partition(current_position, partition_size, sliceLength int) bool {
-	if current_position < 0 || current_position >= sliceLength {
+func Partition(currentPosition, partitionSize, sliceLength int) bool {
+	if currentPosition < 0 || currentPosition >= sliceLength {
 		return false
 	}
-	if partition_size == 1 { // redundant, but an obvious optimisation
+	if partitionSize == 1 { // redundant, but an obvious optimisation
 		return true
 	}
-	if current_position%partition_size == partition_size-1 {
+	if currentPosition%partitionSize == partitionSize-1 {
 		return true
 	}
-	if current_position == sliceLength-1 {
+	if currentPosition == sliceLength-1 {
 		return true
 	}
 	return false
