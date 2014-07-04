@@ -42,7 +42,7 @@ func TestMarshalLength(t *testing.T) {
 var testsPartition = []struct {
 	current_position int
 	partition_size   int
-	sliceLength     int
+	sliceLength      int
 	ok               bool
 }{
 	{-1, 3, 8, false}, // test out of range
