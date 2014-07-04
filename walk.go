@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func (x *GoSNMP) walk(getRequestType byte, rootOid string, walkFn WalkFunc) error {
+func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) error {
 	if rootOid == "" || rootOid == "." {
 		rootOid = baseOid
 	}
@@ -63,7 +63,7 @@ RequestLoop:
 	return nil
 }
 
-func (x *GoSNMP) walkAll(getRequestType byte, rootOid string) (results []SnmpPDU, err error) {
+func (x *GoSNMP) walkAll(getRequestType PDUType, rootOid string) (results []SnmpPDU, err error) {
 	err = x.walk(getRequestType, rootOid, func(dataUnit SnmpPDU) error {
 		results = append(results, dataUnit)
 		return nil

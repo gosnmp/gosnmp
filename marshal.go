@@ -57,11 +57,11 @@ type PDUType byte
 const (
 	Sequence       PDUType = 0x30
 	GetRequest     PDUType = 0xa0
-	GetNextRequest         = 0xa1 // TODO these should all be of tupe PDUType.
-	GetResponse            = 0xa2 // However, tests fail if changed. See for example
-	SetRequest             = 0xa3 // http://stackoverflow.com/questions/5037610/typed-constant-declaration-list.
-	Trap                   = 0xa4
-	GetBulkRequest         = 0xa5
+	GetNextRequest PDUType = 0xa1
+	GetResponse    PDUType = 0xa2
+	SetRequest     PDUType = 0xa3
+	Trap           PDUType = 0xa4
+	GetBulkRequest PDUType = 0xa5
 )
 
 const (

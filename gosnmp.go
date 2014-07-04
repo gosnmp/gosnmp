@@ -93,8 +93,8 @@ type Asn1BER byte
 // Asn1BER's - http://www.ietf.org/rfc/rfc1442.txt
 const (
 	EndOfContents     Asn1BER = 0x00
-	UnknownType               = 0x00 // TODO these should all be type Asn1BER,
-	Boolean                   = 0x01 // if implmented. See for example
+	UnknownType               = 0x00 // TODO these should all be type Asn1BER, however
+	Boolean                   = 0x01 // tests fail if implemented. See for example
 	Integer                   = 0x02 /// http://stackoverflow.com/questions/5037610/typed-constant-declaration-list.
 	BitString                 = 0x03
 	OctetString               = 0x04

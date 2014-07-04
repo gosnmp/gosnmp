@@ -38,10 +38,10 @@ type testsEnmarshalVarbindPosition struct {
 }
 
 type testsEnmarshal_t struct {
-	version      SnmpVersion
-	community    string
+	version     SnmpVersion
+	community   string
 	requestType PDUType
-	requestid    uint32
+	requestid   uint32
 	// function and function name returning bytes from tcpdump
 	good_bytes func() []byte
 	func_name  string // could do this via reflection
