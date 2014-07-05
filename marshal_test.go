@@ -43,16 +43,16 @@ type testsEnmarshalT struct {
 	requestType PDUType
 	requestid   uint32
 	// function and function name returning bytes from tcpdump
-	good_bytes func() []byte
-	func_name  string // could do this via reflection
+	goodBytes func() []byte
+	funcName  string // could do this via reflection
 	// start position of the pdu
 	pduStart int
 	// start position of the vbl
-	vbl_start int
+	vblStart int
 	// finish position of pdu, vbl and message - all the same
 	finish int
 	// a slice of positions containing start and finish of each varbind
-	vb_positions []testsEnmarshalVarbindPosition
+	vbPositions []testsEnmarshalVarbindPosition
 }
 
 var testsEnmarshal = []testsEnmarshalT{
@@ -109,35 +109,35 @@ var testsEnmarshal = []testsEnmarshalT{
 
 // helpers for Enmarshal tests
 
-// vb_pos_pdus returns a slice of oids in the given test
-func vb_pos_pdus(test testsEnmarshalT) (pdus []SnmpPDU) {
-	for _, vbp := range test.vb_positions {
+// vbPosPdus returns a slice of oids in the given test
+func vbPosPdus(test testsEnmarshalT) (pdus []SnmpPDU) {
+	for _, vbp := range test.vbPositions {
 		pdu := SnmpPDU{vbp.oid, vbp.pduType, vbp.pduValue}
 		pdus = append(pdus, pdu)
 	}
 	return
 }
 
-// check_byte_equality walks the bytes in test_bytes, and compares them to good_bytes
-func check_byte_equality(t *testing.T, test testsEnmarshalT, test_bytes []byte,
+// checkByteEquality walks the bytes in testBytes, and compares them to goodBytes
+func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 	start int, finish int) {
 
-	testBytesLen := len(test_bytes)
+	testBytesLen := len(testBytes)
 
-	good_bytes := test.good_bytes()
-	good_bytes = good_bytes[start : finish+1]
-	for cursor := range good_bytes {
+	goodBytes := test.goodBytes()
+	goodBytes = goodBytes[start : finish+1]
+	for cursor := range goodBytes {
 		if testBytesLen < cursor {
-			t.Errorf("%s: testBytesLen (%d) < cursor (%d)", test.func_name,
+			t.Errorf("%s: testBytesLen (%d) < cursor (%d)", test.funcName,
 				testBytesLen, cursor)
 			break
 		}
-		if test_bytes[cursor] != good_bytes[cursor] {
-			t.Errorf("%s: cursor %d: test_bytes != good_bytes:\n%s\n%s",
-				test.func_name,
+		if testBytes[cursor] != goodBytes[cursor] {
+			t.Errorf("%s: cursor %d: testBytes != goodBytes:\n%s\n%s",
+				test.funcName,
 				cursor,
-				dumpBytes2("good", good_bytes, cursor),
-				dumpBytes2("test", test_bytes, cursor))
+				dumpBytes2("good", goodBytes, cursor),
+				dumpBytes2("test", testBytes, cursor))
 			break
 		}
 	}
@@ -152,15 +152,15 @@ func TestEnmarshalVarbind(t *testing.T) {
 	slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
-		for j, test2 := range test.vb_positions {
+		for j, test2 := range test.vbPositions {
 			snmppdu := &SnmpPDU{test2.oid, test2.pduType, test2.pduValue}
-			test_bytes, err := marshalVarbind(snmppdu)
+			testBytes, err := marshalVarbind(snmppdu)
 			if err != nil {
 				t.Errorf("#%s:%d:%s err returned: %v",
-					test.func_name, j, test2.oid, err)
+					test.funcName, j, test2.oid, err)
 			}
 
-			check_byte_equality(t, test, test_bytes, test2.start, test2.finish)
+			checkByteEquality(t, test, testBytes, test2.start, test2.finish)
 		}
 	}
 }
@@ -177,14 +177,14 @@ func TestEnmarshalVBL(t *testing.T) {
 			RequestID: test.requestid,
 		}
 
-		pdus := vb_pos_pdus(test)
+		pdus := vbPosPdus(test)
 
-		test_bytes, err := x.marshalVBL(pdus)
+		testBytes, err := x.marshalVBL(pdus)
 		if err != nil {
-			t.Errorf("#%s: marshalVBL() err returned: %v", test.func_name, err)
+			t.Errorf("#%s: marshalVBL() err returned: %v", test.funcName, err)
 		}
 
-		check_byte_equality(t, test, test_bytes, test.vbl_start, test.finish)
+		checkByteEquality(t, test, testBytes, test.vblStart, test.finish)
 	}
 }
 
@@ -200,14 +200,14 @@ func TestEnmarshalPDU(t *testing.T) {
 			PDUType:   test.requestType,
 			RequestID: test.requestid,
 		}
-		pdus := vb_pos_pdus(test)
+		pdus := vbPosPdus(test)
 
-		test_bytes, err := x.marshalPDU(pdus, test.requestid)
+		testBytes, err := x.marshalPDU(pdus, test.requestid)
 		if err != nil {
-			t.Errorf("#%s: marshalPDU() err returned: %v", test.func_name, err)
+			t.Errorf("#%s: marshalPDU() err returned: %v", test.funcName, err)
 		}
 
-		check_byte_equality(t, test, test_bytes, test.pduStart, test.finish)
+		checkByteEquality(t, test, testBytes, test.pduStart, test.finish)
 	}
 }
 
@@ -223,14 +223,14 @@ func TestEnmarshalMsg(t *testing.T) {
 			PDUType:   test.requestType,
 			RequestID: test.requestid,
 		}
-		pdus := vb_pos_pdus(test)
+		pdus := vbPosPdus(test)
 
-		test_bytes, err := x.marshalMsg(pdus,
+		testBytes, err := x.marshalMsg(pdus,
 			test.requestType, test.requestid)
 		if err != nil {
-			t.Errorf("#%s: marshal() err returned: %v", test.func_name, err)
+			t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
 		}
-		check_byte_equality(t, test, test_bytes, 0, test.finish)
+		checkByteEquality(t, test, testBytes, 0, test.finish)
 	}
 }
 
