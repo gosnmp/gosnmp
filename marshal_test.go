@@ -61,7 +61,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"public",
 		GetRequest,
 		1871507044,
-		kyocera_request_bytes,
+		kyoceraRequestBytes,
 		"kyocera_request",
 		0x0e, // pdu start
 		0x1d, // vbl start
@@ -82,8 +82,8 @@ var testsEnmarshal = []testsEnmarshalT{
 		"privatelab",
 		SetRequest,
 		526895288,
-		port_on_outgoing1,
-		"port_on_outgoing1",
+		portOnOutgoing1,
+		"portOnOutgoing1",
 		0x11, // pdu start
 		0x1f, // vbl start
 		0x36, // finish
@@ -96,8 +96,8 @@ var testsEnmarshal = []testsEnmarshalT{
 		"privatelab",
 		SetRequest,
 		1826072803,
-		port_off_outgoing1,
-		"port_off_outgoing1",
+		portOffOutgoing1,
+		"portOffOutgoing1",
 		0x11, // pdu start
 		0x1f, // vbl start
 		0x36, // finish
@@ -122,14 +122,14 @@ func vb_pos_pdus(test testsEnmarshalT) (pdus []SnmpPDU) {
 func check_byte_equality(t *testing.T, test testsEnmarshalT, test_bytes []byte,
 	start int, finish int) {
 
-	test_bytes_len := len(test_bytes)
+	testBytesLen := len(test_bytes)
 
 	good_bytes := test.good_bytes()
 	good_bytes = good_bytes[start : finish+1]
 	for cursor := range good_bytes {
-		if test_bytes_len < cursor {
-			t.Errorf("%s: test_bytes_len (%d) < cursor (%d)", test.func_name,
-				test_bytes_len, cursor)
+		if testBytesLen < cursor {
+			t.Errorf("%s: testBytesLen (%d) < cursor (%d)", test.func_name,
+				testBytesLen, cursor)
 			break
 		}
 		if test_bytes[cursor] != good_bytes[cursor] {
@@ -240,7 +240,7 @@ var testsUnmarshal = []struct {
 	in  func() []byte
 	out *SnmpPacket
 }{
-	{kyocera_response_bytes,
+	{kyoceraResponseBytes,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -292,7 +292,7 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{cisco_response_bytes,
+	{ciscoResponseBytes,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -354,7 +354,7 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{port_on_incoming1,
+	{portOnIncoming1,
 		&SnmpPacket{
 			Version:    Version1,
 			Community:  "privatelab",
@@ -371,7 +371,7 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{port_off_incoming1,
+	{portOffIncoming1,
 		&SnmpPacket{
 			Version:    Version1,
 			Community:  "privatelab",
@@ -581,7 +581,7 @@ SANITY:
 */
 
 /*
-kyocera_response_bytes corresponds to the response section of this snmpget
+kyoceraResponseBytes corresponds to the response section of this snmpget
 
 Simple Network Management Protocol
   version: v2c (1)
@@ -602,7 +602,7 @@ Simple Network Management Protocol
         1.3.6.1.2.1.1.3.0: 318870100
 */
 
-func kyocera_response_bytes() []byte {
+func kyoceraResponseBytes() []byte {
 	return []byte{
 		0x30, 0x81, 0xc2, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c,
 		0x69, 0x63, 0xa2, 0x81, 0xb4, 0x02, 0x04, 0x3f, 0x97, 0x70, 0x44, 0x02,
@@ -625,7 +625,7 @@ func kyocera_response_bytes() []byte {
 }
 
 /*
-cisco_response_bytes corresponds to the response section of this snmpget:
+ciscoResponseBytes corresponds to the response section of this snmpget:
 
 % snmpget -On -v2c -c public 203.50.251.17 1.3.6.1.2.1.1.7.0 1.3.6.1.2.1.2.2.1.2.6 1.3.6.1.2.1.2.2.1.5.3 1.3.6.1.2.1.2.2.1.7.2 1.3.6.1.2.1.2.2.1.9.3 1.3.6.1.2.1.3.1.1.2.10.1.10.11.0.17 1.3.6.1.2.1.3.1.1.3.10.1.10.11.0.2 1.3.6.1.2.1.4.20.1.1.110.143.197.1 1.3.6.1.66.1 1.3.6.1.2.1.1.2.0
 .1.3.6.1.2.1.1.7.0 = INTEGER: 78
@@ -640,7 +640,7 @@ cisco_response_bytes corresponds to the response section of this snmpget:
 .1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.9.1.1166
 */
 
-func cisco_response_bytes() []byte {
+func ciscoResponseBytes() []byte {
 	return []byte{
 		0x30, 0x81,
 		0xf1, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63,
@@ -668,7 +668,7 @@ func cisco_response_bytes() []byte {
 }
 
 /*
-kyocera_request_bytes corresponds to the request section of this snmpget:
+kyoceraRequestBytes corresponds to the request section of this snmpget:
 
 snmpget -On -v2c -c public 192.168.1.10 1.3.6.1.2.1.1.7.0 1.3.6.1.2.1.2.2.1.10.1 1.3.6.1.2.1.2.2.1.5.1 1.3.6.1.2.1.1.4.0 1.3.6.1.2.1.43.5.1.1.15.1 1.3.6.1.2.1.4.21.1.1.127.0.0.1 1.3.6.1.4.1.23.2.5.1.1.1.4.2 1.3.6.1.2.1.1.3.0
 .1.3.6.1.2.1.1.7.0 = INTEGER: 104
@@ -681,7 +681,7 @@ snmpget -On -v2c -c public 192.168.1.10 1.3.6.1.2.1.1.7.0 1.3.6.1.2.1.2.2.1.10.1
 .1.3.6.1.2.1.1.3.0 = Timeticks: (120394900) 13 days, 22:25:49.00
 */
 
-func kyocera_request_bytes() []byte {
+func kyoceraRequestBytes() []byte {
 	return []byte{
 		0x30, 0x81,
 		0x9e, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63,
@@ -735,7 +735,7 @@ Simple Network Management Protocol
           Value (Integer32): 1
 */
 
-func port_on_outgoing1() []byte {
+func portOnOutgoing1() []byte {
 	return []byte{
 		0x30, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69, 0x76, 0x61,
 		0x74, 0x65, 0x6c, 0x61, 0x62, 0xa3, 0x24, 0x02, 0x04, 0x1f, 0x67, 0xc8,
@@ -745,7 +745,7 @@ func port_on_outgoing1() []byte {
 	}
 }
 
-func port_on_incoming1() []byte {
+func portOnIncoming1() []byte {
 	return []byte{
 		0x30, 0x82, 0x00, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69,
 		0x76, 0x61, 0x74, 0x65, 0x6c, 0x61, 0x62, 0xa2, 0x24, 0x02, 0x04, 0x1f,
@@ -787,7 +787,7 @@ Simple Network Management Protocol
           Value (Integer32): 2
 */
 
-func port_off_outgoing1() []byte {
+func portOffOutgoing1() []byte {
 	return []byte{
 		0x30, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69, 0x76, 0x61,
 		0x74, 0x65, 0x6c, 0x61, 0x62, 0xa3, 0x24, 0x02, 0x04, 0x6c, 0xd7, 0xa8,
@@ -797,7 +797,7 @@ func port_off_outgoing1() []byte {
 	}
 }
 
-func port_off_incoming1() []byte {
+func portOffIncoming1() []byte {
 	return []byte{
 		0x30, 0x82, 0x00, 0x35, 0x02, 0x01, 0x00, 0x04, 0x0a, 0x70, 0x72, 0x69,
 		0x76, 0x61, 0x74, 0x65, 0x6c, 0x61, 0x62, 0xa2, 0x24, 0x02, 0x04, 0x6c,
