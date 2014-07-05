@@ -33,11 +33,11 @@ type testsEnmarshalVarbindPosition struct {
 	// used to find the start and finish values...
 	start     int
 	finish    int
-	pdu_type  Asn1BER
-	pdu_value interface{}
+	pduType  Asn1BER
+	pduValue interface{}
 }
 
-type testsEnmarshal_t struct {
+type testsEnmarshalT struct {
 	version     SnmpVersion
 	community   string
 	requestType PDUType
@@ -46,7 +46,7 @@ type testsEnmarshal_t struct {
 	good_bytes func() []byte
 	func_name  string // could do this via reflection
 	// start position of the pdu
-	pdu_start int
+	pduStart int
 	// start position of the vbl
 	vbl_start int
 	// finish position of pdu, vbl and message - all the same
@@ -55,7 +55,7 @@ type testsEnmarshal_t struct {
 	vb_positions []testsEnmarshalVarbindPosition
 }
 
-var testsEnmarshal = []testsEnmarshal_t{
+var testsEnmarshal = []testsEnmarshalT{
 	{
 		Version2c,
 		"public",
@@ -110,16 +110,16 @@ var testsEnmarshal = []testsEnmarshal_t{
 // helpers for Enmarshal tests
 
 // vb_pos_pdus returns a slice of oids in the given test
-func vb_pos_pdus(test testsEnmarshal_t) (pdus []SnmpPDU) {
+func vb_pos_pdus(test testsEnmarshalT) (pdus []SnmpPDU) {
 	for _, vbp := range test.vb_positions {
-		pdu := SnmpPDU{vbp.oid, vbp.pdu_type, vbp.pdu_value}
+		pdu := SnmpPDU{vbp.oid, vbp.pduType, vbp.pduValue}
 		pdus = append(pdus, pdu)
 	}
 	return
 }
 
 // check_byte_equality walks the bytes in test_bytes, and compares them to good_bytes
-func check_byte_equality(t *testing.T, test testsEnmarshal_t, test_bytes []byte,
+func check_byte_equality(t *testing.T, test testsEnmarshalT, test_bytes []byte,
 	start int, finish int) {
 
 	test_bytes_len := len(test_bytes)
@@ -153,7 +153,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vb_positions {
-			snmppdu := &SnmpPDU{test2.oid, test2.pdu_type, test2.pdu_value}
+			snmppdu := &SnmpPDU{test2.oid, test2.pduType, test2.pduValue}
 			test_bytes, err := marshalVarbind(snmppdu)
 			if err != nil {
 				t.Errorf("#%s:%d:%s err returned: %v",
@@ -207,7 +207,7 @@ func TestEnmarshalPDU(t *testing.T) {
 			t.Errorf("#%s: marshalPDU() err returned: %v", test.func_name, err)
 		}
 
-		check_byte_equality(t, test, test_bytes, test.pdu_start, test.finish)
+		check_byte_equality(t, test, test_bytes, test.pduStart, test.finish)
 	}
 }
 
@@ -388,7 +388,7 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{cisco_getnext_response_bytes,
+	{ciscoGetnextResponseBytes,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -430,7 +430,7 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{cisco_getbulk_response_bytes,
+	{ciscoGetbulkResponseBytes,
 		&SnmpPacket{
 			Version:        Version2c,
 			Community:      "public",
@@ -807,7 +807,7 @@ func port_off_incoming1() []byte {
 	}
 }
 
-func cisco_getnext_response_bytes() []byte {
+func ciscoGetnextResponseBytes() []byte {
 	return []byte{
 		0x30, 0x81,
 		0xc8, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63,
@@ -830,7 +830,7 @@ func cisco_getnext_response_bytes() []byte {
 	}
 }
 
-func cisco_getnext_request_bytes() []byte {
+func ciscoGetnextRequestBytes() []byte {
 	return []byte{
 		0x30, 0x7e,
 		0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa1,
@@ -862,7 +862,7 @@ iso.3.6.1.2.1.2.1.0 = INTEGER: 3
 iso.3.6.1.2.1.2.2.1.1.1 = INTEGER: 1
 
 */
-func cisco_getbulk_request_bytes() []byte {
+func ciscoGetbulkRequestBytes() []byte {
 	return []byte{
 		0x30, 0x2b,
 		0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa5,
@@ -872,7 +872,7 @@ func cisco_getbulk_request_bytes() []byte {
 	}
 }
 
-func cisco_getbulk_response_bytes() []byte {
+func ciscoGetbulkResponseBytes() []byte {
 	return []byte{
 		0x30, 0x81,
 		0xc5, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63,
