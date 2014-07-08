@@ -11,6 +11,7 @@ package gosnmp
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -208,19 +209,46 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 
 // dump bytes in a format similar to Wireshark
 func dumpBytes1(data []byte, msg string, maxlength int) {
-	for i, b := range data {
-		if i >= maxlength {
-			break
-		}
-		if (i % 8) == 0 {
-			msg += "\n"
-			msg += fmt.Sprintf("%3d ", i)
-		} else if i == 0 {
-			msg += fmt.Sprintf("%3d ", 0)
-		}
-		msg += fmt.Sprintf(" %02x", b)
+	var buffer bytes.Buffer
+	buffer.WriteString(msg)
+	length := maxlength
+	if len(data) < maxlength {
+		length = len(data)
 	}
-	slog.Print(msg)
+	length *= 2 //One Byte Symobls Two Hex
+	hexStr := hex.EncodeToString(data)
+	for i := 0; length >= i+16; i += 16 {
+		buffer.WriteString("\n")
+		buffer.WriteString(strconv.Itoa(i / 2))
+		buffer.WriteString("\t")
+		buffer.WriteString(hexStr[i : i+2])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+2 : i+4])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+4 : i+6])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+6 : i+8])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+8 : i+10])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+10 : i+12])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+12 : i+14])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+14 : i+16])
+	}
+	leftOver := length % 16
+	if leftOver != 0 {
+		buffer.WriteString("\n")
+		buffer.WriteString(strconv.Itoa((length - leftOver) / 2))
+		buffer.WriteString("\t")
+		for i := 0; leftOver >= i+2; i += 2 {
+			buffer.WriteString(hexStr[i : i+2])
+			buffer.WriteString(" ")
+		}
+	}
+	buffer.WriteString("\n")
+	slog.Print(buffer.String())
 }
 
 // dump bytes in one row, up to about screen width. Returns a string
@@ -349,10 +377,12 @@ func marshalOID(oid string) ([]byte, error) {
 }
 
 func oidToString(oid []int) (ret string) {
+	var buffer bytes.Buffer
 	for _, i := range oid {
-		ret = ret + fmt.Sprintf(".%d", i)
+		buffer.WriteString(".")
+		buffer.WriteString(string(i))
 	}
-	return ret[1:]
+	return buffer.String()[1:]
 }
 
 // parseBase128Int parses a base-128 encoded int from the given offset in the
