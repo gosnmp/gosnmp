@@ -30,26 +30,34 @@ type variable struct {
 // -- helper functions (mostly) in alphabetical order --------------------------
 
 func decodeValue(data []byte, msg string) (retVal *variable, err error) {
-	dumpBytes1(data, fmt.Sprintf("decodeValue: %s", msg), 16)
+	if LoggingDisabled != true {
+		dumpBytes1(data, fmt.Sprintf("decodeValue: %s", msg), 16)
+	}
 	retVal = new(variable)
 
 	switch Asn1BER(data[0]) {
 
 	case Integer:
 		// 0x02. signed
-		slog.Print("decodeValue: type is Integer")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is Integer")
+		}
 		length, cursor := parseLength(data)
 		var ret int
 		var err error
 		if ret, err = parseInt(data[cursor:length]); err != nil {
-			slog.Printf("%v:", err)
+			if LoggingDisabled != true {
+				slog.Printf("%v:", err)
+			}
 			return retVal, fmt.Errorf("bytes: % x err: %v", data, err)
 		}
 		retVal.Type = Integer
 		retVal.Value = ret
 	case OctetString:
 		// 0x04
-		slog.Print("decodeValue: type is OctetString")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is OctetString")
+		}
 		length, cursor := parseLength(data)
 		retVal.Type = OctetString
 		if data[cursor] == 0 && length == 2 {
@@ -61,12 +69,16 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 	case Null:
 		// 0x05
-		slog.Print("decodeValue: type is Null")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is Null")
+		}
 		retVal.Type = Null
 		retVal.Value = nil
 	case ObjectIdentifier:
 		// 0x06
-		slog.Print("decodeValue: type is ObjectIdentifier")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is ObjectIdentifier")
+		}
 		rawOid, _, err := parseRawField(data, "OID")
 		if err != nil {
 			return nil, fmt.Errorf("Error parsing OID Value: %s", err.Error())
@@ -80,7 +92,9 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		retVal.Value = oidToString(oid)
 	case IPAddress:
 		// 0x40
-		slog.Print("decodeValue: type is IPAddress")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is IPAddress")
+		}
 		retVal.Type = IPAddress
 		switch data[1] {
 		case 4: // IPv4
@@ -100,70 +114,95 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 	case Counter32:
 		// 0x41. unsigned
-		slog.Print("decodeValue: type is Counter32")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is Counter32")
+		}
 		length, cursor := parseLength(data)
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			slog.Printf("decodeValue: err is %v", err)
+			if LoggingDisabled != true {
+				slog.Printf("decodeValue: err is %v", err)
+			}
 			break
 		}
 		retVal.Type = Counter32
 		retVal.Value = ret
 	case Gauge32:
 		// 0x42. unsigned
-		slog.Print("decodeValue: type is Gauge32")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is Gauge32")
+		}
 		length, cursor := parseLength(data)
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			slog.Printf("decodeValue: err is %v", err)
+			if LoggingDisabled != true {
+				slog.Printf("decodeValue: err is %v", err)
+			}
 			break
 		}
 		retVal.Type = Gauge32
 		retVal.Value = ret
 	case TimeTicks:
 		// 0x43
-		slog.Print("decodeValue: type is TimeTicks")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is TimeTicks")
+		}
 		length, cursor := parseLength(data)
 		ret, err := parseInt(data[cursor:length])
 		if err != nil {
-			slog.Printf("decodeValue: err is %v", err)
+			if LoggingDisabled != true {
+				slog.Printf("decodeValue: err is %v", err)
+			}
 			break
 		}
 		retVal.Type = TimeTicks
 		retVal.Value = ret
 	case Counter64:
 		// 0x46
-		slog.Print("decodeValue: type is Counter64")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is Counter64")
+		}
 		length, cursor := parseLength(data)
 		ret, err := parseInt64(data[cursor:length])
 		if err != nil {
-			slog.Printf("decodeValue: err is %v", err)
+			if LoggingDisabled != true {
+				slog.Printf("decodeValue: err is %v", err)
+			}
 			break
 		}
 		retVal.Type = Counter64
 		retVal.Value = ret
 	case NoSuchObject:
 		// 0x80
-		slog.Print("decodeValue: type is NoSuchObject")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is NoSuchObject")
+		}
 		retVal.Type = NoSuchObject
 		retVal.Value = nil
 	case NoSuchInstance:
 		// 0x81
-		slog.Print("decodeValue: type is NoSuchInstance")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is NoSuchInstance")
+		}
 		retVal.Type = NoSuchInstance
 		retVal.Value = nil
 	case EndOfMibView:
 		// 0x82
-		slog.Print("decodeValue: type is EndOfMibView")
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type is EndOfMibView")
+		}
 		retVal.Type = EndOfMibView
 		retVal.Value = nil
 	default:
-		slog.Print("decodeValue: type %x isn't implemented", data[0])
+		if LoggingDisabled != true {
+			slog.Print("decodeValue: type %x isn't implemented", data[0])
+		}
 		retVal.Type = UnknownType
 		retVal.Value = nil
 	}
-
-	slog.Printf("decodeValue: value is %#v", retVal.Value)
+	if LoggingDisabled != true {
+		slog.Printf("decodeValue: value is %#v", retVal.Value)
+	}
 	return
 }
 

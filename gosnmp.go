@@ -31,6 +31,9 @@ const (
 	defaultNonRepeaters = 0
 )
 
+//LoggingDisabled is set if the Logger is nil
+var LoggingDisabled bool
+
 // GoSNMP represents GoSNMP library state
 type GoSNMP struct {
 
@@ -120,6 +123,9 @@ const (
 
 // Connect initiates a connection to the target host
 func (x *GoSNMP) Connect() error {
+	if x.Logger == nil {
+		LoggingDisabled = true
+	}
 	Conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:%d", x.Target, x.Port), x.Timeout)
 	if err == nil {
 		x.Conn = Conn

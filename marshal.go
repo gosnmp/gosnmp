@@ -109,7 +109,9 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	for retries := 0; ; retries++ {
 		if retries > 0 {
-			slog.Printf("Retry number %d. Last error was: %v", retries, err)
+			if LoggingDisabled != true {
+				slog.Printf("Retry number %d. Last error was: %v", retries, err)
+			}
 			if time.Now().After(finalDeadline) {
 				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
 				break
@@ -341,7 +343,9 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	if len(packet) != length {
 		return nil, fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
 	}
-	slog.Printf("Packet sanity verified, we got all the bytes (%d)", length)
+	if LoggingDisabled != true {
+		slog.Printf("Packet sanity verified, we got all the bytes (%d)", length)
+	}
 
 	// Parse SNMP Version
 	rawVersion, count, err := parseRawField(packet[cursor:], "version")
@@ -352,7 +356,9 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	cursor += count
 	if version, ok := rawVersion.(int); ok {
 		response.Version = SnmpVersion(version)
-		slog.Printf("Parsed version %d", version)
+		if LoggingDisabled != true {
+			slog.Printf("Parsed version %d", version)
+		}
 	}
 
 	// Parse community
@@ -360,7 +366,9 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 	cursor += count
 	if community, ok := rawCommunity.(string); ok {
 		response.Community = community
-		slog.Printf("Parsed community %s", community)
+		if LoggingDisabled != true {
+			slog.Printf("Parsed community %s", community)
+		}
 	}
 
 	// Parse SNMP packet type
@@ -387,7 +395,9 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestT
 	if len(packet) != getResponseLength {
 		return nil, fmt.Errorf("Error verifying Response sanity: Got %d Expected: %d\n", len(packet), getResponseLength)
 	}
-	slog.Printf("getResponseLength: %d", getResponseLength)
+	if LoggingDisabled != true {
+		slog.Printf("getResponseLength: %d", getResponseLength)
+	}
 
 	// Parse Request-ID
 	rawRequestID, count, err := parseRawField(packet[cursor:], "request id")
@@ -397,7 +407,9 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestT
 	cursor += count
 	if requestid, ok := rawRequestID.(int); ok {
 		response.RequestID = uint32(requestid)
-		slog.Printf("request-id: %d", response.RequestID)
+		if LoggingDisabled != true {
+			slog.Printf("requestID: %d", response.RequestID)
+		}
 	}
 
 	if response.PDUType == GetBulkRequest {
@@ -429,7 +441,9 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestT
 		cursor += count
 		if errorStatus, ok := rawError.(int); ok {
 			response.Error = uint8(errorStatus)
-			slog.Printf("error-status: %d", uint8(errorStatus))
+			if LoggingDisabled != true {
+				slog.Printf("errorStatus: %d", uint8(errorStatus))
+			}
 		}
 
 		// Parse Error-Index
@@ -440,7 +454,9 @@ func unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestT
 		cursor += count
 		if errorindex, ok := rawErrorIndex.(int); ok {
 			response.ErrorIndex = uint8(errorindex)
-			slog.Printf("error-index: %d", uint8(errorindex))
+			if LoggingDisabled != true {
+				slog.Printf("error-index: %d", uint8(errorindex))
+			}
 		}
 	}
 
@@ -464,7 +480,9 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 		return nil, fmt.Errorf("Error verifying: packet length %d vbl length %d\n",
 			len(packet), vblLength)
 	}
-	slog.Printf("vblLength: %d", vblLength)
+	if LoggingDisabled != true {
+		slog.Printf("vblLength: %d", vblLength)
+	}
 
 	// Loop & parse Varbinds
 	for cursor < vblLength {
@@ -488,7 +506,9 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 		if oid, ok = rawOid.([]int); !ok {
 			return nil, fmt.Errorf("unable to type assert rawOid |%v| to []int", rawOid)
 		}
-		slog.Printf("OID: %s", oidToString(oid))
+		if LoggingDisabled != true {
+			slog.Printf("OID: %s", oidToString(oid))
+		}
 
 		// Parse Value
 		v, err := decodeValue(packet[cursor:], "value")
