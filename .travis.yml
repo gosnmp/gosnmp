@@ -11,7 +11,7 @@ before_install:
  - sudo service snmpd start
 
 install:
-- go get github.com/virtuallynathan/gosnmp
+- go get github.com/soniah/gosnmp
 
 script:
 - ./non-verax-tests.sh
