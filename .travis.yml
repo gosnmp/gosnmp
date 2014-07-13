@@ -1,0 +1,12 @@
+language: go
+
+go:
+- 1.1
+- 1.2
+- 1.3
+
+install:
+- go get github.com/virtuallynathan/gosnmp
+
+script:
+- ./non-verax-tests.sh
