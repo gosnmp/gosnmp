@@ -1,6 +1,6 @@
-// Copyright 2014 Chris Dance (codedance). All rights reserved.  Use of this
-// source code is governed by a BSD-style license that can be found in
-// the LICENSE file.
+// Copyright 2012-2014 The GoSNMP Authors. All rights reserved.  Use of this
+// source code is governed by a BSD-style license that can be found in the
+// LICENSE file.
 
 // This program demonstrates BulkWalk.
 package main
