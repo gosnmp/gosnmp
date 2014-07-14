@@ -67,14 +67,14 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x1d, // vbl start
 		0xa0, // finish
 		[]testsEnmarshalVarbindPosition{
-			{"1.3.6.1.2.1.1.7.0", 0x20, 0x2d, Null, nil},
-			{"1.3.6.1.2.1.2.2.1.10.1", 0x2e, 0x3d, Null, nil},
-			{"1.3.6.1.2.1.2.2.1.5.1", 0x3e, 0x4d, Null, nil},
-			{"1.3.6.1.2.1.1.4.0", 0x4e, 0x5b, Null, nil},
-			{"1.3.6.1.2.1.43.5.1.1.15.1", 0x5c, 0x6c, Null, nil},
-			{"1.3.6.1.2.1.4.21.1.1.127.0.0.1", 0x6d, 0x7f, Null, nil},
-			{"1.3.6.1.4.1.23.2.5.1.1.1.4.2", 0x80, 0x92, Null, nil},
-			{"1.3.6.1.2.1.1.3.0", 0x93, 0xa0, Null, nil},
+			{".1.3.6.1.2.1.1.7.0", 0x20, 0x2d, Null, nil},
+			{".1.3.6.1.2.1.2.2.1.10.1", 0x2e, 0x3d, Null, nil},
+			{".1.3.6.1.2.1.2.2.1.5.1", 0x3e, 0x4d, Null, nil},
+			{".1.3.6.1.2.1.1.4.0", 0x4e, 0x5b, Null, nil},
+			{".1.3.6.1.2.1.43.5.1.1.15.1", 0x5c, 0x6c, Null, nil},
+			{".1.3.6.1.2.1.4.21.1.1.127.0.0.1", 0x6d, 0x7f, Null, nil},
+			{".1.3.6.1.4.1.23.2.5.1.1.1.4.2", 0x80, 0x92, Null, nil},
+			{".1.3.6.1.2.1.1.3.0", 0x93, 0xa0, Null, nil},
 		},
 	},
 	{
@@ -88,7 +88,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x1f, // vbl start
 		0x36, // finish
 		[]testsEnmarshalVarbindPosition{
-			{"1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 1},
+			{".1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 1},
 		},
 	},
 	{
@@ -102,7 +102,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x1f, // vbl start
 		0x36, // finish
 		[]testsEnmarshalVarbindPosition{
-			{"1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 2},
+			{".1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 2},
 		},
 	},
 }
@@ -250,42 +250,42 @@ var testsUnmarshal = []struct {
 			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
-					Name:  "1.3.6.1.2.1.1.7.0",
+					Name:  ".1.3.6.1.2.1.1.7.0",
 					Type:  Integer,
 					Value: 104,
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.2.1.10.1",
+					Name:  ".1.3.6.1.2.1.2.2.1.10.1",
 					Type:  Counter32,
 					Value: 271070065,
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.2.1.5.1",
+					Name:  ".1.3.6.1.2.1.2.2.1.5.1",
 					Type:  Gauge32,
 					Value: 100000000,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.4.0",
+					Name:  ".1.3.6.1.2.1.1.4.0",
 					Type:  OctetString,
 					Value: "Administrator",
 				},
 				{
-					Name:  "1.3.6.1.2.1.43.5.1.1.15.1",
+					Name:  ".1.3.6.1.2.1.43.5.1.1.15.1",
 					Type:  Null,
 					Value: nil,
 				},
 				{
-					Name:  "1.3.6.1.2.1.4.21.1.1.127.0.0.1",
+					Name:  ".1.3.6.1.2.1.4.21.1.1.127.0.0.1",
 					Type:  IPAddress,
 					Value: "127.0.0.1",
 				},
 				{
-					Name:  "1.3.6.1.4.1.23.2.5.1.1.1.4.2",
+					Name:  ".1.3.6.1.4.1.23.2.5.1.1.1.4.2",
 					Type:  OctetString,
 					Value: "00 15 99 37 76 2b",
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.3.0",
+					Name:  ".1.3.6.1.2.1.1.3.0",
 					Type:  TimeTicks,
 					Value: 318870100,
 				},
@@ -302,54 +302,54 @@ var testsUnmarshal = []struct {
 			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
-					Name:  "1.3.6.1.2.1.1.7.0",
+					Name:  ".1.3.6.1.2.1.1.7.0",
 					Type:  Integer,
 					Value: 78,
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.2.1.2.6",
+					Name:  ".1.3.6.1.2.1.2.2.1.2.6",
 					Type:  OctetString,
 					Value: "GigabitEthernet0",
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.2.1.5.3",
+					Name:  ".1.3.6.1.2.1.2.2.1.5.3",
 					Type:  Gauge32,
 					Value: uint(4294967295),
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.2.1.7.2",
+					Name:  ".1.3.6.1.2.1.2.2.1.7.2",
 					Type:  NoSuchInstance,
 					Value: nil,
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.2.1.9.3",
+					Name:  ".1.3.6.1.2.1.2.2.1.9.3",
 					Type:  TimeTicks,
 					Value: 2970,
 				},
 				{
-					Name:  "1.3.6.1.2.1.3.1.1.2.10.1.10.11.0.17",
+					Name:  ".1.3.6.1.2.1.3.1.1.2.10.1.10.11.0.17",
 					Type:  OctetString,
 					Value: "00 07 7d 4d 09 00",
 				},
 				{
-					Name:  "1.3.6.1.2.1.3.1.1.3.10.1.10.11.0.2",
+					Name:  ".1.3.6.1.2.1.3.1.1.3.10.1.10.11.0.2",
 					Type:  IPAddress,
 					Value: "10.11.0.2",
 				},
 				{
-					Name:  "1.3.6.1.2.1.4.20.1.1.110.143.197.1",
+					Name:  ".1.3.6.1.2.1.4.20.1.1.110.143.197.1",
 					Type:  IPAddress,
 					Value: "110.143.197.1",
 				},
 				{
-					Name:  "1.3.6.1.66.1",
+					Name:  ".1.3.6.1.66.1",
 					Type:  NoSuchObject,
 					Value: nil,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.2.0",
+					Name:  ".1.3.6.1.2.1.1.2.0",
 					Type:  ObjectIdentifier,
-					Value: "1.3.6.1.4.1.9.1.1166",
+					Value: ".1.3.6.1.4.1.9.1.1166",
 				},
 			},
 		},
@@ -364,7 +364,7 @@ var testsUnmarshal = []struct {
 			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
-					Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
+					Name:  ".1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
 					Type:  Integer,
 					Value: 1,
 				},
@@ -381,7 +381,7 @@ var testsUnmarshal = []struct {
 			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
-					Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
+					Name:  ".1.3.6.1.4.1.318.1.1.4.4.2.1.3.5",
 					Type:  Integer,
 					Value: 2,
 				},
@@ -398,34 +398,34 @@ var testsUnmarshal = []struct {
 			ErrorIndex: 0,
 			Variables: []SnmpPDU{
 				{
-					Name:  "1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.2",
+					Name:  ".1.3.6.1.2.1.3.1.1.3.2.1.192.168.104.2",
 					Type:  IPAddress,
 					Value: "192.168.104.2",
 				},
 				{
-					Name:  "1.3.6.1.2.1.92.1.2.1.0",
+					Name:  ".1.3.6.1.2.1.92.1.2.1.0",
 					Type:  Counter32,
 					Value: 0,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.3.3",
+					Name:  ".1.3.6.1.2.1.1.9.1.3.3",
 					Type:  OctetString,
 					Value: "The MIB module for managing IP and ICMP implementations",
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.2",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.2",
 					Type:  TimeTicks,
 					Value: 21,
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.1.0",
+					Name:  ".1.3.6.1.2.1.2.1.0",
 					Type:  Integer,
 					Value: 3,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.2.0",
+					Name:  ".1.3.6.1.2.1.1.2.0",
 					Type:  ObjectIdentifier,
-					Value: "1.3.6.1.4.1.8072.3.2.10",
+					Value: ".1.3.6.1.4.1.8072.3.2.10",
 				},
 			},
 		},
@@ -440,52 +440,52 @@ var testsUnmarshal = []struct {
 			MaxRepetitions: 10,
 			Variables: []SnmpPDU{
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.1",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.1",
 					Type:  TimeTicks,
 					Value: 21,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.2",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.2",
 					Type:  TimeTicks,
 					Value: 21,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.3",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.3",
 					Type:  TimeTicks,
 					Value: 21,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.4",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.4",
 					Type:  TimeTicks,
 					Value: 21,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.5",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.5",
 					Type:  TimeTicks,
 					Value: 21,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.6",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.6",
 					Type:  TimeTicks,
 					Value: 23,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.7",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.7",
 					Type:  TimeTicks,
 					Value: 23,
 				},
 				{
-					Name:  "1.3.6.1.2.1.1.9.1.4.8",
+					Name:  ".1.3.6.1.2.1.1.9.1.4.8",
 					Type:  TimeTicks,
 					Value: 23,
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.1.0",
+					Name:  ".1.3.6.1.2.1.2.1.0",
 					Type:  Integer,
 					Value: 3,
 				},
 				{
-					Name:  "1.3.6.1.2.1.2.2.1.1.1",
+					Name:  ".1.3.6.1.2.1.2.2.1.1.1",
 					Type:  Integer,
 					Value: 1,
 				},

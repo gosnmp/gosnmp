@@ -40,7 +40,7 @@ func TestGenericBasicGet(t *testing.T) {
 	setupConnection(t)
 	defer Default.Conn.Close()
 
-	result, err := Default.Get([]string{"1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -61,8 +61,8 @@ func TestGenericMultiGet(t *testing.T) {
 	defer Default.Conn.Close()
 
 	oids := []string{
-		"1.3.6.1.2.1.1.1.0", // SNMP MIB-2 sysDescr
-		"1.3.6.1.2.1.1.5.0", // SNMP MIB-2 sysName
+		".1.3.6.1.2.1.1.1.0", // SNMP MIB-2 sysDescr
+		".1.3.6.1.2.1.1.5.0", // SNMP MIB-2 sysName
 	}
 	result, err := Default.Get(oids)
 	if err != nil {
@@ -82,7 +82,7 @@ func TestGenericGetNext(t *testing.T) {
 	setupConnection(t)
 	defer Default.Conn.Close()
 
-	sysDescrOid := "1.3.6.1.2.1.1.1.0" // SNMP MIB-2 sysDescr
+	sysDescrOid := ".1.3.6.1.2.1.1.1.0" // SNMP MIB-2 sysDescr
 	result, err := Default.GetNext([]string{sysDescrOid})
 	if err != nil {
 		t.Fatalf("GetNext() failed with error => %v", err)
@@ -133,7 +133,7 @@ func TestGenericFailureUnknownHost(t *testing.T) {
 	if !strings.Contains(strings.ToLower(err.Error()), "no such host") {
 		t.Fatalf("Expected connection error of type 'no such host'! Got => %v", err)
 	}
-	_, err = Default.Get([]string{"1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	_, err = Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
 		t.Fatalf("Expected get to fail due to missing connection")
 	}
@@ -145,7 +145,7 @@ func TestGenericFailureConnectionTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Did not expect connection error with IP address")
 	}
-	_, err = Default.Get([]string{"1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	_, err = Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
 		t.Fatalf("Expected Get() to fail due to invalid IP")
 	}
@@ -161,7 +161,7 @@ func TestGenericFailureConnectionRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Did not expect connection error with IP address")
 	}
-	_, err = Default.Get([]string{"1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	_, err = Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
 		t.Fatalf("Expected Get() to fail due to invalid port")
 	}
