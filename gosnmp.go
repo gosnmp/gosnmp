@@ -22,7 +22,7 @@ const (
 	maxOids = 60
 
 	// Base OID for MIB-2 defined SNMP variables
-	baseOid = "1.3.6.1.2.1"
+	baseOid = ".1.3.6.1.2.1"
 
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
@@ -80,7 +80,7 @@ var Default = &GoSNMP{
 // SnmpPDU will be used when doing SNMP Set's
 type SnmpPDU struct {
 
-	// Name is an oid in string format eg "1.3.6.1.4.9.27"
+	// Name is an oid in string format eg ".1.3.6.1.4.9.27"
 	Name string
 
 	// The type of the value eg Integer
