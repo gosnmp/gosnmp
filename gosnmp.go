@@ -31,7 +31,7 @@ const (
 	defaultNonRepeaters = 0
 )
 
-//LoggingDisabled is set if the Logger is nil, short circuits any 'slog' calls
+// LoggingDisabled is set if the Logger is nil, short circuits any 'slog' calls
 var LoggingDisabled bool
 
 // GoSNMP represents GoSNMP library state
