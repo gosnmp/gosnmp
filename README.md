@@ -12,14 +12,11 @@ About
 -----
 
 **soniah/gosnmp** is based on **alouca/gosnmp** - many thanks to Andreas
-Louca for starting the project. Thanks also to the following who have
-contributed:
+Louca for starting the project, other contributors (AUTHORS.md) and
+these project collaborators:
 
-* Chris Dance (@codedance) - Fixes, SNMP Walk functionality and examples, Retry Support
-* Nathan Owens (@virtuallynathan) - Fixes / Changes
-* Jacob Dubinsky (@jdubinsky) - All of GetNext and GetBulk
-* Jon Auer (@jda) - Data truncation fix
-* Andreas Louca (@alouca) - Original library
+* Chris Dance ([@codedance](https://github.com/codedance/))
+* Nathan Owens ([@virtuallynathan](https://github.com/virtuallynathan/))
 
 Overview
 --------
