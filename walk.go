@@ -15,11 +15,15 @@ func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) e
 	}
 	oid := rootOid
 	requests := 0
+	maxReps := x.MaxRepetitions
+	if maxReps <= 0 {
+		maxReps = defaultMaxRepetitions
+	}
 
 	getFn := func(oid string) (result *SnmpPacket, err error) {
 		switch getRequestType {
 		case GetBulkRequest:
-			return x.GetBulk([]string{oid}, defaultNonRepeaters, defaultMaxRepetitions)
+			return x.GetBulk([]string{oid}, uint8(x.NonRepeaters), uint8(maxReps))
 		case GetNextRequest:
 			return x.GetNext([]string{oid})
 		default:

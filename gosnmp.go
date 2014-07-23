@@ -26,9 +26,6 @@ const (
 
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
-
-	// TODO comment
-	defaultNonRepeaters = 0
 )
 
 // LoggingDisabled is set if the Logger is nil, short circuits any 'slog' calls
@@ -62,6 +59,14 @@ type GoSNMP struct {
 	// output will be discarded (/dev/null). For verbose logging to stdout:
 	// x.Logger = log.New(os.Stdout, "", 0)
 	Logger Logger
+
+	// MaxRepititions sets the GETBULK max-repetitions used by BulkWalk*
+	// (default: 50)
+	MaxRepetitions int
+
+	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*
+	// (default: 0 as per RFC 1905)
+	NonRepeaters int
 
 	// Internal - used to sync requests to responses
 	requestID uint32
