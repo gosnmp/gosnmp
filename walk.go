@@ -13,6 +13,11 @@ func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) e
 	if rootOid == "" || rootOid == "." {
 		rootOid = baseOid
 	}
+
+	if !strings.HasPrefix(rootOid, ".") {
+		rootOid = string(".") + rootOid
+	}
+
 	oid := rootOid
 	requests := 0
 	maxReps := x.MaxRepetitions
