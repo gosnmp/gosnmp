@@ -23,9 +23,10 @@ import (
 
 // variable struct is used by decodeValue(), which is used for debugging
 type variable struct {
-	Name  []int
-	Type  Asn1BER
-	Value interface{}
+	Name     []int
+	Type     Asn1BER
+	Value    interface{}
+	RawValue []byte
 }
 
 // -- helper functions (mostly) in alphabetical order --------------------------
@@ -54,6 +55,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 		retVal.Type = Integer
 		retVal.Value = ret
+		retVal.RawValue = data[cursor:length]
 	case OctetString:
 		// 0x04
 		if LoggingDisabled != true {
@@ -68,6 +70,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		} else {
 			retVal.Value = string(data[cursor:length])
 		}
+		retVal.RawValue = data[cursor:length]
 	case Null:
 		// 0x05
 		if LoggingDisabled != true {
@@ -75,6 +78,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 		retVal.Type = Null
 		retVal.Value = nil
+		retVal.RawValue = []byte{}
 	case ObjectIdentifier:
 		// 0x06
 		if LoggingDisabled != true {
@@ -128,6 +132,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 		retVal.Type = Counter32
 		retVal.Value = ret
+		retVal.RawValue = data[cursor:length]
 	case Gauge32:
 		// 0x42. unsigned
 		if LoggingDisabled != true {
@@ -143,6 +148,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 		retVal.Type = Gauge32
 		retVal.Value = ret
+		retVal.RawValue = data[cursor:length]
 	case TimeTicks:
 		// 0x43
 		if LoggingDisabled != true {
@@ -158,6 +164,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 		retVal.Type = TimeTicks
 		retVal.Value = ret
+		retVal.RawValue = data[cursor:length]
 	case Counter64:
 		// 0x46
 		if LoggingDisabled != true {
@@ -173,6 +180,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 		retVal.Type = Counter64
 		retVal.Value = ret
+		retVal.RawValue = data[cursor:length]
 	case NoSuchObject:
 		// 0x80
 		if LoggingDisabled != true {

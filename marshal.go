@@ -517,7 +517,13 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 		}
 		valueLength, _ := parseLength(packet[cursor:])
 		cursor += valueLength
-		response.Variables = append(response.Variables, SnmpPDU{oidToString(oid), v.Type, v.Value})
+		pdu := SnmpPDU{
+			oidToString(oid),
+			v.Type,
+			v.Value,
+			v.RawValue,
+		}
+		response.Variables = append(response.Variables, pdu)
 	}
 	return response, nil
 }
