@@ -100,9 +100,9 @@ func TestVeraxGet(t *testing.T) {
 				var ok bool
 				if vval, ok = vvalue.(string); !ok {
 					t.Errorf("failed string assert vvalue |%v|", vval)
-				} else if gval, ok = gvalue.(string); !ok {
+				} else if b, ok := gvalue.([]byte); !ok {
+					gval = string(b)
 					t.Errorf("failed string assert gvalue |%v|", gval)
-
 				} else if strings.HasPrefix(vval, "2010-") {
 					// skip weird Verax encoded hex strings
 					continue

@@ -53,7 +53,8 @@ func printValue(pdu gosnmp.SnmpPDU) error {
 
 	switch pdu.Type {
 	case gosnmp.OctetString:
-		fmt.Printf("STRING: %s\n", pdu.Value.(string))
+		b := pdu.Value.([]byte)
+		fmt.Printf("STRING: %s\n", string(b))
 	default:
 		fmt.Printf("TYPE %d: %d\n", pdu.Type, gosnmp.ToBigInt(pdu.Value))
 	}

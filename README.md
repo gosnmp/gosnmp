@@ -98,7 +98,8 @@ Here is code from **example/example.go**, demonstrating how to use GoSNMP:
         // interface{}. You could do a type switch...
         switch variable.Type {
         case g.OctetString:
-            fmt.Printf("string: %s\n", variable.Value.(string))
+            bytes := variable.Value.([]bytes)
+            fmt.Printf("string: %s\n", string(bytes))
         default:
             // ... or often you're just interested in numeric values.
             // ToBigInt() will return the Value as a BigInt, for plugging

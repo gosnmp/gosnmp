@@ -5,6 +5,7 @@
 package gosnmp
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -31,8 +32,8 @@ type testsEnmarshalVarbindPosition struct {
 	// and choose snmp. Click on each varbind and the "packet bytes" window
 	// will highlight the corresponding bytes, then the "eyeball tool" can be
 	// used to find the start and finish values...
-	start     int
-	finish    int
+	start    int
+	finish   int
 	pduType  Asn1BER
 	pduValue interface{}
 }
@@ -267,7 +268,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.1.4.0",
 					Type:  OctetString,
-					Value: "Administrator",
+					Value: []byte("Administrator"),
 				},
 				{
 					Name:  ".1.3.6.1.2.1.43.5.1.1.15.1",
@@ -282,7 +283,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.4.1.23.2.5.1.1.1.4.2",
 					Type:  OctetString,
-					Value: "00 15 99 37 76 2b",
+					Value: []byte{0x00, 0x15, 0x99, 0x37, 0x76, 0x2b},
 				},
 				{
 					Name:  ".1.3.6.1.2.1.1.3.0",
@@ -309,7 +310,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.2.2.1.2.6",
 					Type:  OctetString,
-					Value: "GigabitEthernet0",
+					Value: []byte("GigabitEthernet0"),
 				},
 				{
 					Name:  ".1.3.6.1.2.1.2.2.1.5.3",
@@ -329,7 +330,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.3.1.1.2.10.1.10.11.0.17",
 					Type:  OctetString,
-					Value: "00 07 7d 4d 09 00",
+					Value: []byte{0x00, 0x07, 0x7d, 0x4d, 0x09, 0x00},
 				},
 				{
 					Name:  ".1.3.6.1.2.1.3.1.1.3.10.1.10.11.0.2",
@@ -410,7 +411,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.1.9.1.3.3",
 					Type:  OctetString,
-					Value: "The MIB module for managing IP and ICMP implementations",
+					Value: []byte("The MIB module for managing IP and ICMP implementations"),
 				},
 				{
 					Name:  ".1.3.6.1.2.1.1.9.1.4.2",
@@ -554,7 +555,11 @@ SANITY:
 				if vbval.Cmp(vbrval) != 0 {
 					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 				}
-			case OctetString, IPAddress, ObjectIdentifier:
+			case OctetString:
+				if !bytes.Equal(vb.Value.([]byte), vbr.Value.([]byte)) {
+					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+				}
+			case IPAddress, ObjectIdentifier:
 				if vb.Value != vbr.Value {
 					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 				}

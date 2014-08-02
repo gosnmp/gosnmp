@@ -6,9 +6,10 @@ package main
 
 import (
 	"fmt"
-	g "github.com/soniah/gosnmp"
 	"log"
 	"time"
+
+	g "github.com/soniah/gosnmp"
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
 		// interface{}. You could do a type switch...
 		switch variable.Type {
 		case g.OctetString:
-			fmt.Printf("string: %s\n", variable.Value.(string))
+			fmt.Printf("string: %s\n", string(variable.Value.([]byte)))
 		default:
 			// ... or often you're just interested in numeric values.
 			// ToBigInt() will return the Value as a BigInt, for plugging

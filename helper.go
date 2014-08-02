@@ -61,13 +61,7 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 		length, cursor := parseLength(data)
 		retVal.Type = OctetString
-		if data[cursor] == 0 && length == 2 {
-			retVal.Value = ""
-		} else if data[cursor] == 0 {
-			retVal.Value = fmt.Sprintf("% x", data[cursor:length])
-		} else {
-			retVal.Value = string(data[cursor:length])
-		}
+		retVal.Value = []byte(data[cursor:length])
 	case Null:
 		// 0x05
 		if LoggingDisabled != true {
