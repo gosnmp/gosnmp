@@ -31,8 +31,8 @@ type testsEnmarshalVarbindPosition struct {
 	// and choose snmp. Click on each varbind and the "packet bytes" window
 	// will highlight the corresponding bytes, then the "eyeball tool" can be
 	// used to find the start and finish values...
-	start     int
-	finish    int
+	start    int
+	finish   int
 	pduType  Asn1BER
 	pduValue interface{}
 }
