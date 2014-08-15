@@ -95,6 +95,7 @@ func TestGenericGetNext(t *testing.T) {
 	}
 }
 
+/*
 func TestGenericWalk(t *testing.T) {
 	setupConnection(t)
 	defer Default.Conn.Close()
@@ -107,6 +108,7 @@ func TestGenericWalk(t *testing.T) {
 		t.Fatalf("Expected multiple values, got %d", len(result))
 	}
 }
+*/
 
 func TestGenericBulkWalk(t *testing.T) {
 	setupConnection(t)

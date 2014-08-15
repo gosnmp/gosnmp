@@ -115,7 +115,7 @@ Running this example gives the following output (from my printer):
     1: oid: 1.3.6.1.2.1.1.7.0 number: 104
 
 **example/example2.go** is similar to example.go, however is uses a custom
-&GoSNMP rather than **g.Default**.
+```&GoSNMP``` rather than ```g.Default```.
 
 **example/walkexample.go** demonstrates using ```BulkWalk```.
 
@@ -180,48 +180,12 @@ Tests are grouped as follows:
 * Public API consistency tests:
    * `gosnmp_api_test.go`
 * End-to-end integration tests:
-   * `generic_e2e_test.go`
-   * `verax_test.go`
- 
-The generic end-to-end integration test `generic_e2e_test.go` should 
+   * `generic_e2e_test.go` - currently disabled
+   * (deprecated) Verax tests - see readme in verax directory
+
+The generic end-to-end integration test `generic_e2e_test.go` should
 work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
 To use, edit your host file so `gosnmp-test-host` resolves to the system's IP.
-
-The other integration test uses the **Verax Snmp Simulator** [1]: download,
-install and run it with the default configuration. Then, in the gosnmp
-directory, run these commands (or equivalents for your system):
-
-    cd ~/go/src/github.com/soniah/gosnmp
-    ln -s /usr/local/vxsnmpsimulator/device device
-
-    # remove randomising elements from Verax device files
-    cd device/cisco
-    sed -i -e 's!\/\/\$.*!!' -e 's!^M!!' cisco_router.txt
-    sed -i -e 's/\/\/\^int.unq()\^\/\//2/' cisco_router.txt
-    cd ../os
-    sed -i -e 's!\/\/\$.*!!' -e 's!^M!!' os-linux-std.txt
-    sed -i -e 's/\/\/\^int.unq()\^\/\//2/' os-linux-std.txt
-    cd ~/go/src/github.com/soniah/gosnmp
-    go test
-
-To run only the Verax tests:
-
-    go test -run TestVeraxGet 2>&1 | less
-
-I have noticed that the Verax tests randomly fail when using multi-OID
-Get() requests. I believe these bugs come from Verax not GoSNMP. To run
-non-Verax tests:
-
-    % grep -h '^func.*Test' *test.go
-    func TestEnmarshalVarbind(t *testing.T) {
-    func TestEnmarshalVBL(t *testing.T) {
-    ... <snip>
-
-    # for example
-    go test -run TestEnmarshalMsg
-
-    # or use the helpful shell script
-    ./non-verax-tests.sh
 
 To profile cpu usage:
 
@@ -240,8 +204,6 @@ To check test coverage:
     go get github.com/axw/gocov/gocov
     go get github.com/matm/gocov-html
     gocov test github.com/soniah/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
-
-[1] http://www.veraxsystems.com/en/products/snmpsimulator
 
 License
 -------

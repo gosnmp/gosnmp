@@ -16,4 +16,4 @@ install:
 - go get github.com/soniah/gosnmp
 
 script:
-- ./non-verax-tests.sh
+- go test
