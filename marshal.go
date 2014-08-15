@@ -381,7 +381,7 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 			return nil, fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
 		}
 	default:
-		return nil, fmt.Errorf("Unknown PDUType %#x")
+		return nil, fmt.Errorf("Unknown PDUType %#x", requestType)
 	}
 	return response, nil
 }
