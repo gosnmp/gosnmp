@@ -49,20 +49,20 @@ RequestLoop:
 		}
 
 		for _, v := range response.Variables {
-			if v.Name == oid {
-				return fmt.Errorf("OID not increasing: %s", v.Name)
+			if v.Type == EndOfMibView || v.Type == NoSuchObject || v.Type == NoSuchInstance {
+				x.Logger.Printf("BulkWalk terminated with type 0x%x", v.Type)
+				break RequestLoop
 			}
 			if !strings.HasPrefix(v.Name, rootOid) {
 				// Not in the requested root range.
 				break RequestLoop
 			}
+			if v.Name == oid {
+				return fmt.Errorf("OID not increasing: %s", v.Name)
+			}
 			// Report our pdu
 			if err := walkFn(v); err != nil {
 				return err
-			}
-			if v.Type == EndOfMibView || v.Type == NoSuchObject || v.Type == NoSuchInstance {
-				x.Logger.Printf("BulkWalk terminated with type 0x%x", v.Type)
-				break RequestLoop
 			}
 		}
 		// Save last oid for next request
