@@ -103,7 +103,6 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	}
 	slog = x.Logger // global variable for debug logging
 
-	finalDeadline := time.Now().Add(x.Timeout)
 
 	if x.Retries < 0 {
 		x.Retries = 0
@@ -114,10 +113,6 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			if LoggingDisabled != true {
 				slog.Printf("Retry number %d. Last error was: %v", retries, err)
 			}
-			if time.Now().After(finalDeadline) {
-				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
-				break
-			}
 			if retries > x.Retries {
 				// Report last error
 				break
@@ -125,7 +120,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		}
 		err = nil
 
-		reqDeadline := time.Now().Add(x.Timeout / time.Duration(x.Retries+1))
+		reqDeadline := time.Now().Add(x.Timeout)
 		x.Conn.SetDeadline(reqDeadline)
 
 		// Request ID is an atomic counter (started at a random value)
