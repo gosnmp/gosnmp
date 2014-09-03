@@ -538,7 +538,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(length)
 		pduBuf.Write(tmpBytes)
 
-	// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
+		// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
 	case IPAddress:
 		//Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
