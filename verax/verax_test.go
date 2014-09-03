@@ -2,7 +2,7 @@
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
 
-package gosnmp
+package verax_test
 
 import (
 	"fmt"
@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	. "github.com/soniah/gosnmp"
 )
 
 type testResults map[string]SnmpPDU
