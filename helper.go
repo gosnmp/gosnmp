@@ -371,11 +371,15 @@ func marshalOID(oid string) ([]byte, error) {
 }
 
 func oidToString(oid []int) (ret string) {
-	values := make([]interface{}, len(oid))
-	for i, v := range oid {
-		values[i] = v
+	oidAsString := make([]string, len(oid)+1)
+
+	// used for appending of the first dot
+	oidAsString[0] = ""
+	for i, _ := range oid {
+		oidAsString[i+1] = strconv.Itoa(oid[i])
 	}
-	return fmt.Sprintf(strings.Repeat(".%d", len(oid)), values...)
+
+	return strings.Join(oidAsString, ".")
 }
 
 // parseBase128Int parses a base-128 encoded int from the given offset in the
