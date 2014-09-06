@@ -296,7 +296,7 @@ func marshalInt16(value int) (rs []byte) {
 		rs = []byte{byte(value)}
 		return
 	}
-	if value > 0xff && value < 0xffff {
+	if value > 0xff && value <= 0xffff {
 		rs = []byte{byte(((value >> 8) & 0xff)), byte((value & 0xff))}
 		return
 	}
