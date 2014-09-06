@@ -306,12 +306,20 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		pduBuf.Write(oid)
 		pduBuf.Write([]byte{Null, 0x00})
+	// TODO Integer onwwards is for SET's, needs
+	// proper testing, refactoring
 	case Integer:
 		// Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
 		// Integer
-		intBytes := []byte{byte(pdu.Value.(int))}
+		var intBytes []byte
+		switch pduform := pdu.Value.(type) {
+		case byte:
+			intBytes = []byte{byte(pdu.Value.(int))}
+		case int:
+			intBytes = marshalInt16(pduform)
+		}
 		tmpBuf.Write([]byte{byte(Integer), byte(len(intBytes))})
 		tmpBuf.Write(intBytes)
 		// Sequence, length of oid + integer, then oid/integer data

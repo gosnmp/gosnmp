@@ -288,6 +288,21 @@ func marshalBase128Int(out *bytes.Buffer, n int64) (err error) {
 	return nil
 }
 
+// marshalInt16 builds a byte representation of
+// a 16 bit int in BigEndian form.
+// TODO add an error return, like other marshals
+func marshalInt16(value int) (rs []byte) {
+	if value <= 0xff {
+		rs = []byte{byte(value)}
+		return
+	}
+	if value > 0xff && value < 0xffff {
+		rs = []byte{byte(((value >> 8) & 0xff)), byte((value & 0xff))}
+		return
+	}
+	return
+}
+
 // marshalLength builds a byte representation of length
 //
 // http://luca.ntop.org/Teaching/Appunti/asn1.html
