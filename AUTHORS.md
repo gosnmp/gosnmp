@@ -5,6 +5,7 @@
 * Jacob Dubinsky (@jdubinsky)
 * Mattias Folke (@msfe)
 * Sonia Hamilton (@soniah)
+* Marcin Jurczuk (@mrspock)
 * Andreas Louca (@alouca)
 * Nathan Owens (@virtuallynathan)
 
