@@ -26,9 +26,10 @@ var _ = os.DevNull           // dummy
 type testsEnmarshalVarbindPosition struct {
 	oid string
 	// start and finish position of bytes are calculated with application layer
-	// starting at byte 0. The easiest way to calculate these values is to use
-	// ghex (or similar) to delete the bytes from the lower layers of the
-	// capture. Then open the capture in wireshark, right-click, "decode as..."
+	// starting at byte 0. The easiest way to calculate these values is to select
+	// "Simple Network Management Protocal" line in Wiresharks middle pane, then right click
+	// and choose "Export Selected Package Bytes..." (don't use ghex etc, too hard).
+	// Then open the capture in wireshark, right-click, "decode as..."
 	// and choose snmp. Click on each varbind and the "packet bytes" window
 	// will highlight the corresponding bytes, then the "eyeball tool" can be
 	// used to find the start and finish values...
@@ -104,6 +105,55 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x36, // finish
 		[]testsEnmarshalVarbindPosition{
 			{".1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 2},
+		},
+	},
+	// MrSpock Set stuff
+	{
+		Version2c,
+		"private",
+		SetRequest,
+		756726019,
+		setOctet1,
+		"setOctet1",
+		0x0e, // pdu start
+		0x1c, // vbl start
+		0x32, // finish
+		[]testsEnmarshalVarbindPosition{
+			{".1.3.6.1.4.1.2863.205.1.1.75.1.0",
+				0x1e, 0x32, OctetString, []byte{0x80}},
+		},
+	},
+	{
+		Version2c,
+		"private",
+		SetRequest,
+		1000552357,
+		setOctet2,
+		"setOctet2",
+		0x0e, // pdu start
+		0x1c, // vbl start
+		0x37, // finish
+		[]testsEnmarshalVarbindPosition{
+			{".1.3.6.1.4.1.2863.205.1.1.75.2.0",
+				0x1e, 0x36, OctetString, "telnet"},
+		},
+	},
+	// MrSpock Set stuff
+	{
+		Version2c,
+		"private",
+		SetRequest,
+		1664317637,
+		setInteger1,
+		"setInteger1",
+		0x0e, // pdu start
+		0x1c, // vbl start
+		0x7f, // finish
+		[]testsEnmarshalVarbindPosition{
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2", 0x1e, 0x36, Integer, 5001},
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2", 0x37, 0x4f, Integer, 5001},
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2", 0x50, 0x67, Integer, 2},
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2", 0x68, 0x7f, Integer, 1},
 		},
 	},
 }
@@ -811,6 +861,106 @@ func portOffIncoming1() []byte {
 		0x04, 0x04, 0x02, 0x01, 0x03, 0x05, 0x02, 0x01, 0x02,
 	}
 }
+
+// MrSpock START
+
+/*
+setOctet1:
+Simple Network Management Protocol
+  version: v2c (1)
+  community: private
+  data: set-request (3)
+    set-request
+      request-id: 756726019
+      error-status: noError (0)
+      error-index: 0
+      variable-bindings: 1 item
+        1.3.6.1.4.1.2863.205.1.1.75.1.0: 80
+          Object Name: 1.3.6.1.4.1.2863.205.1.1.75.1.0 (iso.3.6.1.4.1.2863.205.1.1.75.1.0)
+          Value (OctetString): 80
+
+setOctet2:
+Simple Network Management Protocol
+    version: v2c (1)
+    community: private
+    data: set-request (3)
+        set-request
+            request-id: 1000552357
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 1 item
+                1.3.6.1.4.1.2863.205.1.1.75.2.0: 74656c6e6574
+                    Object Name: 1.3.6.1.4.1.2863.205.1.1.75.2.0 (iso.3.6.1.4.1.2863.205.1.1.75.2.0)
+                    Value (OctetString): 74656c6e6574 ("telnet")
+*/
+
+func setOctet1() []byte {
+	return []byte{
+		0x30, 0x31, 0x02, 0x01, 0x01, 0x04, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0xa3, 0x23, 0x02, 0x04, 0x2d, 0x1a, 0xb9, 0x03, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x30, 0x15, 0x30, 0x13, 0x06, 0x0e, 0x2b, 0x06,
+		0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x01, 0x01, 0x4b, 0x01, 0x00,
+		0x04, 0x01, 0x80,
+	}
+}
+
+func setOctet2() []byte {
+	return []byte{
+		0x30, 0x36, 0x02, 0x01, 0x01, 0x04, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0xa3, 0x28, 0x02, 0x04, 0x3b, 0xa3, 0x37, 0xa5, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x30, 0x1a, 0x30, 0x18, 0x06, 0x0e, 0x2b, 0x06,
+		0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x01, 0x01, 0x4b, 0x02, 0x00,
+		0x04, 0x06, 0x74, 0x65, 0x6c, 0x6e, 0x65, 0x74,
+	}
+}
+
+/* setInteger1:
+snmpset -c private -v2c 10.80.0.14 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2 i 5001 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2 i 5001 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2 i 2 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2 i 1
+
+Simple Network Management Protocol
+ version: v2c (1)
+ community: private
+ data: set-request (3)
+  set-request
+   request-id: 1664317637
+   error-status: noError (0)
+   error-index: 0
+   variable-bindings: 4 items
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2)
+     Value (Integer32): 5001
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2)
+     Value (Integer32): 5001
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2)
+     Value (Integer32): 2
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2)
+     Value (Integer32): 1
+*/
+
+func setInteger1() []byte {
+	return []byte{
+		0x30, 0x7e, 0x02, 0x01, 0x01, 0x04, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0xa3, 0x70, 0x02, 0x04, 0x63, 0x33, 0x78, 0xc5, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x30, 0x62, 0x30, 0x17, 0x06, 0x11, 0x2b, 0x06,
+		0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21, 0x02, 0x05,
+		0x01, 0x02, 0x02, 0x02, 0x02, 0x13, 0x89, 0x30, 0x17, 0x06, 0x11, 0x2b,
+		0x06, 0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21, 0x02,
+		0x05, 0x01, 0x03, 0x02, 0x02, 0x02, 0x13, 0x89, 0x30, 0x16, 0x06, 0x11,
+		0x2b, 0x06, 0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21,
+		0x02, 0x05, 0x01, 0x04, 0x02, 0x02, 0x01, 0x02, 0x30, 0x16, 0x06, 0x11,
+		0x2b, 0x06, 0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21,
+		0x02, 0x05, 0x01, 0x05, 0x02, 0x02, 0x01, 0x01,
+	}
+}
+
+// MrSpock FINISH
 
 func ciscoGetnextResponseBytes() []byte {
 	return []byte{
