@@ -119,6 +119,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"private",
 		SetRequest,
 		756726019,
+		0,
 		setOctet1,
 		"setOctet1",
 		0x0e, // pdu start
@@ -134,6 +135,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"private",
 		SetRequest,
 		1000552357,
+		0,
 		setOctet2,
 		"setOctet2",
 		0x0e, // pdu start
@@ -150,6 +152,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"private",
 		SetRequest,
 		1664317637,
+		0,
 		setInteger1,
 		"setInteger1",
 		0x0e, // pdu start
