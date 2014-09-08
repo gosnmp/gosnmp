@@ -40,11 +40,20 @@ type GoSNMP struct {
 	// Port is a udp port
 	Port uint16
 
+	// Version is an SNMP Version
+	Version SnmpVersion
+
 	// Community is an SNMP Community string
 	Community string
 
-	// Version is an SNMP Version
-	Version SnmpVersion
+	// MsgFlags is an SNMPV3 MsgFlags
+	MsgFlags SnmpV3MsgFlags
+
+	// SecurityModel is an SNMPV3 Security Model
+	SecurityModel SnmpV3SecurityModel
+
+	// SecurityParameters is an SNMPV3 User Security Model paramaters struct
+	SecurityParameters *UsmSecurityParameters
 
 	// Timeout is the timeout for the SNMP Query
 	Timeout time.Duration
@@ -70,7 +79,11 @@ type GoSNMP struct {
 
 	// Internal - used to sync requests to responses
 	requestID uint32
-	random    *rand.Rand
+
+	// Internal - used to sync requests to responses - snmpv3
+	msgID uint32
+
+	random *rand.Rand
 }
 
 // The default connection settings
@@ -140,8 +153,24 @@ func (x *GoSNMP) Connect() error {
 	if x.random == nil {
 		x.random = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	}
-	x.requestID = x.random.Uint32()
+	x.requestID = uint32(x.random.Int31())
+	x.msgID = uint32(x.random.Int31())
 	return nil
+}
+
+func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
+	return &SnmpPacket{
+		Version:            x.Version,
+		Community:          x.Community,
+		MsgFlags:           x.MsgFlags,
+		SecurityModel:      x.SecurityModel,
+		SecurityParameters: x.SecurityParameters,
+		Error:              0,
+		ErrorIndex:         0,
+		PDUType:            pdutype,
+		NonRepeaters:       nonRepeaters,
+		MaxRepetitions:     maxRepetitions,
+	}
 }
 
 // Get sends an SNMP GET request
@@ -157,13 +186,7 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
 	// build up SnmpPacket
-	packetOut := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    GetRequest,
-		Version:    x.Version,
-	}
+	packetOut := x.mkSnmpPacket(GetRequest, 0, 0)
 	return x.send(pdus, packetOut)
 }
 
@@ -173,13 +196,7 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 		return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers and OctetStrings")
 	}
 	// build up SnmpPacket
-	packetOut := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    SetRequest,
-		Version:    x.Version,
-	}
+	packetOut := x.mkSnmpPacket(SetRequest, 0, 0)
 	return x.send(pdus, packetOut)
 }
 
@@ -198,13 +215,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	}
 
 	// Marshal and send the packet
-	packetOut := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    GetNextRequest,
-		Version:    x.Version,
-	}
+	packetOut := x.mkSnmpPacket(GetNextRequest, 0, 0)
 
 	return x.send(pdus, packetOut)
 }
@@ -224,13 +235,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 	}
 
 	// Marshal and send the packet
-	packetOut := &SnmpPacket{
-		Community:      x.Community,
-		PDUType:        GetBulkRequest,
-		Version:        x.Version,
-		NonRepeaters:   nonRepeaters,
-		MaxRepetitions: maxRepetitions,
-	}
+	packetOut := x.mkSnmpPacket(GetBulkRequest, nonRepeaters, maxRepetitions)
 	return x.send(pdus, packetOut)
 }
 
