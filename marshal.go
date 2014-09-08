@@ -288,6 +288,8 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	pdutype PDUType, msgid uint32, requestid uint32) ([]byte, error) {
+	var auth_param_start uint32
+
 	buf := new(bytes.Buffer)
 
 	// version
@@ -313,15 +315,18 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 
 		var security_parameters []byte
 		if packet.SecurityModel == UserSecurityModel {
-			security_parameters, err = packet.marshalSnmpV3UsmSecurityParameters()
+			var priv_param_start uint32
+			security_parameters, auth_param_start, priv_param_start, err = packet.marshalSnmpV3UsmSecurityParameters()
 			if err != nil {
 				return nil, err
 			}
+			_, _ = auth_param_start, priv_param_start
 		}
 
 		buf.Write([]byte{byte(OctetString)})
 		sec_param_len, err := marshalLength(len(security_parameters))
 		buf.Write(sec_param_len)
+		auth_param_start += buf.Len()
 		buf.Write(security_parameters)
 
 		scoped_pdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
@@ -345,8 +350,66 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	msg.Write(bufLengthBytes)
 
 	buf.WriteTo(msg) // reverse logic - want to do msg.Write(buf)
-	return msg.Bytes(), nil
+
+	authenticated_message, err := packet.authenticate(msg.Bytes(), auth_param_start)
+	if err != nil {
+		return nil, err
+	}
+
+	return authenticated_message, nil
 }
+
+func (packet *SnmpPacket) authenticate(msg []byte, auth_param_start uint32) ([]byte, error) {
+
+	if packet.Version != Version3 {
+		return msg, nil
+	}
+
+	if packet.SecurityModel != UserSecurityModel {
+		return nil, fmt.Errorf("Error authenticating message: Unknown security model.")
+	}
+
+	var sec_params *UsmSecurityParameters
+	sec_params, ok := packet.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || sec_params == nil {
+		return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
+	}
+
+	var secret_key = genlocalkey(sec_params.AuthenticationProtocol,
+		sec_params.AuthenticationPassphrase,
+		sec_params.AuthoritativeEngineID)
+
+	var extkey [64]byte
+
+	copy(extkey[:], secret_key)
+
+	var k1, k2 [64]byte
+
+	for i := 0; i < 64; i++ {
+		k1[i] = extkey[i] ^ 0x36
+		k2[i] = extkey[i] ^ 0x5c
+	}
+
+	var h, h2 hash.Hash
+
+	switch sec_params.AuthenticationProtocol {
+	default:
+		h = md5.New()
+		h2 = md5.New()
+	case SHA:
+		h = sha1.New()
+		h2 = sha1.New()
+	}
+
+	h.Write(k1[:])
+	h.Write(msg)
+	d1 := h.Sum(nil)
+	h2.Write(k2[:])
+	h2.Write(d1)
+	copy(msg[auth_param_start:auth_param_start+12], h2.Sum(nil)[:12])
+	return msg
+}
+
 func marshalUvarInt(x uint32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, x)
@@ -380,12 +443,14 @@ func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, error) {
+func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, uint32, error) {
 	var buf bytes.Buffer
+	var auth_param_start uint32
+	var priv_param_start uint32
 
 	sec_params, ok := packet.SecurityParameters.(*UsmSecurityParameters)
 	if !ok || sec_params == nil {
-		return nil, fmt.Errorf("packet.SecurityParameters is not of type &UsmSecurityParameters.")
+		return nil, 0, 0, fmt.Errorf("packet.SecurityParameters is not of type &UsmSecurityParameters.")
 	}
 
 	// msgAuthoritativeEngineID
@@ -406,21 +471,33 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, error) {
 	buf.Write([]byte{byte(OctetString), byte(len(sec_params.UserName))})
 	buf.WriteString(sec_params.UserName)
 
+	auth_param_start = uint32(buf.Len() + 2) // +2 indicates PDUType + Length
 	// msgAuthenticationParameters
-	buf.Write([]byte{byte(OctetString), 0})
-
+	if packet.MsgFlags&AuthNoPriv > 0 {
+		buf.Write([]byte{byte(OctetString), 12,
+			0, 0, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 0})
+	} else {
+		buf.Write([]byte{byte(OctetString), 0})
+	}
+	priv_param_start = uint32(buf.Len() + 2)
 	// msgPrivacyParameters
-	buf.Write([]byte{byte(OctetString), 0})
+	if packet.MsgFlags&AuthPriv > 0 {
+		buf.Write([]byte{byte(OctetString), 0})
+	} else {
+		buf.Write([]byte{byte(OctetString), 0})
+	}
 
 	// wrap security parameters in a sequence
 	param_len, err := marshalLength(buf.Len())
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 	tmpseq := append([]byte{byte(Sequence)}, param_len...)
 	tmpseq = append(tmpseq, buf.Bytes()...)
 
-	return tmpseq, nil
+	return tmpseq, auth_param_start, priv_param_start, nil
 }
 
 func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
