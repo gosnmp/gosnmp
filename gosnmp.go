@@ -52,8 +52,8 @@ type GoSNMP struct {
 	// SecurityModel is an SNMPV3 Security Model
 	SecurityModel SnmpV3SecurityModel
 
-	// SecurityParameters is an SNMPV3 User Security Model paramaters struct
-	SecurityParameters *UsmSecurityParameters
+	// SecurityParameters is an SNMPV3 Security Model paramaters struct
+	SecurityParameters interface{}
 
 	// Timeout is the timeout for the SNMP Query
 	Timeout time.Duration
