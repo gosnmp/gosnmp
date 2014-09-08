@@ -28,7 +28,7 @@ GoSNMP has the following SNMP functions:
 * **GetBulk**
 * **Walk** - retrieves a subtree of values using GETNEXT.
 * **BulkWalk** - retrieves a subtree of values using GETBULK.
-* **Set** (beta - only supports setting one integer OID)
+* **Set** (beta - currently supports Integers and OctetStrings)
 
 GoSNMP also has the following helper functions:
 
