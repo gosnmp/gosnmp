@@ -7,9 +7,12 @@ package gosnmp
 import (
 	"bytes"
 	"crypto/cipher"
+	"crypto/md5"
+	"crypto/sha1"
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"io/ioutil"
 	"log"
 	"net"
@@ -325,8 +328,11 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 
 		buf.Write([]byte{byte(OctetString)})
 		sec_param_len, err := marshalLength(len(security_parameters))
+		if err != nil {
+			return nil, err
+		}
 		buf.Write(sec_param_len)
-		auth_param_start += buf.Len()
+		auth_param_start += uint32(buf.Len())
 		buf.Write(security_parameters)
 
 		scoped_pdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
@@ -335,6 +341,9 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 		}
 		buf.Write([]byte{byte(Sequence)})
 		pdu_len, err := marshalLength(len(scoped_pdu))
+		if err != nil {
+			return nil, err
+		}
 		buf.Write(pdu_len)
 		buf.Write(scoped_pdu)
 	}
@@ -348,7 +357,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 		return nil, err2
 	}
 	msg.Write(bufLengthBytes)
-
+	auth_param_start += uint32(msg.Len())
 	buf.WriteTo(msg) // reverse logic - want to do msg.Write(buf)
 
 	authenticated_message, err := packet.authenticate(msg.Bytes(), auth_param_start)
@@ -360,11 +369,17 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 }
 
 func (packet *SnmpPacket) authenticate(msg []byte, auth_param_start uint32) ([]byte, error) {
-
+	defer func() {
+		if e := recover(); e != nil {
+			fmt.Printf("recover: %v\n", e)
+		}
+	}()
 	if packet.Version != Version3 {
 		return msg, nil
 	}
-
+	if packet.MsgFlags&AuthNoPriv == 0 {
+		return msg, nil
+	}
 	if packet.SecurityModel != UserSecurityModel {
 		return nil, fmt.Errorf("Error authenticating message: Unknown security model.")
 	}
@@ -407,7 +422,7 @@ func (packet *SnmpPacket) authenticate(msg []byte, auth_param_start uint32) ([]b
 	h2.Write(k2[:])
 	h2.Write(d1)
 	copy(msg[auth_param_start:auth_param_start+12], h2.Sum(nil)[:12])
-	return msg
+	return msg, nil
 }
 
 func marshalUvarInt(x uint32) []byte {
