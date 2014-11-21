@@ -22,6 +22,8 @@ var testsMarshalLength = []struct {
 }{
 	{1, []byte{0x01}},
 	{129, []byte{0x81, 0x81}},
+	{272, []byte{0x82, 0x01, 0x10}},
+	{435, []byte{0x82, 0x01, 0xb3}},
 }
 
 func TestMarshalLength(t *testing.T) {
