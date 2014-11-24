@@ -3,6 +3,7 @@
 * Jon Auer (@jda)
 * Chris Dance (@codedance)
 * Jacob Dubinsky (@jdubinsky)
+* Eduardo Ferro (@aleasoluciones)
 * Mattias Folke (@msfe)
 * Miroslav Genov (@mgenov)
 * Sonia Hamilton (@soniah)

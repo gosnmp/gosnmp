@@ -335,18 +335,8 @@ func marshalLength(length int) ([]byte, error) {
 	}
 	bufBytes = bufBytes[0 : len(bufBytes)-1] // remove trailing 00
 
-	var reverseBufBytes []byte
-	reverseBufBytes = make([]byte, len(bufBytes), len(bufBytes))
-	reverseIndex := len(bufBytes) - 1
-	positiveIndex := 0
-	for reverseIndex >= 0 {
-		reverseBufBytes[positiveIndex] = bufBytes[reverseIndex]
-		reverseIndex--
-		positiveIndex++
-	}
-
 	header := []byte{byte(128 | len(bufBytes))}
-	return append(header, reverseBufBytes...), nil
+	return append(header, reverseBufBytes(bufBytes)...), nil
 }
 
 func marshalObjectIdentifier(oid []int) (ret []byte, err error) {
@@ -595,6 +585,19 @@ func parseUint(bytes []byte) (uint, error) {
 		return 0, errors.New("integer too large")
 	}
 	return uint(ret64), nil
+}
+
+// reverseBufBytes reverse order of the bytes in the given bytes
+func reverseBufBytes(bytes []byte) (ret []byte) {
+	ret = make([]byte, len(bytes), len(bytes))
+	reverseIndex := len(bytes) - 1
+	positiveIndex := 0
+	for reverseIndex >= 0 {
+		ret[positiveIndex] = bytes[reverseIndex]
+		reverseIndex--
+		positiveIndex++
+	}
+	return ret
 }
 
 // Issue 4389: math/big: add SetUint64 and Uint64 functions to *Int
