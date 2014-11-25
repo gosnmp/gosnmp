@@ -215,6 +215,7 @@ func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 func TestEnmarshalVarbind(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	// LoggingDisabled = false          // for verbose debugging
 	slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -234,6 +235,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 func TestEnmarshalVBL(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	// LoggingDisabled = false          // for verbose debugging
 	slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -257,6 +259,7 @@ func TestEnmarshalVBL(t *testing.T) {
 func TestEnmarshalPDU(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	// LoggingDisabled = false          // for verbose debugging
 	slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -280,6 +283,7 @@ func TestEnmarshalPDU(t *testing.T) {
 func TestEnmarshalMsg(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	// LoggingDisabled = false          // for verbose debugging
 	slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -573,6 +577,7 @@ var testsUnmarshal = []struct {
 func TestUnmarshal(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
+	// LoggingDisabled = false          // for verbose debugging
 	slog = log.New(ioutil.Discard, "", 0)
 
 SANITY:
