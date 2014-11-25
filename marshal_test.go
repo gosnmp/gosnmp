@@ -33,6 +33,8 @@ type testsEnmarshalVarbindPosition struct {
 	// and choose snmp. Click on each varbind and the "packet bytes" window
 	// will highlight the corresponding bytes, then the "eyeball tool" can be
 	// used to find the start and finish values...
+	//
+	// Then use `~/bin/go-bindata -nocompress foo.pcap` to generate function.
 	start    int
 	finish   int
 	pduType  Asn1BER
@@ -155,6 +157,19 @@ var testsEnmarshal = []testsEnmarshalT{
 			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2", 0x50, 0x67, Integer, 2},
 			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2", 0x68, 0x7f, Integer, 1},
 		},
+	},
+	// Issue 35, empty responses.
+	{
+		Version2c,
+		"public",
+		GetRequest,
+		1883298028,
+		emptyErrRequest,
+		"emptyErrRequest",
+		0x0d, // pdu start
+		0x1b, // vbl start
+		0x1c, // finish
+		[]testsEnmarshalVarbindPosition{},
 	},
 }
 
@@ -541,6 +556,16 @@ var testsUnmarshal = []struct {
 					Value: 1,
 				},
 			},
+		},
+	},
+	{emptyErrResponse,
+		&SnmpPacket{
+			Version:   Version2c,
+			Community: "public",
+			PDUType:   GetResponse,
+			RequestID: 1883298028,
+			Error:     0,
+			Variables: []SnmpPDU{},
 		},
 	},
 }
@@ -1047,5 +1072,45 @@ func ciscoGetbulkResponseBytes() []byte {
 		0x06, 0x08, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x01,
 		0x03, 0x30, 0x0f, 0x06, 0x0a, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x02, 0x02,
 		0x01, 0x01, 0x01, 0x02, 0x01, 0x01,
+	}
+}
+
+/*
+Issue 35, empty responses.
+Simple Network Management Protocol
+    version: v2c (1)
+    community: public
+    data: get-request (0)
+        get-request
+            request-id: 1883298028
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 0 items
+*/
+func emptyErrRequest() []byte {
+	return []byte{
+		0x30, 0x1b, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
+		0x63, 0xa0, 0x0e, 0x02, 0x04, 0x70, 0x40, 0xd8, 0xec, 0x02, 0x01, 0x00,
+		0x02, 0x01, 0x00, 0x30, 0x00,
+	}
+}
+
+/*
+Issue 35, empty responses.
+Simple Network Management Protocol
+    version: v2c (1)
+    community: public
+    data: get-response (2)
+        get-response
+            request-id: 1883298028
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 0 items
+*/
+func emptyErrResponse() []byte {
+	return []byte{
+		0x30, 0x1b, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
+		0x63, 0xa2, 0x0e, 0x02, 0x04, 0x70, 0x40, 0xd8, 0xec, 0x02, 0x01, 0x00,
+		0x02, 0x01, 0x00, 0x30, 0x00,
 	}
 }
