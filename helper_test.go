@@ -4,10 +4,7 @@
 
 package gosnmp
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
 func TestOidToString(t *testing.T) {
 	oid := []int{1, 2, 3, 4, 5}
@@ -33,25 +30,5 @@ func BenchmarkOidToString(b *testing.B) {
 	oid := []int{1, 2, 3, 4, 5}
 	for i := 0; i < b.N; i++ {
 		oidToString(oid)
-	}
-}
-
-var testsReverseBufBytes = []struct {
-	given    []byte
-	expected []byte
-}{
-	{[]byte{}, []byte{}},
-	{[]byte{0x01}, []byte{0x01}},
-	{[]byte{0x01, 0x02}, []byte{0x02, 0x01}},
-	{[]byte{0x01, 0x02, 0x03}, []byte{0x03, 0x02, 0x01}},
-}
-
-func TestReverseBufBytes(t *testing.T) {
-	for i, test := range testsReverseBufBytes {
-		testBytes := reverseBufBytes(test.given)
-		if !reflect.DeepEqual(testBytes, test.expected) {
-			t.Errorf("%d: got |%x| expected |%x|",
-				i, testBytes, test.expected)
-		}
 	}
 }
