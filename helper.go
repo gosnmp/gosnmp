@@ -315,7 +315,6 @@ func marshalInt16(value int) (rs []byte) {
 //   7-1 give the number of additional length octets. Second and following
 //   octets give the length, base 256, most significant digit first.
 func marshalLength(length int) ([]byte, error) {
-
 	// more convenient to pass length as int than uint64. Therefore check < 0
 	if length < 0 {
 		return nil, fmt.Errorf("length must be greater than zero")
@@ -324,19 +323,22 @@ func marshalLength(length int) ([]byte, error) {
 	}
 
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, uint64(length))
+	err := binary.Write(buf, binary.BigEndian, uint64(length))
 	if err != nil {
 		return nil, err
 	}
+	bufBytes := buf.Bytes()
 
-	bufBytes, err2 := buf.ReadBytes(0) // can't use buf.Bytes() - trailing 00's
-	if err2 != nil {
-		return nil, err
+	// strip leading zeros
+	for idx, octect := range bufBytes {
+		if octect != 00 {
+			bufBytes = bufBytes[idx:len(bufBytes)]
+			break
+		}
 	}
-	bufBytes = bufBytes[0 : len(bufBytes)-1] // remove trailing 00
 
 	header := []byte{byte(128 | len(bufBytes))}
-	return append(header, reverseBufBytes(bufBytes)...), nil
+	return append(header, bufBytes...), nil
 }
 
 func marshalObjectIdentifier(oid []int) (ret []byte, err error) {
@@ -585,19 +587,6 @@ func parseUint(bytes []byte) (uint, error) {
 		return 0, errors.New("integer too large")
 	}
 	return uint(ret64), nil
-}
-
-// reverseBufBytes reverse order of the bytes in the given bytes
-func reverseBufBytes(bytes []byte) (ret []byte) {
-	ret = make([]byte, len(bytes), len(bytes))
-	reverseIndex := len(bytes) - 1
-	positiveIndex := 0
-	for reverseIndex >= 0 {
-		ret[positiveIndex] = bytes[reverseIndex]
-		reverseIndex--
-		positiveIndex++
-	}
-	return ret
 }
 
 // Issue 4389: math/big: add SetUint64 and Uint64 functions to *Int
