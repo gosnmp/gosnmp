@@ -390,7 +390,7 @@ func oidToString(oid []int) (ret string) {
 
 	// used for appending of the first dot
 	oidAsString[0] = ""
-	for i, _ := range oid {
+	for i := range oid {
 		oidAsString[i+1] = strconv.Itoa(oid[i])
 	}
 
