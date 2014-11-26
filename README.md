@@ -122,6 +122,12 @@ Running this example gives the following output (from my printer):
 Bugs
 ----
 
+Please create an [issue](https://github.com/soniah/gosnmp/issues) on
+Github with packet captures (upload capture to Google Drive, Dropbox, or
+similar) containing samples of missing BER types, or of any other bugs
+you find. If possible, please include 2 or 3 examples of the
+missing/faulty BER type.
+
 The following BER types have been implemented:
 
 * 0x02 Integer
@@ -149,11 +155,6 @@ time or haven't been able to find example devices to query:
 
 Packet Captures
 ---------------
-
-Please create an issue on GitHub with packet captures (upload them somewhere) containing
-samples of the missing BER types, or of any other bugs you find. Please include
-2 or 3 examples of the missing/faulty BER type, interspersed with a couple of
-other common BER's eg an Integer, a Counter32 ie about 6-8 OIDs.
 
 Create your packet captures in the following way:
 
