@@ -572,6 +572,23 @@ var testsUnmarshal = []struct {
 			Variables: []SnmpPDU{},
 		},
 	},
+	{counter64Response,
+		&SnmpPacket{
+			Version:    Version2c,
+			Community:  "public",
+			PDUType:    GetResponse,
+			RequestID:  190378322,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables: []SnmpPDU{
+				{
+					Name:  ".1.3.6.1.2.1.31.1.1.1.10.1",
+					Type:  Counter64,
+					Value: 1527943,
+				},
+			},
+		},
+	},
 }
 
 func TestUnmarshal(t *testing.T) {
@@ -1102,6 +1119,7 @@ func emptyErrRequest() []byte {
 
 /*
 Issue 35, empty responses.
+
 Simple Network Management Protocol
     version: v2c (1)
     community: public
@@ -1117,5 +1135,31 @@ func emptyErrResponse() []byte {
 		0x30, 0x1b, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
 		0x63, 0xa2, 0x0e, 0x02, 0x04, 0x70, 0x40, 0xd8, 0xec, 0x02, 0x01, 0x00,
 		0x02, 0x01, 0x00, 0x30, 0x00,
+	}
+}
+
+/*
+Issue 15, test Counter64.
+
+Simple Network Management Protocol
+    version: v2c (1)
+    community: public
+    data: get-response (2)
+        get-response
+            request-id: 190378322
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 1 item
+                1.3.6.1.2.1.31.1.1.1.10.1: 1527943
+                    Object Name: 1.3.6.1.2.1.31.1.1.1.10.1 (iso.3.6.1.2.1.31.1.1.1.10.1)
+                    Value (Counter64): 1527943
+*/
+func counter64Response() []byte {
+	return []byte{
+		0x30, 0x2f, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
+		0x63, 0xa2, 0x22, 0x02, 0x04, 0x0b, 0x58, 0xf1, 0x52, 0x02, 0x01, 0x00,
+		0x02, 0x01, 0x00, 0x30, 0x14, 0x30, 0x12, 0x06, 0x0b, 0x2b, 0x06, 0x01,
+		0x02, 0x01, 0x1f, 0x01, 0x01, 0x01, 0x0a, 0x01, 0x46, 0x03, 0x17, 0x50,
+		0x87,
 	}
 }
