@@ -5,6 +5,7 @@
 * Jacob Dubinsky (@jdubinsky)
 * Eduardo Ferro (@aleasoluciones)
 * Mattias Folke (@msfe)
+* Geoff Garside (@geoffgarside)
 * Miroslav Genov (@mgenov)
 * Sonia Hamilton (@soniah)
 * Marcin Jurczuk (@mrspock)

@@ -6,7 +6,8 @@ gosnmp
 
 
 GoSNMP is an SNMP client library written fully in Go. Currently it
-supports GetRequest, GetNext, GetBulk, Walk (beta, see below), and SetRequest (beta, see below).
+provides GetRequest, GetNext, GetBulk, Walk (beta, see below), and
+SetRequest (beta, see below). It supports IPv4 and IPv6.
 
 About
 -----
