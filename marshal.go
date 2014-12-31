@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"sync/atomic"
 	"time"
 )
@@ -65,7 +66,8 @@ const (
 )
 
 const (
-	rxBufSize = 65536
+	rxBufSizeMin = 256
+	rxBufSizeMax = 65536
 )
 
 // Logger is an interface used for debugging. Both Print and
@@ -137,24 +139,14 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			err = fmt.Errorf("marshal: %v", err)
 			break
 		}
-		_, err = x.Conn.Write(outBuf)
+
+		var resp []byte
+		resp, err := handleResponse(x.Conn, outBuf)
 		if err != nil {
-			err = fmt.Errorf("Error writing to socket: %s", err.Error())
-			continue
+			return result, err
 		}
 
-		// FIXME: If our packet exceeds our buf size we'll get a partial read
-		// and this request, and the next will fail. The correct logic would be
-		// to realloc and read more if pack len > buff size.
-		resp := make([]byte, rxBufSize, rxBufSize)
-		var n int
-		n, err = x.Conn.Read(resp)
-		if err != nil {
-			err = fmt.Errorf("Error reading from UDP: %s", err.Error())
-			continue
-		}
-
-		result, err = unmarshal(resp[:n])
+		result, err = unmarshal(resp)
 		if err != nil {
 			err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 			continue
@@ -559,4 +551,24 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 		response.Variables = append(response.Variables, SnmpPDU{oidStr, v.Type, v.Value})
 	}
 	return response, nil
+}
+
+func handleResponse(c net.Conn, outBuf []byte) ([]byte, error) {
+	var resp []byte
+	for bufSize := rxBufSizeMin; bufSize < rxBufSizeMax; bufSize *= 2 {
+		resp = make([]byte, bufSize)
+		_, err := c.Write(outBuf)
+		if err != nil {
+			return resp, fmt.Errorf("Error writing to socket: %s", err.Error())
+		}
+		n, err := c.Read(resp)
+		if err != nil {
+			return resp, fmt.Errorf("Error reading from UDP: %s", err.Error())
+		}
+
+		if n < bufSize {
+			return resp[:n], nil
+		}
+	}
+	return resp, fmt.Errorf("Response bufSize exceeded rxBufSizeMax (%d)", rxBufSizeMax)
 }
