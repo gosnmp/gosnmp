@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"sync/atomic"
 	"time"
 )
@@ -65,6 +66,7 @@ const (
 )
 
 const (
+	rxBufSizeMin = 256
 	rxBufSizeMax = 65536
 )
 
@@ -138,26 +140,13 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			break
 		}
 
-		var n int
 		var resp []byte
-
-		for bufSize := 256; bufSize < rxBufSizeMax; bufSize *= 2 {
-			resp = make([]byte, bufSize)
-			_, err = x.Conn.Write(outBuf)
-			if err != nil {
-				return result, fmt.Errorf("Error writing to socket: %s", err.Error())
-			}
-			n, err = x.Conn.Read(resp)
-			if err != nil {
-				return result, fmt.Errorf("Error reading from UDP: %s", err.Error())
-			}
-
-			if n < bufSize {
-				break
-			}
+		resp, err := handleResponse(x.Conn, outBuf)
+		if err != nil {
+			return result, err
 		}
 
-		result, err = unmarshal(resp[:n])
+		result, err = unmarshal(resp)
 		if err != nil {
 			err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 			continue
@@ -562,4 +551,24 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 		response.Variables = append(response.Variables, SnmpPDU{oidStr, v.Type, v.Value})
 	}
 	return response, nil
+}
+
+func handleResponse(c net.Conn, outBuf []byte) ([]byte, error) {
+	var resp []byte
+	for bufSize := rxBufSizeMin; bufSize < rxBufSizeMax; bufSize *= 2 {
+		resp = make([]byte, bufSize)
+		_, err := c.Write(outBuf)
+		if err != nil {
+			return resp, fmt.Errorf("Error writing to socket: %s", err.Error())
+		}
+		n, err := c.Read(resp)
+		if err != nil {
+			return resp, fmt.Errorf("Error reading from UDP: %s", err.Error())
+		}
+
+		if n < bufSize {
+			return resp[:n], nil
+		}
+	}
+	return resp, fmt.Errorf("Response bufSize exceeded rxBufSizeMax (%d)", rxBufSizeMax)
 }
