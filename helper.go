@@ -315,7 +315,6 @@ func marshalInt16(value int) (rs []byte) {
 //   7-1 give the number of additional length octets. Second and following
 //   octets give the length, base 256, most significant digit first.
 func marshalLength(length int) ([]byte, error) {
-
 	// more convenient to pass length as int than uint64. Therefore check < 0
 	if length < 0 {
 		return nil, fmt.Errorf("length must be greater than zero")
@@ -324,16 +323,19 @@ func marshalLength(length int) ([]byte, error) {
 	}
 
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, uint64(length))
+	err := binary.Write(buf, binary.BigEndian, uint64(length))
 	if err != nil {
 		return nil, err
 	}
+	bufBytes := buf.Bytes()
 
-	bufBytes, err2 := buf.ReadBytes(0) // can't use buf.Bytes() - trailing 00's
-	if err2 != nil {
-		return nil, err
+	// strip leading zeros
+	for idx, octect := range bufBytes {
+		if octect != 00 {
+			bufBytes = bufBytes[idx:len(bufBytes)]
+			break
+		}
 	}
-	bufBytes = bufBytes[0 : len(bufBytes)-1] // remove trailing 00
 
 	header := []byte{byte(128 | len(bufBytes))}
 	return append(header, bufBytes...), nil
@@ -390,7 +392,7 @@ func oidToString(oid []int) (ret string) {
 
 	// used for appending of the first dot
 	oidAsString[0] = ""
-	for i, _ := range oid {
+	for i := range oid {
 		oidAsString[i+1] = strconv.Itoa(oid[i])
 	}
 

@@ -509,6 +509,11 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 		slog.Printf("vblLength: %d", vblLength)
 	}
 
+	// check for an empty response
+	if vblLength == 2 && packet[1] == 0x00 {
+		return response, nil
+	}
+
 	// Loop & parse Varbinds
 	for cursor < vblLength {
 		dumpBytes1(packet[cursor:], fmt.Sprintf("\nSTARTING a varbind. Cursor %d", cursor), 32)

@@ -131,10 +131,10 @@ func (x *GoSNMP) Connect() error {
 	if x.Logger == nil {
 		LoggingDisabled = true
 	}
-	Conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:%d", x.Target, x.Port), x.Timeout)
-	if err == nil {
-		x.Conn = Conn
-	} else {
+	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
+	var err error
+	x.Conn, err = net.DialTimeout("udp", addr, x.Timeout)
+	if err != nil {
 		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
 	if x.random == nil {

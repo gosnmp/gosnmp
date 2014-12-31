@@ -4,9 +4,7 @@
 
 package gosnmp
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestOidToString(t *testing.T) {
 	oid := []int{1, 2, 3, 4, 5}
