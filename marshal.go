@@ -141,7 +141,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		}
 
 		var resp []byte
-		resp, err := handleResponse(x.Conn, outBuf)
+		resp, err := dispatch(x.Conn, outBuf)
 		if err != nil {
 			return result, err
 		}
@@ -553,7 +553,12 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 	return response, nil
 }
 
-func handleResponse(c net.Conn, outBuf []byte) ([]byte, error) {
+// dispatch request on network, and read the results into a byte array
+//
+// Previously, resp was allocated rxBufSize (65536) bytes ie a fixed size for
+// all responses. To decrease memory usage, resp is dynamically sized, at the
+// cost of possible additional network round trips.
+func dispatch(c net.Conn, outBuf []byte) ([]byte, error) {
 	var resp []byte
 	for bufSize := rxBufSizeMin; bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
