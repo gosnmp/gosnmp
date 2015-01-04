@@ -66,8 +66,8 @@ const (
 )
 
 const (
-	rxBufSizeMin = 256
-	rxBufSizeMax = 65536
+	rxBufSizeMin = 256   // Minimal buffer size to handle 1 OID (see dispatch())
+	rxBufSizeMax = 65536 // Prevent memory allocation going out of control
 )
 
 // Logger is an interface used for debugging. Both Print and
@@ -141,7 +141,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		}
 
 		var resp []byte
-		resp, err := dispatch(x.Conn, outBuf)
+		resp, err := dispatch(x.Conn, outBuf, len(pdus))
 		if err != nil {
 			return result, err
 		}
@@ -558,9 +558,9 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 // Previously, resp was allocated rxBufSize (65536) bytes ie a fixed size for
 // all responses. To decrease memory usage, resp is dynamically sized, at the
 // cost of possible additional network round trips.
-func dispatch(c net.Conn, outBuf []byte) ([]byte, error) {
+func dispatch(c net.Conn, outBuf []byte, pduCount int) ([]byte, error) {
 	var resp []byte
-	for bufSize := rxBufSizeMin; bufSize < rxBufSizeMax; bufSize *= 2 {
+	for bufSize := rxBufSizeMin * pduCount; bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
 		_, err := c.Write(outBuf)
 		if err != nil {
