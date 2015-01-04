@@ -66,8 +66,8 @@ const (
 )
 
 const (
-	rxBufSizeMin = 256
-	rxBufSizeMax = 65536
+	rxBufSizeMin = 1024   // Minimal buffer size to handle 1 OID (see dispatch())
+	rxBufSizeMax = 131072 // Prevent memory allocation from going out of control
 )
 
 // Logger is an interface used for debugging. Both Print and
@@ -141,7 +141,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		}
 
 		var resp []byte
-		resp, err := dispatch(x.Conn, outBuf)
+		resp, err := dispatch(x.Conn, outBuf, len(pdus))
 		if err != nil {
 			return result, err
 		}
@@ -558,9 +558,9 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 // Previously, resp was allocated rxBufSize (65536) bytes ie a fixed size for
 // all responses. To decrease memory usage, resp is dynamically sized, at the
 // cost of possible additional network round trips.
-func dispatch(c net.Conn, outBuf []byte) ([]byte, error) {
+func dispatch(c net.Conn, outBuf []byte, pduCount int) ([]byte, error) {
 	var resp []byte
-	for bufSize := rxBufSizeMin; bufSize < rxBufSizeMax; bufSize *= 2 {
+	for bufSize := rxBufSizeMin * pduCount; bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
 		_, err := c.Write(outBuf)
 		if err != nil {
@@ -572,7 +572,17 @@ func dispatch(c net.Conn, outBuf []byte) ([]byte, error) {
 		}
 
 		if n < bufSize {
-			return resp[:n], nil
+			// Memory usage optimization. Help the runtime to release as much memory as possible.
+			//
+			// See: http://blog.golang.org/go-slices-usage-and-internals, section: A possible "gotcha"
+			// ...As mentioned earlier, re-slicing a slice doesn't make a copy of the
+			// underlying array. The full array will be kept in memory until it is no
+			// longer referenced. Occasionally this can cause the program to hold all
+			// the data in memory when only a small piece of it is needed.
+			resp = resp[:n]
+			resp2 := make([]byte, len(resp))
+			copy(resp2, resp)
+			return resp2, nil
 		}
 	}
 	return resp, fmt.Errorf("Response bufSize exceeded rxBufSizeMax (%d)", rxBufSizeMax)
