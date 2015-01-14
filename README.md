@@ -3,6 +3,7 @@ gosnmp
 [![Build Status](https://travis-ci.org/soniah/gosnmp.svg?branch=master)](https://travis-ci.org/soniah/gosnmp)
 [![Coverage](http://gocover.io/_badge/github.com/soniah/gosnmp)](http://gocover.io/github.com/soniah/gosnmp)
 [![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
+https://github.com/soniah/gosnmp
 
 
 GoSNMP is an SNMP client library written fully in Go. Currently it
