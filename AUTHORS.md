@@ -7,6 +7,7 @@
 * Mattias Folke (@msfe)
 * Geoff Garside (@geoffgarside)
 * Miroslav Genov (@mgenov)
+* Jaime Gil de Sagredo Luna (@jaimegildesagredo)
 * Sonia Hamilton (@soniah)
 * Marcin Jurczuk (@mrspock)
 * Andreas Louca (@alouca)

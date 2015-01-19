@@ -143,7 +143,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		var resp []byte
 		resp, err = dispatch(x.Conn, outBuf, len(pdus))
 		if err != nil {
-			return result, err
+			continue
 		}
 
 		result, err = unmarshal(resp)
