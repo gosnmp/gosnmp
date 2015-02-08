@@ -281,11 +281,14 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				packetOut.ContextName = result.ContextName
 			}
 			if packetOut.MsgFlags&AuthPriv > AuthNoPriv {
-				var salt = make([]byte, 8)
-				binary.BigEndian.PutUint32(salt, sec_params.AuthoritativeEngineBoots)
-				binary.BigEndian.PutUint32(salt[4:], sec_params.localSalt)
-				sec_params.PrivacyParameters = salt
-
+				switch sec_params.PrivacyProtocol {
+				case AES:
+				default:
+					var salt = make([]byte, 8)
+					binary.BigEndian.PutUint32(salt, sec_params.AuthoritativeEngineBoots)
+					binary.BigEndian.PutUint32(salt[4:], sec_params.localSalt)
+					sec_params.PrivacyParameters = salt
+				}
 			}
 		}
 	}
@@ -541,31 +544,36 @@ func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint3
 		if !ok || sec_params == nil {
 			return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
 		}
-		var privkey = genlocalkey(sec_params.AuthenticationProtocol,
-			sec_params.PrivacyPassphrase,
-			sec_params.AuthoritativeEngineID)
-		preiv := privkey[8:]
-		var iv [8]byte
-		for i := 0; i < len(iv); i++ {
-			iv[i] = preiv[i] ^ sec_params.PrivacyParameters[i]
-		}
-		block, err := des.NewCipher(privkey[:8])
-		if err != nil {
-			return nil, err
-		}
-		mode := cipher.NewCBCEncrypter(block, iv[:])
+		switch sec_params.PrivacyProtocol {
+		case AES:
+		default:
+			var privkey = genlocalkey(sec_params.AuthenticationProtocol,
+				sec_params.PrivacyPassphrase,
+				sec_params.AuthoritativeEngineID)
+			preiv := privkey[8:]
+			var iv [8]byte
+			for i := 0; i < len(iv); i++ {
+				iv[i] = preiv[i] ^ sec_params.PrivacyParameters[i]
+			}
+			block, err := des.NewCipher(privkey[:8])
+			if err != nil {
+				return nil, err
+			}
+			mode := cipher.NewCBCEncrypter(block, iv[:])
 
-		pad := make([]byte, des.BlockSize-len(scoped_pdu)%des.BlockSize)
-		scoped_pdu = append(scoped_pdu, pad...)
+			pad := make([]byte, des.BlockSize-len(scoped_pdu)%des.BlockSize)
+			scoped_pdu = append(scoped_pdu, pad...)
 
-		ciphertext := make([]byte, len(scoped_pdu))
-		mode.CryptBlocks(ciphertext, scoped_pdu)
-		pdu_len, err := marshalLength(len(ciphertext))
-		if err != nil {
-			return nil, err
+			ciphertext := make([]byte, len(scoped_pdu))
+			mode.CryptBlocks(ciphertext, scoped_pdu)
+			pdu_len, err := marshalLength(len(ciphertext))
+			if err != nil {
+				return nil, err
+			}
+			b = append([]byte{byte(OctetString)}, pdu_len...)
+			scoped_pdu = append(b, ciphertext...)
 		}
-		b = append([]byte{byte(OctetString)}, pdu_len...)
-		scoped_pdu = append(b, ciphertext...)
+
 	}
 
 	return scoped_pdu, nil
@@ -947,24 +955,29 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 				if !ok || sec_params == nil {
 					return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
 				}
-				var privkey = genlocalkey(sec_params.AuthenticationProtocol,
-					sec_params.PrivacyPassphrase,
-					sec_params.AuthoritativeEngineID)
-				preiv := privkey[8:]
-				var iv [8]byte
-				for i := 0; i < len(iv); i++ {
-					iv[i] = preiv[i] ^ sec_params.PrivacyParameters[i]
-				}
-				block, err := des.NewCipher(privkey[:8])
-				if err != nil {
-					return nil, err
-				}
-				mode := cipher.NewCBCDecrypter(block, iv[:])
+				switch sec_params.PrivacyProtocol {
+				case AES:
+				default:
+					var privkey = genlocalkey(sec_params.AuthenticationProtocol,
+						sec_params.PrivacyPassphrase,
+						sec_params.AuthoritativeEngineID)
+					preiv := privkey[8:]
+					var iv [8]byte
+					for i := 0; i < len(iv); i++ {
+						iv[i] = preiv[i] ^ sec_params.PrivacyParameters[i]
+					}
+					block, err := des.NewCipher(privkey[:8])
+					if err != nil {
+						return nil, err
+					}
+					mode := cipher.NewCBCDecrypter(block, iv[:])
 
-				plaintext := make([]byte, len(packet[cursor_tmp:]))
-				mode.CryptBlocks(plaintext, packet[cursor_tmp:])
-				copy(packet[cursor:], plaintext)
-				packet = packet[:cursor+len(plaintext)]
+					plaintext := make([]byte, len(packet[cursor_tmp:]))
+					mode.CryptBlocks(plaintext, packet[cursor_tmp:])
+					copy(packet[cursor:], plaintext)
+					packet = packet[:cursor+len(plaintext)]
+				}
+
 			}
 			fallthrough
 		case Sequence:
