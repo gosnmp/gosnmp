@@ -953,7 +953,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 				var sec_params *UsmSecurityParameters
 				sec_params, ok := response.SecurityParameters.(*UsmSecurityParameters)
 				if !ok || sec_params == nil {
-					return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
+					return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
 				}
 				switch sec_params.PrivacyProtocol {
 				case AES:
