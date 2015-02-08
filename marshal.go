@@ -279,6 +279,8 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 					sec_params.AuthoritativeEngineBoots = new_sec_params.AuthoritativeEngineBoots
 					sec_params.AuthoritativeEngineTime = new_sec_params.AuthoritativeEngineTime
 				}
+				packetOut.ContextEngineID = result.ContextEngineID
+				packetOut.ContextName = result.ContextName
 			}
 		}
 	}
@@ -389,7 +391,6 @@ func (packet *SnmpPacket) authenticate(msg []byte, auth_param_start uint32) ([]b
 	if !ok || sec_params == nil {
 		return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
 	}
-
 	var secret_key = genlocalkey(sec_params.AuthenticationProtocol,
 		sec_params.AuthenticationPassphrase,
 		sec_params.AuthoritativeEngineID)
@@ -510,6 +511,8 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 		return nil, 0, 0, err
 	}
 	tmpseq := append([]byte{byte(Sequence)}, param_len...)
+	auth_param_start += uint32(len(tmpseq))
+	priv_param_start += uint32(len(tmpseq))
 	tmpseq = append(tmpseq, buf.Bytes()...)
 
 	return tmpseq, auth_param_start, priv_param_start, nil
@@ -519,11 +522,19 @@ func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint3
 	var buf bytes.Buffer
 
 	//ContextEngineID
-	buf.Write([]byte{byte(OctetString), byte(len(packet.ContextEngineID))})
+	idlen, err := marshalLength(len(packet.ContextEngineID))
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(append([]byte{byte(OctetString)}, idlen...))
 	buf.WriteString(packet.ContextEngineID)
 
 	//ContextName
-	buf.Write([]byte{byte(OctetString), byte(len(packet.ContextName))})
+	namelen, err := marshalLength(len(packet.ContextName))
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(append([]byte{byte(OctetString)}, namelen...))
 	buf.WriteString(packet.ContextName)
 
 	data, err := packet.marshalPDU(pdus, requestid)
