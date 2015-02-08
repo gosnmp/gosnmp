@@ -155,10 +155,26 @@ func (x *GoSNMP) Connect() error {
 	}
 	x.requestID = uint32(x.random.Int31())
 	x.msgID = uint32(x.random.Int31())
+
+	if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
+		sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || sec_params == nil {
+			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+		}
+		sec_params.localSalt = x.random.Uint32()
+	}
+
 	return nil
 }
 
 func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
+	if x.Version == Version3 && x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
+		sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || sec_params == nil {
+			panic("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+		}
+		sec_params.localSalt += 1
+	}
 	return &SnmpPacket{
 		Version:            x.Version,
 		Community:          x.Community,

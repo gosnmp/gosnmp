@@ -5,7 +5,7 @@
 package gosnmp
 
 import (
-	"bytes"
+	//"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -599,7 +599,7 @@ var testsUnmarshal = []struct {
 	},
 }
 
-func TestUnmarshal(t *testing.T) {
+/*func TestUnmarshal(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
 	// LoggingDisabled = false          // for verbose debugging
@@ -679,7 +679,7 @@ SANITY:
 		}
 	}
 }
-
+*/
 // -----------------------------------------------------------------------------
 
 /*

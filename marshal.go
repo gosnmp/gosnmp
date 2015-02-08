@@ -7,6 +7,7 @@ package gosnmp
 import (
 	"bytes"
 	"crypto/cipher"
+	"crypto/des"
 	"crypto/md5"
 	"crypto/sha1"
 	"encoding/asn1"
@@ -73,7 +74,7 @@ type UsmSecurityParameters struct {
 	AuthoritativeEngineTime  uint32
 	UserName                 string
 	AuthenticationParameters string
-	PrivacyParameters        string
+	PrivacyParameters        []byte
 
 	AuthenticationProtocol SnmpV3AuthProtocol
 	PrivacyProtocol        SnmpV3PrivProtocol
@@ -81,8 +82,7 @@ type UsmSecurityParameters struct {
 	AuthenticationPassphrase string
 	PrivacyPassphrase        string
 
-	localSalt     uint32
-	privacyCipher cipher.Block
+	localSalt uint32
 }
 
 // SnmpPacket struct represents the entire SNMP Message or Sequence at the
@@ -175,7 +175,6 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			}
 		}
 		err = nil
-
 		reqDeadline := time.Now().Add(x.Timeout / time.Duration(x.Retries+1))
 		x.Conn.SetDeadline(reqDeadline)
 
@@ -203,7 +202,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			continue
 		}
 
-		result, err = unmarshal(resp)
+		result, err = x.unmarshal(resp)
 		if err != nil {
 			err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 			continue
@@ -223,7 +222,6 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			err = fmt.Errorf("Out of order response")
 			continue
 		}
-
 		// Success!
 		return result, nil
 	}
@@ -282,6 +280,13 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				packetOut.ContextEngineID = result.ContextEngineID
 				packetOut.ContextName = result.ContextName
 			}
+			if packetOut.MsgFlags&AuthPriv > AuthNoPriv {
+				var salt = make([]byte, 8)
+				binary.BigEndian.PutUint32(salt, sec_params.AuthoritativeEngineBoots)
+				binary.BigEndian.PutUint32(salt[4:], sec_params.localSalt)
+				sec_params.PrivacyParameters = salt
+
+			}
 		}
 	}
 	// Return last error
@@ -294,7 +299,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	pdutype PDUType, msgid uint32, requestid uint32) ([]byte, error) {
 	var auth_param_start uint32
-
+	var priv_param_start uint32
 	buf := new(bytes.Buffer)
 
 	// version
@@ -320,7 +325,6 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 
 		var security_parameters []byte
 		if packet.SecurityModel == UserSecurityModel {
-			var priv_param_start uint32
 			security_parameters, auth_param_start, priv_param_start, err = packet.marshalSnmpV3UsmSecurityParameters()
 			if err != nil {
 				return nil, err
@@ -335,18 +339,13 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 		}
 		buf.Write(sec_param_len)
 		auth_param_start += uint32(buf.Len())
+		priv_param_start += uint32(buf.Len())
 		buf.Write(security_parameters)
 
 		scoped_pdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
 		if err != nil {
 			return nil, err
 		}
-		buf.Write([]byte{byte(Sequence)})
-		pdu_len, err := marshalLength(len(scoped_pdu))
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(pdu_len)
 		buf.Write(scoped_pdu)
 	}
 
@@ -499,8 +498,14 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 	}
 	priv_param_start = uint32(buf.Len() + 2)
 	// msgPrivacyParameters
-	if packet.MsgFlags&AuthPriv > 0 {
-		buf.Write([]byte{byte(OctetString), 0})
+	if packet.MsgFlags&AuthPriv > AuthNoPriv {
+		privlen, err := marshalLength(len(sec_params.PrivacyParameters))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		buf.Write([]byte{byte(OctetString)})
+		buf.Write(privlen)
+		buf.Write(sec_params.PrivacyParameters)
 	} else {
 		buf.Write([]byte{byte(OctetString), 0})
 	}
@@ -519,6 +524,54 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 }
 
 func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+	var b []byte
+
+	scoped_pdu, err := packet.prepareSnmpV3ScopedPDU(pdus, requestid)
+	if err != nil {
+		return nil, err
+	}
+	pdu_len, err := marshalLength(len(scoped_pdu))
+	if err != nil {
+		return nil, err
+	}
+	b = append([]byte{byte(Sequence)}, pdu_len...)
+	scoped_pdu = append(b, scoped_pdu...)
+	if packet.MsgFlags&AuthPriv > AuthNoPriv && packet.SecurityModel == UserSecurityModel {
+		sec_params, ok := packet.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || sec_params == nil {
+			return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+		}
+		var privkey = genlocalkey(sec_params.AuthenticationProtocol,
+			sec_params.PrivacyPassphrase,
+			sec_params.AuthoritativeEngineID)
+		preiv := privkey[8:]
+		var iv [8]byte
+		for i := 0; i < len(iv); i++ {
+			iv[i] = preiv[i] ^ sec_params.PrivacyParameters[i]
+		}
+		block, err := des.NewCipher(privkey[:8])
+		if err != nil {
+			return nil, err
+		}
+		mode := cipher.NewCBCEncrypter(block, iv[:])
+
+		pad := make([]byte, des.BlockSize-len(scoped_pdu)%des.BlockSize)
+		scoped_pdu = append(scoped_pdu, pad...)
+
+		ciphertext := make([]byte, len(scoped_pdu))
+		mode.CryptBlocks(ciphertext, scoped_pdu)
+		pdu_len, err := marshalLength(len(ciphertext))
+		if err != nil {
+			return nil, err
+		}
+		b = append([]byte{byte(OctetString)}, pdu_len...)
+		scoped_pdu = append(b, ciphertext...)
+	}
+
+	return scoped_pdu, nil
+}
+
+func (packet *SnmpPacket) prepareSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
 	var buf bytes.Buffer
 
 	//ContextEngineID
@@ -687,7 +740,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 
 // -- Unmarshalling Logic ------------------------------------------------------
 
-func unmarshal(packet []byte) (*SnmpPacket, error) {
+func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 	response := new(SnmpPacket)
 	response.Variables = make([]SnmpPDU, 0, 5)
 
@@ -793,7 +846,13 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 
 		if response.SecurityModel == UserSecurityModel {
 			var sec_parameters UsmSecurityParameters
-
+			if x.SecurityModel == UserSecurityModel {
+				sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
+				if !ok || sec_params == nil {
+					return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
+				}
+				sec_parameters.PrivacyPassphrase = sec_params.PrivacyPassphrase
+			}
 			if PDUType(packet[cursor]) != Sequence {
 				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model parameters\n")
 			}
@@ -866,7 +925,7 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 			}
 			cursor += count
 			if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
-				sec_parameters.PrivacyParameters = msgPrivacyParameters
+				sec_parameters.PrivacyParameters = []byte(msgPrivacyParameters)
 				if LoggingDisabled != true {
 					slog.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
 				}
@@ -874,12 +933,44 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 
 			response.SecurityParameters = &sec_parameters
 		}
-
-		if PDUType(packet[cursor]) == OctetString {
+		switch PDUType(packet[cursor]) {
+		case OctetString:
 			// pdu is encrypted
-		} else if PDUType(packet[cursor]) == Sequence {
+			_, cursor_tmp := parseLength(packet[cursor:])
+			cursor_tmp += cursor
+			if len(packet[cursor_tmp:])%des.BlockSize != 0 {
+				return nil, fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
+			}
+			if response.SecurityModel == UserSecurityModel {
+				var sec_params *UsmSecurityParameters
+				sec_params, ok := response.SecurityParameters.(*UsmSecurityParameters)
+				if !ok || sec_params == nil {
+					return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
+				}
+				var privkey = genlocalkey(sec_params.AuthenticationProtocol,
+					sec_params.PrivacyPassphrase,
+					sec_params.AuthoritativeEngineID)
+				preiv := privkey[8:]
+				var iv [8]byte
+				for i := 0; i < len(iv); i++ {
+					iv[i] = preiv[i] ^ sec_params.PrivacyParameters[i]
+				}
+				block, err := des.NewCipher(privkey[:8])
+				if err != nil {
+					return nil, err
+				}
+				mode := cipher.NewCBCDecrypter(block, iv[:])
+
+				plaintext := make([]byte, len(packet[cursor_tmp:]))
+				mode.CryptBlocks(plaintext, packet[cursor_tmp:])
+				copy(packet[cursor:], plaintext)
+				packet = packet[:cursor+len(plaintext)]
+			}
+			fallthrough
+		case Sequence:
 			// pdu is plaintext
-			_, cursor_tmp = parseLength(packet[cursor:])
+			tlength, cursor_tmp := parseLength(packet[cursor:])
+			packet = packet[:cursor+tlength]
 			cursor += cursor_tmp
 
 			rawContextEngineID, count, err := parseRawField(packet[cursor:], "contextEngineID")
@@ -906,10 +997,9 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 				}
 			}
 
-		} else {
+		default:
 			return nil, fmt.Errorf("Error parsing SNMPV3 scoped PDU\n")
 		}
-
 	}
 
 	// Parse SNMP packet type
