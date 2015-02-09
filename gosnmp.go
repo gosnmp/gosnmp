@@ -153,7 +153,7 @@ func (x *GoSNMP) Connect() error {
 	if x.random == nil {
 		x.random = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	}
-	x.requestID = uint32(x.random.Int31())
+	x.requestID = x.random.Uint32()
 	x.msgID = uint32(x.random.Int31())
 
 	if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
