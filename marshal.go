@@ -151,6 +151,10 @@ var slog Logger
 
 func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
 	finalDeadline := time.Now().Add(x.Timeout)
+
+	if x.Retries < 0 {
+		x.Retries = 0
+	}
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	allMsgIDs := make([]uint32, 0, x.Retries+1)
 	for retries := 0; ; retries++ {
