@@ -27,10 +27,10 @@ import (
 // protocol.
 //
 
-// SnmpVersion 1 and 2c implemented, 3 planned
+// SnmpVersion 1, 2c and 3 implemented
 type SnmpVersion uint8
 
-// SnmpVersion 1 and 2c implemented, 3 planned
+// SnmpVersion 1, 2c and 3 implemented
 const (
 	Version1  SnmpVersion = 0x0
 	Version2c SnmpVersion = 0x1
@@ -148,12 +148,6 @@ type Logger interface {
 
 // slog is a global variable that is used for debug logging
 var slog Logger
-
-// Preconditions:
-// x.Conn is setup
-// x.Logger is initialized
-// x.Retries is not negative
-// The snmpV3 discovery process has completed if applicable
 
 func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
 	finalDeadline := time.Now().Add(x.Timeout)
