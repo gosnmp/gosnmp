@@ -976,6 +976,8 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 					plaintext := make([]byte, len(packet[cursor_tmp:]))
 					mode.CryptBlocks(plaintext, packet[cursor_tmp:])
 					copy(packet[cursor:], plaintext)
+					// truncate packet to remove extra space caused by the
+					// octetstring/length header that was just replaced
 					packet = packet[:cursor+len(plaintext)]
 				}
 
@@ -984,6 +986,8 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 		case Sequence:
 			// pdu is plaintext
 			tlength, cursor_tmp := parseLength(packet[cursor:])
+			// truncate padding that may have been included with
+			// the encrypted PDU
 			packet = packet[:cursor+tlength]
 			cursor += cursor_tmp
 
