@@ -1187,6 +1187,11 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 // cost of possible additional network round trips.
 func dispatch(c net.Conn, outBuf []byte, pduCount int) ([]byte, error) {
 	var resp []byte
+	// SNMPV3 requests are initiated with a blank packet to get authoritative
+	// engine id/boot/time and context engine id/name. In these packets the
+	// pduCount is 0 so rxBufSizeMin * 0 * 2 will always equal 0 causing the
+	// loop to not terminate. An easy fix is to increment pduCount at minimal
+	// expense to memory.
 	for bufSize := rxBufSizeMin * (pduCount + 1); bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
 		_, err := c.Write(outBuf)
