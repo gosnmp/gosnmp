@@ -543,7 +543,7 @@ func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint3
 	if packet.MsgFlags&AuthPriv > AuthNoPriv && packet.SecurityModel == UserSecurityModel {
 		sec_params, ok := packet.SecurityParameters.(*UsmSecurityParameters)
 		if !ok || sec_params == nil {
-			return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+			return nil, fmt.Errorf("packet.SecurityModel indicates the User Security Model, but packet.SecurityParameters is not of type &UsmSecurityParameters.")
 		}
 		switch sec_params.PrivacyProtocol {
 		case AES:
