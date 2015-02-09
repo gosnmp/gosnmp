@@ -434,6 +434,7 @@ func marshalUvarInt(x uint32) []byte {
 	i := 0
 	for ; buf[i] == 0 && i < 3; i++ {
 	}
+	i -= 1
 	buf = buf[i:]
 	return buf
 }
