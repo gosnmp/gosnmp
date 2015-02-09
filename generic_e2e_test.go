@@ -13,8 +13,6 @@ package gosnmp
 
 import (
 	"fmt"
-	//"log"
-	//"os"
 	"strings"
 	"testing"
 	"time"

@@ -79,11 +79,10 @@ type GoSNMP struct {
 
 	// Internal - used to sync requests to responses
 	requestID uint32
+	random    *rand.Rand
 
 	// Internal - used to sync requests to responses - snmpv3
 	msgID uint32
-
-	random *rand.Rand
 }
 
 // The default connection settings
