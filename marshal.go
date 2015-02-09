@@ -172,16 +172,17 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			}
 		}
 		err = nil
+
 		reqDeadline := time.Now().Add(x.Timeout / time.Duration(x.Retries+1))
 		x.Conn.SetDeadline(reqDeadline)
 
 		// Request ID is an atomic counter (started at a random value)
-		reqID := atomic.AddUint32(&(x.requestID), 1) // todo: fix overflows
+		reqID := atomic.AddUint32(&(x.requestID), 1) // TODO: fix overflows
 		allReqIDs = append(allReqIDs, reqID)
 
 		var msgID uint32
 		if x.Version == Version3 {
-			msgID = atomic.AddUint32(&(x.msgID), 1) // todo: fix overflows
+			msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
 			allMsgIDs = append(allMsgIDs, msgID)
 
 			if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
