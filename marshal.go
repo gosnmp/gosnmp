@@ -310,6 +310,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	pdutype PDUType, msgid uint32, requestid uint32) ([]byte, error) {
 	var auth_param_start uint32
+	var priv_param_start uint32
 	buf := new(bytes.Buffer)
 
 	// version
