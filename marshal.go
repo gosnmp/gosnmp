@@ -129,9 +129,8 @@ const (
 )
 
 const (
-	rxBufSizeMin        = 1024   // Minimal buffer size to handle 1 OID (see dispatch())
-	rxBufSizeMax        = 131072 // Prevent memory allocation from going out of control
-	rxBufSize    uint32 = 65536
+	rxBufSizeMin = 1024   // Minimal buffer size to handle 1 OID (see dispatch())
+	rxBufSizeMax = 131072 // Prevent memory allocation from going out of control
 )
 
 // Logger is an interface used for debugging. Both Print and
@@ -1186,7 +1185,7 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 // cost of possible additional network round trips.
 func dispatch(c net.Conn, outBuf []byte, pduCount int) ([]byte, error) {
 	var resp []byte
-	for bufSize := rxBufSizeMin * pduCount; bufSize < rxBufSizeMax; bufSize *= 2 {
+	for bufSize := rxBufSizeMin * (pduCount + 1); bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
 		_, err := c.Write(outBuf)
 		if err != nil {

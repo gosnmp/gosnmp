@@ -171,6 +171,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"public",
 		GetRequest,
 		1883298028,
+		0,
 		emptyErrRequest,
 		"emptyErrRequest",
 		0x0d, // pdu start

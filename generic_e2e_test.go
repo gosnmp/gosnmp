@@ -176,7 +176,7 @@ func TestSnmpV3NoAuthNoPrivBasicGet(t *testing.T) {
 	Default.Version = Version3
 	Default.MsgFlags = NoAuthNoPriv
 	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: "test"}
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "noAuthNoPrivUser"}
 	setupConnection(t)
 	defer Default.Conn.Close()
 
