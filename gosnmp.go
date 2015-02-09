@@ -152,8 +152,12 @@ func (x *GoSNMP) Connect() error {
 	if x.random == nil {
 		x.random = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	}
-	x.requestID = x.random.Uint32()
+	// http://tools.ietf.org/html/rfc3412#section-6 - msgID only
+	// uses the first 31 bits
+	// msgID INTEGER (0..2147483647)
 	x.msgID = uint32(x.random.Int31())
+	// similar for requestID
+	x.requestID = uint32(x.random.Int31())
 
 	if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
 		sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
