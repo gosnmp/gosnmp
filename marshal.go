@@ -185,6 +185,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
 			allMsgIDs = append(allMsgIDs, msgID)
 
+			/* should this be here?
 			if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
 				sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
 				if !ok || sec_params == nil {
@@ -192,6 +193,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 				}
 				atomic.AddUint32(&(sec_params.localSalt), 1)
 			}
+			*/
 		}
 
 		var outBuf []byte
