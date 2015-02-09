@@ -186,6 +186,14 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 		if x.Version == Version3 {
 			msgID = atomic.AddUint32(&(x.msgID), 1) // todo: fix overflows
 			allMsgIDs = append(allMsgIDs, msgID)
+
+			if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
+				sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
+				if !ok || sec_params == nil {
+					panic("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+				}
+				atomic.AddUint32(&(sec_params.localSalt), 1)
+			}
 		}
 
 		var outBuf []byte
