@@ -53,7 +53,7 @@ type GoSNMP struct {
 	SecurityModel SnmpV3SecurityModel
 
 	// SecurityParameters is an SNMPV3 Security Model paramaters struct
-	SecurityParameters interface{}
+	SecurityParameters SnmpV3SecurityParameters
 
 	// Timeout is the timeout for the SNMP Query
 	Timeout time.Duration
@@ -171,12 +171,16 @@ func (x *GoSNMP) Connect() error {
 }
 
 func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
+	var newSecParams SnmpV3SecurityParameters
+	if x.SecurityParameters != nil {
+		newSecParams = x.SecurityParameters.Copy()
+	}
 	return &SnmpPacket{
 		Version:            x.Version,
 		Community:          x.Community,
 		MsgFlags:           x.MsgFlags,
 		SecurityModel:      x.SecurityModel,
-		SecurityParameters: x.SecurityParameters,
+		SecurityParameters: newSecParams,
 		Error:              0,
 		ErrorIndex:         0,
 		PDUType:            pdutype,
