@@ -160,11 +160,11 @@ func (x *GoSNMP) Connect() error {
 	x.requestID = x.random.Uint32()
 
 	if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
-		sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || sec_params == nil {
-			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+		secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || secParams == nil {
+			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
 		}
-		sec_params.localSalt = x.random.Uint32()
+		secParams.localSalt = x.random.Uint32()
 	}
 
 	return nil

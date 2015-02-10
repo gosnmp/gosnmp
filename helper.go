@@ -704,13 +704,13 @@ func shaHMAC(password string, engineID string) []byte {
 	return final
 }
 
-func genlocalkey(auth_protocol SnmpV3AuthProtocol, passphrase string, engine_id string) []byte {
+func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) []byte {
 	var secretKey []byte
-	switch auth_protocol {
+	switch authProtocol {
 	default:
-		secretKey = md5HMAC(passphrase, engine_id)
+		secretKey = md5HMAC(passphrase, engineID)
 	case SHA:
-		secretKey = shaHMAC(passphrase, engine_id)
+		secretKey = shaHMAC(passphrase, engineID)
 	}
 	return secretKey
 }
