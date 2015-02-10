@@ -152,9 +152,6 @@ var slog Logger
 func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
 	finalDeadline := time.Now().Add(x.Timeout)
 
-	if x.Retries < 0 {
-		x.Retries = 0
-	}
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	allMsgIDs := make([]uint32, 0, x.Retries+1)
 	for retries := 0; ; retries++ {
@@ -185,7 +182,12 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
 			allMsgIDs = append(allMsgIDs, msgID)
 
-			/* should this be here?
+			// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
+			// localSalt needs to be incremented on every packet.
+			// Unfortunately we can not set the localSalt for this packet
+			// with the value returned from atomic.AddUint32
+			// because the PrivacyParameters (salt) have already been calculated.
+			// -- I think it will be clearer to move that code under here.
 			if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
 				sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
 				if !ok || sec_params == nil {
@@ -193,7 +195,6 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 				}
 				atomic.AddUint32(&(sec_params.localSalt), 1)
 			}
-			*/
 		}
 
 		var outBuf []byte
@@ -310,7 +311,6 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	pdutype PDUType, msgid uint32, requestid uint32) ([]byte, error) {
 	var auth_param_start uint32
-	var priv_param_start uint32
 	buf := new(bytes.Buffer)
 
 	// version
@@ -336,11 +336,10 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 
 		var security_parameters []byte
 		if packet.SecurityModel == UserSecurityModel {
-			security_parameters, auth_param_start, priv_param_start, err = packet.marshalSnmpV3UsmSecurityParameters()
+			security_parameters, auth_param_start, err = packet.marshalSnmpV3UsmSecurityParameters()
 			if err != nil {
 				return nil, err
 			}
-			_, _ = auth_param_start, priv_param_start
 		}
 
 		buf.Write([]byte{byte(OctetString)})
@@ -350,7 +349,6 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 		}
 		buf.Write(sec_param_len)
 		auth_param_start += uint32(buf.Len())
-		priv_param_start += uint32(buf.Len())
 		buf.Write(security_parameters)
 
 		scoped_pdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
@@ -471,14 +469,13 @@ func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, uint32, error) {
+func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, error) {
 	var buf bytes.Buffer
 	var auth_param_start uint32
-	var priv_param_start uint32
 
 	sec_params, ok := packet.SecurityParameters.(*UsmSecurityParameters)
 	if !ok || sec_params == nil {
-		return nil, 0, 0, fmt.Errorf("packet.SecurityParameters is not of type &UsmSecurityParameters.")
+		return nil, 0, fmt.Errorf("packet.SecurityParameters is not of type &UsmSecurityParameters.")
 	}
 
 	// msgAuthoritativeEngineID
@@ -509,12 +506,11 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 	} else {
 		buf.Write([]byte{byte(OctetString), 0})
 	}
-	priv_param_start = uint32(buf.Len() + 2)
 	// msgPrivacyParameters
 	if packet.MsgFlags&AuthPriv > AuthNoPriv {
 		privlen, err := marshalLength(len(sec_params.PrivacyParameters))
 		if err != nil {
-			return nil, 0, 0, err
+			return nil, 0, err
 		}
 		buf.Write([]byte{byte(OctetString)})
 		buf.Write(privlen)
@@ -526,14 +522,13 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 	// wrap security parameters in a sequence
 	param_len, err := marshalLength(buf.Len())
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, 0, err
 	}
 	tmpseq := append([]byte{byte(Sequence)}, param_len...)
 	auth_param_start += uint32(len(tmpseq))
-	priv_param_start += uint32(len(tmpseq))
 	tmpseq = append(tmpseq, buf.Bytes()...)
 
-	return tmpseq, auth_param_start, priv_param_start, nil
+	return tmpseq, auth_param_start, nil
 }
 
 func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
