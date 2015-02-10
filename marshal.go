@@ -68,6 +68,10 @@ const (
 	AES    SnmpV3PrivProtocol = 3
 )
 
+type SnmpV3SecurityParameters interface {
+	Copy() SnmpV3SecurityParameters
+}
+
 type UsmSecurityParameters struct {
 	AuthoritativeEngineID    string
 	AuthoritativeEngineBoots uint32
@@ -83,6 +87,21 @@ type UsmSecurityParameters struct {
 	PrivacyPassphrase        string
 
 	localSalt uint32
+}
+
+func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
+	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,
+		AuthoritativeEngineBoots: sp.AuthoritativeEngineBoots,
+		AuthoritativeEngineTime:  sp.AuthoritativeEngineTime,
+		UserName:                 sp.UserName,
+		AuthenticationParameters: sp.AuthenticationParameters,
+		PrivacyParameters:        sp.PrivacyParameters,
+		AuthenticationProtocol:   sp.AuthenticationProtocol,
+		PrivacyProtocol:          sp.PrivacyProtocol,
+		AuthenticationPassphrase: sp.AuthenticationPassphrase,
+		PrivacyPassphrase:        sp.PrivacyPassphrase,
+		localSalt:                sp.localSalt,
+	}
 }
 
 // SnmpPacket struct represents the entire SNMP Message or Sequence at the
@@ -184,16 +203,28 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 
 			// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 			// localSalt needs to be incremented on every packet.
-			// Unfortunately we can not set the localSalt for this packet
-			// with the value returned from atomic.AddUint32
-			// because the PrivacyParameters (salt) have already been calculated.
-			// -- I think it will be clearer to move that code under here.
 			if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
-				sec_params, ok := x.SecurityParameters.(*UsmSecurityParameters)
-				if !ok || sec_params == nil {
-					panic("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+				baseSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+				if !ok || baseSecParams == nil {
+					err = fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
+					break
 				}
-				atomic.AddUint32(&(sec_params.localSalt), 1)
+				newPktLocalSalt := atomic.AddUint32(&(baseSecParams.localSalt), 1)
+				if packetOut.Version == Version3 && packetOut.SecurityModel == UserSecurityModel && packetOut.MsgFlags&AuthPriv > AuthNoPriv {
+					pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+					if !ok || baseSecParams == nil {
+						err = fmt.Errorf("&packetOut.SecurityModel indicates the User Security Model, but &packetOut.SecurityParameters is not of type &UsmSecurityParameters.")
+						break
+					}
+					switch pktSecParams.PrivacyProtocol {
+					case AES:
+					default:
+						var salt = make([]byte, 8)
+						binary.BigEndian.PutUint32(salt, pktSecParams.AuthoritativeEngineBoots)
+						binary.BigEndian.PutUint32(salt[4:], newPktLocalSalt)
+						pktSecParams.PrivacyParameters = salt
+					}
+				}
 			}
 		}
 
@@ -288,16 +319,6 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				}
 				packetOut.ContextEngineID = result.ContextEngineID
 				packetOut.ContextName = result.ContextName
-			}
-			if packetOut.MsgFlags&AuthPriv > AuthNoPriv {
-				switch sec_params.PrivacyProtocol {
-				case AES:
-				default:
-					var salt = make([]byte, 8)
-					binary.BigEndian.PutUint32(salt, sec_params.AuthoritativeEngineBoots)
-					binary.BigEndian.PutUint32(salt[4:], sec_params.localSalt)
-					sec_params.PrivacyParameters = salt
-				}
 			}
 		}
 	}
