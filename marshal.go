@@ -290,7 +290,10 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	if x.Retries < 0 {
 		x.Retries = 0
 	}
-
+	// blindly negotiates each request by sending a blank packet to retrieve authoritative
+	// engine id/boot/time and pdu context id/name
+	// may not need to if the last request was less than 150 seconds ago.
+	// http://tools.ietf.org/html/rfc2574#section-2.2.3
 	if packetOut.Version == Version3 {
 		if packetOut.SecurityModel == UserSecurityModel {
 			secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
