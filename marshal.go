@@ -291,13 +291,13 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		x.Retries = 0
 	}
 
-	if x.Version == Version3 {
+	if packetOut.Version == Version3 {
 		if packetOut.SecurityModel == UserSecurityModel {
-			sec_params, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
-			if !ok || sec_params == nil {
+			secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || secParams == nil {
 				return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters.")
 			}
-			if sec_params.AuthoritativeEngineID == "" {
+			if secParams.AuthoritativeEngineID == "" {
 				// send blank packet and store results for the discovery process
 				blankPacket := &SnmpPacket{
 					Version:            Version3,
@@ -311,11 +311,11 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				if err != nil {
 					return nil, err
 				}
-				new_sec_params, ok := result.SecurityParameters.(*UsmSecurityParameters)
-				if ok && new_sec_params != nil {
-					sec_params.AuthoritativeEngineID = new_sec_params.AuthoritativeEngineID
-					sec_params.AuthoritativeEngineBoots = new_sec_params.AuthoritativeEngineBoots
-					sec_params.AuthoritativeEngineTime = new_sec_params.AuthoritativeEngineTime
+				newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+				if ok && newSecParams != nil {
+					secParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
+					secParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
+					secParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
 				}
 				packetOut.ContextEngineID = result.ContextEngineID
 				packetOut.ContextName = result.ContextName
