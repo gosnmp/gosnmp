@@ -220,13 +220,16 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 					err = fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
 					break
 				}
+
 				newPktLocalSalt := atomic.AddUint32(&(baseSecParams.localSalt), 1)
 				if packetOut.Version == Version3 && packetOut.SecurityModel == UserSecurityModel && packetOut.MsgFlags&AuthPriv > AuthNoPriv {
+
 					pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
 					if !ok || baseSecParams == nil {
 						err = fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
 						break
 					}
+
 					switch pktSecParams.PrivacyProtocol {
 					case AES:
 					default:
@@ -269,6 +272,9 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 				validID = true
 			}
 		}
+		if result.RequestID == 0 {
+			validID = true
+		}
 		if !validID {
 			err = fmt.Errorf("Out of order response")
 			continue
@@ -307,6 +313,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	// http://tools.ietf.org/html/rfc2574#section-2.2.3
 	// -- Now saves the authoritative engine params
 	// -- still need to check if packet is in time window
+
 	if packetOut.Version == Version3 {
 		if packetOut.SecurityModel == UserSecurityModel {
 			secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
@@ -324,9 +331,11 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				}
 				var emptyPdus []SnmpPDU
 				result, err := x.sendOneRequest(emptyPdus, blankPacket)
+
 				if err != nil {
 					return nil, err
 				}
+
 				newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
 				if ok && newSecParams != nil {
 					secParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
@@ -343,6 +352,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	if err != nil {
 		return result, err
 	}
+
 	if result.Version == Version3 && result.SecurityModel == UserSecurityModel {
 		secParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
 		if !ok || secParams == nil {
@@ -355,6 +365,22 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				connSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
 				connSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
 			}
+		}
+
+		if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
+
+			// out of time window -- but since we just renegotiated the authoritative engine parameters, just resubmit
+			pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || pktSecParams == nil {
+				return nil, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+			}
+			pktSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
+			pktSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
+			pktSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+			packetOut.ContextName = result.ContextName
+			packetOut.ContextEngineID = result.ContextEngineID
+
+			return x.sendOneRequest(pdus, packetOut)
 		}
 	}
 	return result, err
@@ -493,9 +519,11 @@ func marshalUvarInt(x uint32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, x)
 	i := 0
-	for ; buf[i] == 0 && i < 3; i++ {
+	for ; i < 4; i++ {
+		if buf[i] != 0 {
+			break
+		}
 	}
-	i--
 	buf = buf[i:]
 	return buf
 }
