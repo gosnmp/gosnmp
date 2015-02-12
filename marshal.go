@@ -305,6 +305,8 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	// engine id/boot/time and pdu context id/name
 	// may not need to if the last request was less than 150 seconds ago.
 	// http://tools.ietf.org/html/rfc2574#section-2.2.3
+	// -- Now saves the authoritative engine params
+	// -- still need to check if packet is in time window
 	if packetOut.Version == Version3 {
 		if packetOut.SecurityModel == UserSecurityModel {
 			secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
@@ -333,11 +335,29 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				}
 				packetOut.ContextEngineID = result.ContextEngineID
 				packetOut.ContextName = result.ContextName
+
 			}
 		}
 	}
-	// Return last error
-	return x.sendOneRequest(pdus, packetOut)
+	result, err = x.sendOneRequest(pdus, packetOut)
+	if err != nil {
+		return result, err
+	}
+	if result.Version == Version3 && result.SecurityModel == UserSecurityModel {
+		secParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || secParams == nil {
+			return nil, fmt.Errorf("result.SecurityModel indicates the User Security Model, but result.SecurityParameters is not of type &UsmSecurityParameters")
+		}
+		if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
+			connSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || connSecParams != nil {
+				connSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
+				connSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
+				connSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+			}
+		}
+	}
+	return result, err
 }
 
 // -- Marshalling Logic --------------------------------------------------------
