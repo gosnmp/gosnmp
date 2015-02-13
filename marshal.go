@@ -346,6 +346,9 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 					packetOut.ContextEngineID = result.ContextEngineID
 					packetOut.ContextName = result.ContextName
 				}
+				/*if x.ContextEngineID == "" {
+					x.ContextEngineID = result.ContextEngineID
+				}*/
 
 			}
 		}
@@ -385,6 +388,8 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			pktSecParams.PrivacyParameters = []byte{}
 			packetOut.ContextName = result.ContextName
 			packetOut.ContextEngineID = secParams.AuthoritativeEngineID
+			//packetOut.ContextName = result.ContextName
+			//packetOut.ContextEngineID = result.ContextEngineID
 
 			return x.sendOneRequest(pdus, packetOut)
 		}
