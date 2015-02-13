@@ -55,6 +55,12 @@ type GoSNMP struct {
 	// SecurityParameters is an SNMPV3 Security Model paramaters struct
 	SecurityParameters SnmpV3SecurityParameters
 
+	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU
+	ContextEngineID string
+
+	// ContextName is SNMPV3 ContextName in ScopedPDU
+	ContextName string
+
 	// Timeout is the timeout for the SNMP Query
 	Timeout time.Duration
 
@@ -181,6 +187,8 @@ func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetition
 		MsgFlags:           x.MsgFlags,
 		SecurityModel:      x.SecurityModel,
 		SecurityParameters: newSecParams,
+		ContextEngineID:    x.ContextEngineID,
+		ContextName:        x.ContextName,
 		Error:              0,
 		ErrorIndex:         0,
 		PDUType:            pdutype,

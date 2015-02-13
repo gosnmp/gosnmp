@@ -342,8 +342,10 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 					secParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
 					secParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
 				}
-				packetOut.ContextEngineID = result.ContextEngineID
-				packetOut.ContextName = result.ContextName
+				if packetOut.ContextEngineID == "" {
+					packetOut.ContextEngineID = result.ContextEngineID
+					packetOut.ContextName = result.ContextName
+				}
 
 			}
 		}
@@ -365,6 +367,8 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				connSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
 				connSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
 			}
+			x.ContextName = result.ContextName
+			x.ContextEngineID = secParams.AuthoritativeEngineID
 		}
 
 		if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
@@ -377,8 +381,10 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			pktSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
 			pktSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
 			pktSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+			pktSecParams.AuthenticationParameters = ""
+			pktSecParams.PrivacyParameters = []byte{}
 			packetOut.ContextName = result.ContextName
-			packetOut.ContextEngineID = result.ContextEngineID
+			packetOut.ContextEngineID = secParams.AuthoritativeEngineID
 
 			return x.sendOneRequest(pdus, packetOut)
 		}
