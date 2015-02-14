@@ -534,6 +534,10 @@ func marshalUvarInt(x uint32) []byte {
 		}
 	}
 	buf = buf[i:]
+	// if the highest bit in buf is set and x is not negative - prepend a byte to make it positive
+	if len(buf) > 0 && buf[0]&0x80 > 0 && x >= 0 {
+		buf = append([]byte{0}, buf...)
+	}
 	return buf
 }
 
