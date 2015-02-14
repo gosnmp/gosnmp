@@ -307,13 +307,11 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	if x.Retries < 0 {
 		x.Retries = 0
 	}
-	// blindly negotiates each request by sending a blank packet to retrieve authoritative
-	// engine id/boot/time and pdu context id/name
-	// may not need to if the last request was less than 150 seconds ago.
-	// http://tools.ietf.org/html/rfc2574#section-2.2.3
-	// -- Now saves the authoritative engine params
-	// -- still need to check if packet is in time window
 
+	// http://tools.ietf.org/html/rfc2574#section-2.2.3
+	// This code does not check if the last message received was more than 150 seconds ago
+	// The snmpds that this code was tested on emit an 'out of time window' error with the new
+	// time and this code will retransmit when that is received.
 	if packetOut.Version == Version3 {
 		if packetOut.SecurityModel == UserSecurityModel {
 			secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
