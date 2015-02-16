@@ -165,12 +165,15 @@ func (x *GoSNMP) Connect() error {
 	// RequestID is Integer32 from SNMPV2-SMI and uses all 32 bits
 	x.requestID = x.random.Uint32()
 
-	if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
-		secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || secParams == nil {
-			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+	if x.Version == Version3 {
+		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
+		if x.SecurityModel == UserSecurityModel {
+			secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || secParams == nil {
+				return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+			}
+			secParams.localSalt = x.random.Uint32()
 		}
-		secParams.localSalt = x.random.Uint32()
 	}
 
 	return nil
