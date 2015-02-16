@@ -319,7 +319,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				return nil, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
 			}
 			if secParams.AuthoritativeEngineID == "" {
-				// send blank packet and store results for the discovery process
+				// send blank packet to discover authoriative engine ID/boots/time
 				blankPacket := &SnmpPacket{
 					Version:            Version3,
 					MsgFlags:           Reportable | NoAuthNoPriv,
@@ -333,15 +333,19 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				if err != nil {
 					return nil, err
 				}
-
+				// store the authoritative engine parameters
 				newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
 				if ok && newSecParams != nil {
 					secParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
 					secParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
 					secParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
+
+					// it seems common to use the authoritative engine id as the default
+					// context engine id when it is not specified
 					if packetOut.ContextEngineID == "" {
 						packetOut.ContextEngineID = newSecParams.AuthoritativeEngineID
 					}
+					// store for base connection as well
 					if x.ContextEngineID == "" {
 						x.ContextEngineID = newSecParams.AuthoritativeEngineID
 					}
@@ -350,6 +354,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			}
 		}
 	}
+	// perform request
 	result, err = x.sendOneRequest(pdus, packetOut)
 	if err != nil {
 		return result, err
@@ -374,7 +379,8 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 
 		if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
 
-			// out of time window -- but since we just renegotiated the authoritative engine parameters, just resubmit
+			// out of time window -- but since we just renegotiated the authoritative engine parameters,
+			// just resubmit the packet with updated parameters
 			pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
 			if !ok || pktSecParams == nil {
 				return nil, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
