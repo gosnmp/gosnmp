@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -67,7 +68,7 @@ const (
 
 const (
 	rxBufSizeMin = 1024   // Minimal buffer size to handle 1 OID (see dispatch())
-	rxBufSizeMax = 131072 // Prevent memory allocation from going out of control
+	rxBufSizeMax = 131072 // 2 x max MTU size (65507)
 )
 
 // Logger is an interface used for debugging. Both Print and
@@ -140,8 +141,15 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			break
 		}
 
+		var expected int
+		if packetOut.PDUType == GetBulkRequest {
+			expected = int(packetOut.MaxRepetitions)
+		} else {
+			expected = len(pdus)
+		}
+
 		var resp []byte
-		resp, err = dispatch(x.Conn, outBuf, len(pdus))
+		resp, err = dispatch(x.Conn, outBuf, expected)
 		if err != nil {
 			continue
 		}
@@ -558,9 +566,12 @@ func unmarshalVBL(packet []byte, response *SnmpPacket,
 // Previously, resp was allocated rxBufSize (65536) bytes ie a fixed size for
 // all responses. To decrease memory usage, resp is dynamically sized, at the
 // cost of possible additional network round trips.
-func dispatch(c net.Conn, outBuf []byte, pduCount int) ([]byte, error) {
+func dispatch(c net.Conn, outBuf []byte, expected int) ([]byte, error) {
+	if expected <= 0 {
+		expected = 1
+	}
 	var resp []byte
-	for bufSize := rxBufSizeMin * pduCount; bufSize < rxBufSizeMax; bufSize *= 2 {
+	for bufSize := rxBufSizeMin * expected; bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
 		_, err := c.Write(outBuf)
 		if err != nil {
@@ -568,13 +579,23 @@ func dispatch(c net.Conn, outBuf []byte, pduCount int) ([]byte, error) {
 		}
 		n, err := c.Read(resp)
 		if err != nil {
+			// On Windows we don't get a partial read and truncation. Instead
+			// we get an error if buff is too small - WSAEMSGSIZE 10040.
+			const WSAEMSGSIZE syscall.Errno = 10040
+			if opErr, ok := err.(*net.OpError); ok {
+				if opErr.Err == WSAEMSGSIZE {
+					continue
+				}
+			}
 			return resp, fmt.Errorf("Error reading from UDP: %s", err.Error())
 		}
 
 		if n < bufSize {
-			// Memory usage optimization. Help the runtime to release as much memory as possible.
+			// Memory usage optimization. Help the runtime to release as much memory as
+			// possible.
 			//
-			// See: http://blog.golang.org/go-slices-usage-and-internals, section: A possible "gotcha"
+			// See: http://blog.golang.org/go-slices-usage-and-internals,
+			//    section: A possible "gotcha"
 			// ...As mentioned earlier, re-slicing a slice doesn't make a copy of the
 			// underlying array. The full array will be kept in memory until it is no
 			// longer referenced. Occasionally this can cause the program to hold all
@@ -584,6 +605,7 @@ func dispatch(c net.Conn, outBuf []byte, pduCount int) ([]byte, error) {
 			copy(resp2, resp)
 			return resp2, nil
 		}
+		slog.Printf("Retrying. Buffer size was too small. (size %d)", bufSize)
 	}
 	return resp, fmt.Errorf("Response bufSize exceeded rxBufSizeMax (%d)", rxBufSizeMax)
 }
