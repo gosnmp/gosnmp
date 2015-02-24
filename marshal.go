@@ -147,9 +147,6 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		} else {
 			expected = len(pdus)
 		}
-		if expected <= 0 {
-			panic("expected!")
-		}
 
 		var resp []byte
 		resp, err = dispatch(x.Conn, outBuf, expected)
