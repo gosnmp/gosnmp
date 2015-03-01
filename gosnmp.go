@@ -174,7 +174,7 @@ func (x *GoSNMP) Connect() error {
 			}
 			switch secParams.PrivacyProtocol {
 			case AES:
-				secParams.localAESSalt = (uint64(x.random.Uint32()) << 32) & uint64(x.random.Uint32())
+				secParams.localAESSalt = (uint64(x.random.Uint32()) << 32) | uint64(x.random.Uint32())
 			case DES:
 				secParams.localDESSalt = x.random.Uint32()
 			}
