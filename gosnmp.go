@@ -172,7 +172,12 @@ func (x *GoSNMP) Connect() error {
 			if !ok || secParams == nil {
 				return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
 			}
-			secParams.localSalt = x.random.Uint32()
+			switch secParams.PrivacyProtocol {
+			case AES:
+				secParams.localAESSalt = (uint64(x.random.Uint32()) << 32) & uint64(x.random.Uint32())
+			case DES:
+				secParams.localDESSalt = x.random.Uint32()
+			}
 		}
 	}
 
