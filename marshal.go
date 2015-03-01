@@ -114,6 +114,7 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 		AuthenticationPassphrase: sp.AuthenticationPassphrase,
 		PrivacyPassphrase:        sp.PrivacyPassphrase,
 		localDESSalt:             sp.localDESSalt,
+		localAESSalt:             sp.localAESSalt,
 	}
 }
 
