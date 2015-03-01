@@ -964,6 +964,8 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 				if !ok || baseSecParams == nil {
 					return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
 				}
+				secParameters.AuthenticationProtocol = baseSecParams.AuthenticationProtocol
+				secParameters.PrivacyProtocol = baseSecParams.PrivacyProtocol
 				secParameters.PrivacyPassphrase = baseSecParams.PrivacyPassphrase
 			}
 			if PDUType(packet[cursor]) != Sequence {
@@ -1094,7 +1096,6 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 			// the encrypted PDU
 			packet = packet[:cursor+tlength]
 			cursor += cursorTmp
-
 			rawContextEngineID, count, err := parseRawField(packet[cursor:], "contextEngineID")
 			if err != nil {
 				return nil, fmt.Errorf("Error parsing SNMPV3 contextEngineID: %s", err.Error())
@@ -1106,7 +1107,6 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 					slog.Printf("Parsed contextEngineID %s", contextEngineID)
 				}
 			}
-
 			rawContextName, count, err := parseRawField(packet[cursor:], "contextName")
 			if err != nil {
 				return nil, fmt.Errorf("Error parsing SNMPV3 contextName: %s", err.Error())
@@ -1123,7 +1123,6 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 			return nil, fmt.Errorf("Error parsing SNMPV3 scoped PDU\n")
 		}
 	}
-
 	// Parse SNMP packet type
 	requestType := PDUType(packet[cursor])
 	switch requestType {
