@@ -6,9 +6,15 @@ package gosnmp
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/des"
+	"crypto/md5"
+	"crypto/sha1"
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"io/ioutil"
 	"log"
 	"net"
@@ -23,27 +29,114 @@ import (
 // protocol.
 //
 
-// SnmpVersion 1 and 2c implemented, 3 planned
+// SnmpVersion 1, 2c and 3 implemented
 type SnmpVersion uint8
 
-// SnmpVersion 1 and 2c implemented, 3 planned
+// SnmpVersion 1, 2c and 3 implemented
 const (
 	Version1  SnmpVersion = 0x0
 	Version2c SnmpVersion = 0x1
+	Version3  SnmpVersion = 0x3
 )
+
+// SnmpV3MsgFlags contains various message flags to describe Authentication, Privacy, and whether a report PDU must be sent.
+type SnmpV3MsgFlags uint8
+
+// Possible values of SnmpV3MsgFlags
+const (
+	NoAuthNoPriv SnmpV3MsgFlags = 0x0 // No authentication, and no privacy
+	AuthNoPriv   SnmpV3MsgFlags = 0x1 // Authentication and no privacy
+	AuthPriv     SnmpV3MsgFlags = 0x3 // Authentication and privacy
+	Reportable   SnmpV3MsgFlags = 0x4 // Report PDU must be sent.
+)
+
+// SnmpV3SecurityModel describes the security model used by a SnmpV3 connection
+type SnmpV3SecurityModel uint8
+
+// UserSecurityModel is the only SnmpV3SecurityModel currently implemented.
+const (
+	UserSecurityModel SnmpV3SecurityModel = 3
+)
+
+// SnmpV3AuthProtocol describes the authentication protocol in use by an authenticated SnmpV3 connection.
+type SnmpV3AuthProtocol uint8
+
+// NoAuth, MD5, and SHA are implemented
+const (
+	NoAuth SnmpV3AuthProtocol = 1
+	MD5    SnmpV3AuthProtocol = 2
+	SHA    SnmpV3AuthProtocol = 3
+)
+
+// SnmpV3PrivProtocol is the privacy protocol in use by an private SnmpV3 connection.
+type SnmpV3PrivProtocol uint8
+
+// NoPriv, DES implemented, AES planned
+const (
+	NoPriv SnmpV3PrivProtocol = 1
+	DES    SnmpV3PrivProtocol = 2
+	AES    SnmpV3PrivProtocol = 3
+)
+
+// SnmpV3SecurityParameters is a generic interface type to contain various implementations of SnmpV3SecurityParameters
+type SnmpV3SecurityParameters interface {
+	Copy() SnmpV3SecurityParameters
+}
+
+// UsmSecurityParameters is an implementation of SnmpV3SecurityParameters for the UserSecurityModel
+type UsmSecurityParameters struct {
+	AuthoritativeEngineID    string
+	AuthoritativeEngineBoots uint32
+	AuthoritativeEngineTime  uint32
+	UserName                 string
+	AuthenticationParameters string
+	PrivacyParameters        []byte
+
+	AuthenticationProtocol SnmpV3AuthProtocol
+	PrivacyProtocol        SnmpV3PrivProtocol
+
+	AuthenticationPassphrase string
+	PrivacyPassphrase        string
+
+	localDESSalt uint32
+	localAESSalt uint64
+}
+
+// Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
+func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
+	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,
+		AuthoritativeEngineBoots: sp.AuthoritativeEngineBoots,
+		AuthoritativeEngineTime:  sp.AuthoritativeEngineTime,
+		UserName:                 sp.UserName,
+		AuthenticationParameters: sp.AuthenticationParameters,
+		PrivacyParameters:        sp.PrivacyParameters,
+		AuthenticationProtocol:   sp.AuthenticationProtocol,
+		PrivacyProtocol:          sp.PrivacyProtocol,
+		AuthenticationPassphrase: sp.AuthenticationPassphrase,
+		PrivacyPassphrase:        sp.PrivacyPassphrase,
+		localDESSalt:             sp.localDESSalt,
+		localAESSalt:             sp.localAESSalt,
+	}
+}
 
 // SnmpPacket struct represents the entire SNMP Message or Sequence at the
 // application layer.
 type SnmpPacket struct {
-	Version        SnmpVersion
-	Community      string
-	PDUType        PDUType
-	RequestID      uint32
-	Error          uint8
-	ErrorIndex     uint8
-	NonRepeaters   uint8
-	MaxRepetitions uint8
-	Variables      []SnmpPDU
+	Version            SnmpVersion
+	MsgFlags           SnmpV3MsgFlags
+	SecurityModel      SnmpV3SecurityModel
+	SecurityParameters interface{}
+	ContextEngineID    string
+	ContextName        string
+	Community          string
+	PDUType            PDUType
+	MsgID              uint32
+	RequestID          uint32
+	Error              uint8
+	ErrorIndex         uint8
+	NonRepeaters       uint8
+	MaxRepetitions     uint8
+	Variables          []SnmpPDU
 }
 
 // VarBind struct represents an SNMP Varbind.
@@ -64,6 +157,9 @@ const (
 	SetRequest     PDUType = 0xa3
 	Trap           PDUType = 0xa4
 	GetBulkRequest PDUType = 0xa5
+	InformRequest  PDUType = 0xa6
+	SNMPV2Trap     PDUType = 0xa7
+	Report         PDUType = 0xa8
 )
 
 const (
@@ -87,29 +183,11 @@ type Logger interface {
 // slog is a global variable that is used for debug logging
 var slog Logger
 
-// generic "sender"
-func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err = fmt.Errorf("recover: %v", e)
-		}
-	}()
-
-	if x.Conn == nil {
-		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
-	}
-
-	if x.Logger == nil {
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	}
-	slog = x.Logger // global variable for debug logging
-
+func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
 	finalDeadline := time.Now().Add(x.Timeout)
 
-	if x.Retries < 0 {
-		x.Retries = 0
-	}
 	allReqIDs := make([]uint32, 0, x.Retries+1)
+	allMsgIDs := make([]uint32, 0, x.Retries+1)
 	for retries := 0; ; retries++ {
 		if retries > 0 {
 			if LoggingDisabled != true {
@@ -130,11 +208,56 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 		x.Conn.SetDeadline(reqDeadline)
 
 		// Request ID is an atomic counter (started at a random value)
-		reqID := atomic.AddUint32(&(x.requestID), 1)
+		reqID := atomic.AddUint32(&(x.requestID), 1) // TODO: fix overflows
 		allReqIDs = append(allReqIDs, reqID)
 
+		var msgID uint32
+		if x.Version == Version3 {
+			msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
+			allMsgIDs = append(allMsgIDs, msgID)
+
+			// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
+			// localDESSalt needs to be incremented on every packet.
+			if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
+				baseSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+				if !ok || baseSecParams == nil {
+					err = fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+					break
+				}
+				var newPktLocalAESSalt uint64
+				var newPktLocalDESSalt uint32
+				switch baseSecParams.PrivacyProtocol {
+				case AES:
+					newPktLocalAESSalt = atomic.AddUint64(&(baseSecParams.localAESSalt), 1)
+				case DES:
+					newPktLocalDESSalt = atomic.AddUint32(&(baseSecParams.localDESSalt), 1)
+				}
+
+				if packetOut.Version == Version3 && packetOut.SecurityModel == UserSecurityModel && packetOut.MsgFlags&AuthPriv > AuthNoPriv {
+
+					pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+					if !ok || baseSecParams == nil {
+						err = fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+						break
+					}
+
+					switch pktSecParams.PrivacyProtocol {
+					case AES:
+						var salt = make([]byte, 8)
+						binary.BigEndian.PutUint64(salt, newPktLocalAESSalt)
+						pktSecParams.PrivacyParameters = salt
+					default:
+						var salt = make([]byte, 8)
+						binary.BigEndian.PutUint32(salt, pktSecParams.AuthoritativeEngineBoots)
+						binary.BigEndian.PutUint32(salt[4:], newPktLocalDESSalt)
+						pktSecParams.PrivacyParameters = salt
+					}
+				}
+			}
+		}
+
 		var outBuf []byte
-		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType, reqID)
+		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType, msgID, reqID)
 		if err != nil {
 			// Don't retry - not going to get any better!
 			err = fmt.Errorf("marshal: %v", err)
@@ -154,7 +277,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			continue
 		}
 
-		result, err = unmarshal(resp)
+		result, err = x.unmarshal(resp)
 		if err != nil {
 			err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 			continue
@@ -170,11 +293,13 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				validID = true
 			}
 		}
+		if result.RequestID == 0 {
+			validID = true
+		}
 		if !validID {
 			err = fmt.Errorf("Out of order response")
 			continue
 		}
-
 		// Success!
 		return result, nil
 	}
@@ -183,26 +308,170 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	return nil, err
 }
 
+// generic "sender"
+func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("recover: %v", e)
+		}
+	}()
+
+	if x.Conn == nil {
+		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
+	}
+
+	if x.Logger == nil {
+		x.Logger = log.New(ioutil.Discard, "", 0)
+	}
+	slog = x.Logger // global variable for debug logging
+
+	if x.Retries < 0 {
+		x.Retries = 0
+	}
+
+	// http://tools.ietf.org/html/rfc2574#section-2.2.3
+	// This code does not check if the last message received was more than 150 seconds ago
+	// The snmpds that this code was tested on emit an 'out of time window' error with the new
+	// time and this code will retransmit when that is received.
+	if packetOut.Version == Version3 {
+		if packetOut.SecurityModel == UserSecurityModel {
+			secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || secParams == nil {
+				return nil, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+			}
+			if secParams.AuthoritativeEngineID == "" {
+				// send blank packet to discover authoriative engine ID/boots/time
+				blankPacket := &SnmpPacket{
+					Version:            Version3,
+					MsgFlags:           Reportable | NoAuthNoPriv,
+					SecurityModel:      UserSecurityModel,
+					SecurityParameters: &UsmSecurityParameters{},
+					PDUType:            GetRequest,
+				}
+				var emptyPdus []SnmpPDU
+				result, err := x.sendOneRequest(emptyPdus, blankPacket)
+
+				if err != nil {
+					return nil, err
+				}
+				// store the authoritative engine parameters
+				newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+				if ok && newSecParams != nil {
+					secParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
+					secParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
+					secParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
+
+					// it seems common to use the authoritative engine id as the default
+					// context engine id when it is not specified
+					if packetOut.ContextEngineID == "" {
+						packetOut.ContextEngineID = newSecParams.AuthoritativeEngineID
+					}
+					// store for base connection as well
+					if x.ContextEngineID == "" {
+						x.ContextEngineID = newSecParams.AuthoritativeEngineID
+					}
+				}
+
+			}
+		}
+	}
+	// perform request
+	result, err = x.sendOneRequest(pdus, packetOut)
+	if err != nil {
+		return result, err
+	}
+
+	if result.Version == Version3 && result.SecurityModel == UserSecurityModel {
+		secParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || secParams == nil {
+			return nil, fmt.Errorf("result.SecurityModel indicates the User Security Model, but result.SecurityParameters is not of type &UsmSecurityParameters")
+		}
+		if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
+			connSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || connSecParams != nil {
+				connSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
+				connSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
+				connSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+			}
+			if x.ContextEngineID == "" {
+				x.ContextEngineID = secParams.AuthoritativeEngineID
+			}
+		}
+
+		if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
+
+			// out of time window -- but since we just renegotiated the authoritative engine parameters,
+			// just resubmit the packet with updated parameters
+			pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || pktSecParams == nil {
+				return nil, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+			}
+			pktSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
+			pktSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
+			pktSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+
+			if packetOut.ContextEngineID == "" {
+				packetOut.ContextEngineID = secParams.AuthoritativeEngineID
+			}
+
+			return x.sendOneRequest(pdus, packetOut)
+		}
+	}
+	return result, err
+}
+
 // -- Marshalling Logic --------------------------------------------------------
 
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
-	pdutype PDUType, requestid uint32) ([]byte, error) {
+	pdutype PDUType, msgid uint32, requestid uint32) ([]byte, error) {
+	var authParamStart uint32
 	buf := new(bytes.Buffer)
 
 	// version
 	buf.Write([]byte{2, 1, byte(packet.Version)})
 
-	// community
-	buf.Write([]byte{4, uint8(len(packet.Community))})
-	buf.WriteString(packet.Community)
+	if packet.Version != Version3 {
+		// community
+		buf.Write([]byte{4, uint8(len(packet.Community))})
+		buf.WriteString(packet.Community)
+		// pdu
+		pdu, err := packet.marshalPDU(pdus, requestid)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(pdu)
+	} else {
+		header, err := packet.marshalSnmpV3Header(msgid)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write([]byte{byte(Sequence), byte(len(header))})
+		buf.Write(header)
 
-	// pdu
-	pdu, err := packet.marshalPDU(pdus, requestid)
-	if err != nil {
-		return nil, err
+		var securityParameters []byte
+		if packet.SecurityModel == UserSecurityModel {
+			securityParameters, authParamStart, err = packet.marshalSnmpV3UsmSecurityParameters()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		buf.Write([]byte{byte(OctetString)})
+		secParamLen, err := marshalLength(len(securityParameters))
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(secParamLen)
+		authParamStart += uint32(buf.Len())
+		buf.Write(securityParameters)
+
+		scopedPdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(scopedPdu)
 	}
-	buf.Write(pdu)
 
 	// build up resulting msg - sequence, length then the tail (buf)
 	msg := new(bytes.Buffer)
@@ -213,9 +482,272 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 		return nil, err2
 	}
 	msg.Write(bufLengthBytes)
-
+	authParamStart += uint32(msg.Len())
 	buf.WriteTo(msg) // reverse logic - want to do msg.Write(buf)
-	return msg.Bytes(), nil
+
+	authenticatedMessage, err := packet.authenticate(msg.Bytes(), authParamStart)
+	if err != nil {
+		return nil, err
+	}
+
+	return authenticatedMessage, nil
+}
+
+func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byte, error) {
+	defer func() {
+		if e := recover(); e != nil {
+			fmt.Printf("recover: %v\n", e)
+		}
+	}()
+	if packet.Version != Version3 {
+		return msg, nil
+	}
+	if packet.MsgFlags&AuthNoPriv == 0 {
+		return msg, nil
+	}
+	if packet.SecurityModel != UserSecurityModel {
+		return nil, fmt.Errorf("Error authenticating message: Unknown security model.")
+	}
+
+	var secParams *UsmSecurityParameters
+	secParams, ok := packet.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || secParams == nil {
+		return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
+	}
+	var secretKey = genlocalkey(secParams.AuthenticationProtocol,
+		secParams.AuthenticationPassphrase,
+		secParams.AuthoritativeEngineID)
+
+	var extkey [64]byte
+
+	copy(extkey[:], secretKey)
+
+	var k1, k2 [64]byte
+
+	for i := 0; i < 64; i++ {
+		k1[i] = extkey[i] ^ 0x36
+		k2[i] = extkey[i] ^ 0x5c
+	}
+
+	var h, h2 hash.Hash
+
+	switch secParams.AuthenticationProtocol {
+	default:
+		h = md5.New()
+		h2 = md5.New()
+	case SHA:
+		h = sha1.New()
+		h2 = sha1.New()
+	}
+
+	h.Write(k1[:])
+	h.Write(msg)
+	d1 := h.Sum(nil)
+	h2.Write(k2[:])
+	h2.Write(d1)
+	copy(msg[authParamStart:authParamStart+12], h2.Sum(nil)[:12])
+	return msg, nil
+}
+
+func marshalUvarInt(x uint32) []byte {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, x)
+	i := 0
+	for ; i < 4; i++ {
+		if buf[i] != 0 {
+			break
+		}
+	}
+	buf = buf[i:]
+	// if the highest bit in buf is set and x is not negative - prepend a byte to make it positive
+	if len(buf) > 0 && buf[0]&0x80 > 0 {
+		buf = append([]byte{0}, buf...)
+	}
+	return buf
+}
+
+func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	// msg id
+	buf.Write([]byte{byte(Integer), 4})
+	err := binary.Write(buf, binary.BigEndian, msgid)
+	if err != nil {
+		return nil, err
+	}
+
+	// maximum response msg size
+	maxmsgsize := marshalUvarInt(rxBufSizeMax)
+	buf.Write([]byte{byte(Integer), byte(len(maxmsgsize))})
+	buf.Write(maxmsgsize)
+
+	// msg flags
+	buf.Write([]byte{byte(OctetString), 1, byte(packet.MsgFlags)})
+
+	// msg security model
+	buf.Write([]byte{byte(Integer), 1, byte(packet.SecurityModel)})
+
+	return buf.Bytes(), nil
+}
+
+func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, error) {
+	var buf bytes.Buffer
+	var authParamStart uint32
+
+	secParams, ok := packet.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || secParams == nil {
+		return nil, 0, fmt.Errorf("packet.SecurityParameters is not of type &UsmSecurityParameters")
+	}
+
+	// msgAuthoritativeEngineID
+	buf.Write([]byte{byte(OctetString), byte(len(secParams.AuthoritativeEngineID))})
+	buf.WriteString(secParams.AuthoritativeEngineID)
+
+	// msgAuthoritativeEngineBoots
+	msgAuthoritativeEngineBoots := marshalUvarInt(secParams.AuthoritativeEngineBoots)
+	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineBoots))})
+	buf.Write(msgAuthoritativeEngineBoots)
+
+	// msgAuthoritativeEngineTime
+	msgAuthoritativeEngineTime := marshalUvarInt(secParams.AuthoritativeEngineTime)
+	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineTime))})
+	buf.Write(msgAuthoritativeEngineTime)
+
+	// msgUserName
+	buf.Write([]byte{byte(OctetString), byte(len(secParams.UserName))})
+	buf.WriteString(secParams.UserName)
+
+	authParamStart = uint32(buf.Len() + 2) // +2 indicates PDUType + Length
+	// msgAuthenticationParameters
+	if packet.MsgFlags&AuthNoPriv > 0 {
+		buf.Write([]byte{byte(OctetString), 12,
+			0, 0, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 0})
+	} else {
+		buf.Write([]byte{byte(OctetString), 0})
+	}
+	// msgPrivacyParameters
+	if packet.MsgFlags&AuthPriv > AuthNoPriv {
+		privlen, err := marshalLength(len(secParams.PrivacyParameters))
+		if err != nil {
+			return nil, 0, err
+		}
+		buf.Write([]byte{byte(OctetString)})
+		buf.Write(privlen)
+		buf.Write(secParams.PrivacyParameters)
+	} else {
+		buf.Write([]byte{byte(OctetString), 0})
+	}
+
+	// wrap security parameters in a sequence
+	paramLen, err := marshalLength(buf.Len())
+	if err != nil {
+		return nil, 0, err
+	}
+	tmpseq := append([]byte{byte(Sequence)}, paramLen...)
+	authParamStart += uint32(len(tmpseq))
+	tmpseq = append(tmpseq, buf.Bytes()...)
+
+	return tmpseq, authParamStart, nil
+}
+
+func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+	var b []byte
+
+	scopedPdu, err := packet.prepareSnmpV3ScopedPDU(pdus, requestid)
+	if err != nil {
+		return nil, err
+	}
+	pduLen, err := marshalLength(len(scopedPdu))
+	if err != nil {
+		return nil, err
+	}
+	b = append([]byte{byte(Sequence)}, pduLen...)
+	scopedPdu = append(b, scopedPdu...)
+	if packet.MsgFlags&AuthPriv > AuthNoPriv && packet.SecurityModel == UserSecurityModel {
+		secParams, ok := packet.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || secParams == nil {
+			return nil, fmt.Errorf("packet.SecurityModel indicates the User Security Model, but packet.SecurityParameters is not of type &UsmSecurityParameters")
+		}
+		var privkey = genlocalkey(secParams.AuthenticationProtocol,
+			secParams.PrivacyPassphrase,
+			secParams.AuthoritativeEngineID)
+		switch secParams.PrivacyProtocol {
+		case AES:
+			var iv [16]byte
+			binary.BigEndian.PutUint32(iv[:], secParams.AuthoritativeEngineBoots)
+			binary.BigEndian.PutUint32(iv[4:], secParams.AuthoritativeEngineTime)
+			copy(iv[8:], secParams.PrivacyParameters)
+
+			block, err := aes.NewCipher(privkey[:16])
+			if err != nil {
+				return nil, err
+			}
+			stream := cipher.NewCFBEncrypter(block, iv[:])
+			ciphertext := make([]byte, len(scopedPdu))
+			stream.XORKeyStream(ciphertext, scopedPdu)
+			pduLen, err := marshalLength(len(ciphertext))
+			if err != nil {
+				return nil, err
+			}
+			b = append([]byte{byte(OctetString)}, pduLen...)
+			scopedPdu = append(b, ciphertext...)
+		default:
+			preiv := privkey[8:]
+			var iv [8]byte
+			for i := 0; i < len(iv); i++ {
+				iv[i] = preiv[i] ^ secParams.PrivacyParameters[i]
+			}
+			block, err := des.NewCipher(privkey[:8])
+			if err != nil {
+				return nil, err
+			}
+			mode := cipher.NewCBCEncrypter(block, iv[:])
+
+			pad := make([]byte, des.BlockSize-len(scopedPdu)%des.BlockSize)
+			scopedPdu = append(scopedPdu, pad...)
+
+			ciphertext := make([]byte, len(scopedPdu))
+			mode.CryptBlocks(ciphertext, scopedPdu)
+			pduLen, err := marshalLength(len(ciphertext))
+			if err != nil {
+				return nil, err
+			}
+			b = append([]byte{byte(OctetString)}, pduLen...)
+			scopedPdu = append(b, ciphertext...)
+		}
+
+	}
+
+	return scopedPdu, nil
+}
+
+func (packet *SnmpPacket) prepareSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+	var buf bytes.Buffer
+
+	//ContextEngineID
+	idlen, err := marshalLength(len(packet.ContextEngineID))
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(append([]byte{byte(OctetString)}, idlen...))
+	buf.WriteString(packet.ContextEngineID)
+
+	//ContextName
+	namelen, err := marshalLength(len(packet.ContextName))
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(append([]byte{byte(OctetString)}, namelen...))
+	buf.WriteString(packet.ContextName)
+
+	data, err := packet.marshalPDU(pdus, requestid)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(data)
+	return buf.Bytes(), nil
 }
 
 // marshal a PDU
@@ -360,7 +892,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 
 // -- Unmarshalling Logic ------------------------------------------------------
 
-func unmarshal(packet []byte) (*SnmpPacket, error) {
+func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 	response := new(SnmpPacket)
 	response.Variables = make([]SnmpPDU, 0, 5)
 
@@ -393,22 +925,263 @@ func unmarshal(packet []byte) (*SnmpPacket, error) {
 			slog.Printf("Parsed version %d", version)
 		}
 	}
+	if response.Version != Version3 {
+		// Parse community
+		rawCommunity, count, err := parseRawField(packet[cursor:], "community")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing community string: %s", err.Error())
+		}
+		cursor += count
+		if community, ok := rawCommunity.(string); ok {
+			response.Community = community
+			if LoggingDisabled != true {
+				slog.Printf("Parsed community %s", community)
+			}
+		}
+	} else {
+		if PDUType(packet[cursor]) != Sequence {
+			return nil, fmt.Errorf("Invalid SNMPV3 Header\n")
+		}
 
-	// Parse community
-	rawCommunity, count, err := parseRawField(packet[cursor:], "community")
-	cursor += count
-	if community, ok := rawCommunity.(string); ok {
-		response.Community = community
-		if LoggingDisabled != true {
-			slog.Printf("Parsed community %s", community)
+		_, cursorTmp := parseLength(packet[cursor:])
+		cursor += cursorTmp
+
+		rawMsgID, count, err := parseRawField(packet[cursor:], "msgID")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMPV3 message ID: %s", err.Error())
+		}
+		cursor += count
+		if MsgID, ok := rawMsgID.(int); ok {
+			response.MsgID = uint32(MsgID)
+			if LoggingDisabled != true {
+				slog.Printf("Parsed message ID %d", MsgID)
+
+			}
+		}
+		// discard msg max size
+		_, count, err = parseRawField(packet[cursor:], "maxMsgSize")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMPV3 maxMsgSize: %s", err.Error())
+		}
+		cursor += count
+		// discard msg max size
+
+		rawMsgFlags, count, err := parseRawField(packet[cursor:], "msgFlags")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMPV3 msgFlags: %s", err.Error())
+		}
+		cursor += count
+		if MsgFlags, ok := rawMsgFlags.(string); ok {
+			response.MsgFlags = SnmpV3MsgFlags(MsgFlags[0])
+			if LoggingDisabled != true {
+				slog.Printf("parsed msg flags %s", MsgFlags)
+			}
+		}
+
+		rawSecModel, count, err := parseRawField(packet[cursor:], "msgSecurityModel")
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing SNMPV3 msgSecModel: %s", err.Error())
+		}
+		cursor += count
+		if SecModel, ok := rawSecModel.(int); ok {
+			response.SecurityModel = SnmpV3SecurityModel(SecModel)
+			if LoggingDisabled != true {
+				slog.Printf("Parsed security model %d", SecModel)
+			}
+		}
+
+		if PDUType(packet[cursor]) != OctetString {
+			return nil, fmt.Errorf("Invalid SNMPV3 Security Parameters\n")
+		}
+		_, cursorTmp = parseLength(packet[cursor:])
+		cursor += cursorTmp
+
+		if response.SecurityModel == UserSecurityModel {
+			var secParameters UsmSecurityParameters
+			if x.SecurityModel == UserSecurityModel {
+				baseSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+				if !ok || baseSecParams == nil {
+					return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+				}
+				secParameters.AuthenticationProtocol = baseSecParams.AuthenticationProtocol
+				secParameters.PrivacyProtocol = baseSecParams.PrivacyProtocol
+				secParameters.PrivacyPassphrase = baseSecParams.PrivacyPassphrase
+			}
+			if PDUType(packet[cursor]) != Sequence {
+				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model parameters\n")
+			}
+			_, cursorTmp = parseLength(packet[cursor:])
+			cursor += cursorTmp
+
+			rawMsgAuthoritativeEngineID, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineID")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineID: %s", err.Error())
+			}
+			cursor += count
+			if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
+				secParameters.AuthoritativeEngineID = AuthoritativeEngineID
+				if LoggingDisabled != true {
+					slog.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
+				}
+			}
+
+			rawMsgAuthoritativeEngineBoots, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineBoots: %s", err.Error())
+			}
+			cursor += count
+			if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
+				secParameters.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots)
+				if LoggingDisabled != true {
+					slog.Printf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
+				}
+			}
+
+			rawMsgAuthoritativeEngineTime, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineTime: %s", err.Error())
+			}
+			cursor += count
+			if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
+				secParameters.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime)
+				if LoggingDisabled != true {
+					slog.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
+				}
+			}
+
+			rawMsgUserName, count, err := parseRawField(packet[cursor:], "msgUserName")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgUserName: %s", err.Error())
+			}
+			cursor += count
+			if msgUserName, ok := rawMsgUserName.(string); ok {
+				secParameters.UserName = msgUserName
+				if LoggingDisabled != true {
+					slog.Printf("Parsed userName %s", msgUserName)
+				}
+			}
+
+			rawMsgAuthParameters, count, err := parseRawField(packet[cursor:], "msgAuthenticationParameters")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
+			}
+			cursor += count
+			if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
+				secParameters.AuthenticationParameters = msgAuthenticationParameters
+				if LoggingDisabled != true {
+					slog.Printf("Parsed authenticationParameters %s", msgAuthenticationParameters)
+				}
+			}
+
+			rawMsgPrivacyParameters, count, err := parseRawField(packet[cursor:], "msgPrivacyParameters")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgPrivacyParameters: %s", err.Error())
+			}
+			cursor += count
+			if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
+				secParameters.PrivacyParameters = []byte(msgPrivacyParameters)
+				if LoggingDisabled != true {
+					slog.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
+				}
+			}
+
+			response.SecurityParameters = &secParameters
+		}
+		switch PDUType(packet[cursor]) {
+		case OctetString:
+			// pdu is encrypted
+			_, cursorTmp := parseLength(packet[cursor:])
+			cursorTmp += cursor
+
+			if response.SecurityModel == UserSecurityModel {
+				var secParams *UsmSecurityParameters
+				secParams, ok := response.SecurityParameters.(*UsmSecurityParameters)
+				if !ok || secParams == nil {
+					return nil, fmt.Errorf("response.SecurityModel indicates the User Security Model, but response.SecurityParameters is not of type &UsmSecurityParameters")
+				}
+				var privkey = genlocalkey(secParams.AuthenticationProtocol,
+					secParams.PrivacyPassphrase,
+					secParams.AuthoritativeEngineID)
+				switch secParams.PrivacyProtocol {
+				case AES:
+					var iv [16]byte
+					binary.BigEndian.PutUint32(iv[:], secParams.AuthoritativeEngineBoots)
+					binary.BigEndian.PutUint32(iv[4:], secParams.AuthoritativeEngineTime)
+					copy(iv[8:], secParams.PrivacyParameters)
+
+					block, err := aes.NewCipher(privkey[:16])
+					if err != nil {
+						return nil, err
+					}
+					stream := cipher.NewCFBDecrypter(block, iv[:])
+					plaintext := make([]byte, len(packet[cursorTmp:]))
+					stream.XORKeyStream(plaintext, packet[cursorTmp:])
+					copy(packet[cursor:], plaintext)
+					packet = packet[:cursor+len(plaintext)]
+				default:
+					if len(packet[cursorTmp:])%des.BlockSize != 0 {
+						return nil, fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
+					}
+					preiv := privkey[8:]
+					var iv [8]byte
+					for i := 0; i < len(iv); i++ {
+						iv[i] = preiv[i] ^ secParams.PrivacyParameters[i]
+					}
+					block, err := des.NewCipher(privkey[:8])
+					if err != nil {
+						return nil, err
+					}
+					mode := cipher.NewCBCDecrypter(block, iv[:])
+
+					plaintext := make([]byte, len(packet[cursorTmp:]))
+					mode.CryptBlocks(plaintext, packet[cursorTmp:])
+					copy(packet[cursor:], plaintext)
+					// truncate packet to remove extra space caused by the
+					// octetstring/length header that was just replaced
+					packet = packet[:cursor+len(plaintext)]
+				}
+
+			}
+			fallthrough
+		case Sequence:
+			// pdu is plaintext
+			tlength, cursorTmp := parseLength(packet[cursor:])
+			// truncate padding that may have been included with
+			// the encrypted PDU
+			packet = packet[:cursor+tlength]
+			cursor += cursorTmp
+			rawContextEngineID, count, err := parseRawField(packet[cursor:], "contextEngineID")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 contextEngineID: %s", err.Error())
+			}
+			cursor += count
+			if contextEngineID, ok := rawContextEngineID.(string); ok {
+				response.ContextEngineID = contextEngineID
+				if LoggingDisabled != true {
+					slog.Printf("Parsed contextEngineID %s", contextEngineID)
+				}
+			}
+			rawContextName, count, err := parseRawField(packet[cursor:], "contextName")
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing SNMPV3 contextName: %s", err.Error())
+			}
+			cursor += count
+			if contextName, ok := rawContextName.(string); ok {
+				response.ContextName = contextName
+				if LoggingDisabled != true {
+					slog.Printf("Parsed contextName %s", contextName)
+				}
+			}
+
+		default:
+			return nil, fmt.Errorf("Error parsing SNMPV3 scoped PDU\n")
 		}
 	}
-
 	// Parse SNMP packet type
 	requestType := PDUType(packet[cursor])
 	switch requestType {
 	// known, supported types
-	case GetResponse, GetNextRequest, GetBulkRequest:
+	case GetResponse, GetNextRequest, GetBulkRequest, Report:
 		response, err = unmarshalResponse(packet[cursor:], response, length, requestType)
 		if err != nil {
 			return nil, fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
@@ -571,6 +1344,7 @@ func dispatch(c net.Conn, outBuf []byte, expected int) ([]byte, error) {
 		expected = 1
 	}
 	var resp []byte
+
 	for bufSize := rxBufSizeMin * expected; bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
 		_, err := c.Write(outBuf)
