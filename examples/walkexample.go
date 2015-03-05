@@ -6,6 +6,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,24 +15,28 @@ import (
 	"github.com/soniah/gosnmp"
 )
 
-func usage() {
-	fmt.Println("Usage:")
-	fmt.Printf("   %s host community [oid]\n", filepath.Base(os.Args[0]))
-	fmt.Println("     host      - the host to walk/scan")
-	fmt.Println("     community - the community string for device")
-	fmt.Println("     oid       - the MIB/Oid defining a subtree of values")
-	os.Exit(1)
-}
-
 func main() {
-	if len(os.Args) < 3 {
-		usage()
+	flag.Usage = func() {
+		fmt.Printf("Usage:\n")
+		fmt.Printf("   %s [-community=<community>] host [oid]\n", filepath.Base(os.Args[0]))
+		fmt.Printf("     host      - the host to walk/scan\n")
+		fmt.Printf("     oid       - the MIB/Oid defining a subtree of values\n\n")
+		flag.PrintDefaults()
 	}
-	target := os.Args[1]
-	community := os.Args[2]
+
+	var community string
+	flag.StringVar(&community, "community", "public", "the community string for device")
+
+	flag.Parse()
+
+	if len(flag.Args()) < 1 {
+		flag.Usage()
+		os.Exit(1)
+	}
+	target := flag.Args()[0]
 	var oid string
-	if len(os.Args) > 3 {
-		oid = os.Args[3]
+	if len(flag.Args()) > 1 {
+		oid = flag.Args()[1]
 	}
 
 	gosnmp.Default.Target = target
