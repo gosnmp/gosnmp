@@ -19,6 +19,7 @@ these project collaborators:
 
 * Chris Dance ([@codedance](https://github.com/codedance/))
 * Nathan Owens ([@virtuallynathan](https://github.com/virtuallynathan/))
+* Whitham Reeve ([@wdreeveii](https://github.com/wdreeveii/))
 
 Overview
 --------
