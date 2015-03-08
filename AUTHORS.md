@@ -12,6 +12,7 @@
 * Marcin Jurczuk (@mrspock)
 * Andreas Louca (@alouca)
 * Nathan Owens (@virtuallynathan)
+* Whitham Reeve (@wdreeveii)
 * Benjamin Thomas (@benjamin-thomas)
 
 In alphabetical order of surname. In vim: highlight, then `!sort -k3`.
