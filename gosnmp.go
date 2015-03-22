@@ -9,6 +9,8 @@
 package gosnmp
 
 import (
+	crand "crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -174,9 +176,19 @@ func (x *GoSNMP) Connect() error {
 			}
 			switch secParams.PrivacyProtocol {
 			case AES:
-				secParams.localAESSalt = (uint64(x.random.Uint32()) << 32) | uint64(x.random.Uint32())
+				salt := make([]byte, 8)
+				_, err = crand.Read(salt)
+				if err != nil {
+					return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+				}
+				secParams.localAESSalt = binary.BigEndian.Uint64(salt)
 			case DES:
-				secParams.localDESSalt = x.random.Uint32()
+				salt := make([]byte, 4)
+				_, err = crand.Read(salt)
+				if err != nil {
+					return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+				}
+				secParams.localDESSalt = binary.BigEndian.Uint32(salt)
 			}
 		}
 	}
