@@ -122,7 +122,7 @@ type SnmpPacket struct {
 	Version            SnmpVersion
 	MsgFlags           SnmpV3MsgFlags
 	SecurityModel      SnmpV3SecurityModel
-	SecurityParameters interface{}
+	SecurityParameters SnmpV3SecurityParameters
 	ContextEngineID    string
 	ContextName        string
 	Community          string
@@ -275,8 +275,9 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			continue
 		}
 		result = new(SnmpPacket)
-		if x.SecurityParameters != nil {
-			result.SecurityParameters = x.SecurityParameters.Copy()
+		result.MsgFlags = packetOut.MsgFlags
+		if packetOut.SecurityParameters != nil {
+			result.SecurityParameters = packetOut.SecurityParameters.Copy()
 		}
 		err = unmarshal(resp, result)
 		if err != nil {
@@ -376,6 +377,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 			}
 		}
 	}
+
 	// perform request
 	result, err = x.sendOneRequest(pdus, packetOut)
 	if err != nil {
@@ -828,6 +830,7 @@ func unmarshal(packet []byte, response *SnmpPacket) error {
 	if response == nil {
 		return fmt.Errorf("Cannot unmarshal response into nil packet reference")
 	}
+	var OrigMsgFlags = response.MsgFlags
 	response.Variables = make([]SnmpPDU, 0, 5)
 
 	// Start parsing the packet
@@ -994,13 +997,28 @@ func unmarshal(packet []byte, response *SnmpPacket) error {
 			if err != nil {
 				return fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
 			}
-			cursor += count
+
 			if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
 				secParameters.AuthenticationParameters = msgAuthenticationParameters
 				if LoggingDisabled != true {
 					slog.Printf("Parsed authenticationParameters %s", msgAuthenticationParameters)
 				}
 			}
+			// use the authoritative copy of MsgFlags to determine whether this message should be authenticated
+			if OrigMsgFlags&AuthNoPriv > 0 {
+				if count != 14 {
+					return fmt.Errorf("Error authenticating incoming packet: msgAuthenticationParameters is not the correct size")
+				}
+				blank := make([]byte, 12)
+				copy(packet[cursor+2:cursor+14], blank)
+				if !isAuthentic(packet, secParameters.AuthenticationParameters,
+					secParameters.AuthenticationProtocol,
+					secParameters.AuthenticationPassphrase,
+					secParameters.AuthoritativeEngineID) {
+					return fmt.Errorf("Incoming packet is not authentic, discarding")
+				}
+			}
+			cursor += count
 
 			rawMsgPrivacyParameters, count, err := parseRawField(packet[cursor:], "msgPrivacyParameters")
 			if err != nil {
