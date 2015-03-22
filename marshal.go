@@ -180,6 +180,7 @@ type Logger interface {
 // slog is a global variable that is used for debug logging
 var slog Logger
 
+// send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
 	finalDeadline := time.Now().Add(x.Timeout)
 
@@ -308,7 +309,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 	return nil, err
 }
 
-// generic "sender"
+// generic "sender" that negotiate any version of snmp request
 func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
@@ -493,23 +494,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	return authenticatedMessage, nil
 }
 
-func marshalUvarInt(x uint32) []byte {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, x)
-	i := 0
-	for ; i < 4; i++ {
-		if buf[i] != 0 {
-			break
-		}
-	}
-	buf = buf[i:]
-	// if the highest bit in buf is set and x is not negative - prepend a byte to make it positive
-	if len(buf) > 0 && buf[0]&0x80 > 0 {
-		buf = append([]byte{0}, buf...)
-	}
-	return buf
-}
-
+// marshal a snmp version 3 packet header
 func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
@@ -534,6 +519,7 @@ func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// marshal a snmp version 3 security parameters field for the User Security Model
 func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, error) {
 	var buf bytes.Buffer
 	var authParamStart uint32
@@ -596,6 +582,7 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 	return tmpseq, authParamStart, nil
 }
 
+// marshal and encrypt (if necessary) a snmp version 3 Scoped PDU
 func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
 	var b []byte
 
@@ -667,6 +654,7 @@ func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint3
 	return scopedPdu, nil
 }
 
+// prepare the plain text of a snmp version 3 Scoped PDU
 func (packet *SnmpPacket) prepareSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
 	var buf bytes.Buffer
 

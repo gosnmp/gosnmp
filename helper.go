@@ -262,6 +262,23 @@ func dumpBytes2(desc string, bb []byte, cursor int) string {
 	return result
 }
 
+func marshalUvarInt(x uint32) []byte {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, x)
+	i := 0
+	for ; i < 4; i++ {
+		if buf[i] != 0 {
+			break
+		}
+	}
+	buf = buf[i:]
+	// if the highest bit in buf is set and x is not negative - prepend a byte to make it positive
+	if len(buf) > 0 && buf[0]&0x80 > 0 {
+		buf = append([]byte{0}, buf...)
+	}
+	return buf
+}
+
 func marshalBase128Int(out *bytes.Buffer, n int64) (err error) {
 	if n == 0 {
 		err = out.WriteByte(0)
