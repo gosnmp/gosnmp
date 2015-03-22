@@ -602,7 +602,7 @@ var testsUnmarshal = []struct {
 }
 
 // TODO TODO
-/*func TestUnmarshal(t *testing.T) {
+func TestUnmarshal(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
 	// LoggingDisabled = false          // for verbose debugging
@@ -611,9 +611,9 @@ var testsUnmarshal = []struct {
 SANITY:
 	for i, test := range testsUnmarshal {
 		var err error
-		var res *SnmpPacket
+		var res = new(SnmpPacket)
 
-		if res, err = unmarshal(test.in()); err != nil {
+		if err = unmarshal(test.in(), res); err != nil {
 			t.Errorf("#%d, Unmarshal returned err: %v", i, err)
 			continue SANITY
 		} else if res == nil {
@@ -682,7 +682,7 @@ SANITY:
 		}
 	}
 }
-*/
+
 // -----------------------------------------------------------------------------
 
 /*
