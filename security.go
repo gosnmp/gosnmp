@@ -15,6 +15,7 @@ import (
 	"hash"
 )
 
+// authenticate the marshalled result of a snmp version 3 packet
 func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byte, error) {
 	defer func() {
 		if e := recover(); e != nil {
