@@ -72,6 +72,49 @@ func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byt
 	return msg, nil
 }
 
+// determine whether a message is authentic
+func isAuthentic(msg []byte, authParams string, authProtocol SnmpV3AuthProtocol, authPassphrase string, authEngineID string) bool {
+	var secretKey = genlocalkey(authProtocol,
+		authPassphrase,
+		authEngineID)
+
+	var extkey [64]byte
+
+	copy(extkey[:], secretKey)
+
+	var k1, k2 [64]byte
+
+	for i := 0; i < 64; i++ {
+		k1[i] = extkey[i] ^ 0x36
+		k2[i] = extkey[i] ^ 0x5c
+	}
+
+	var h, h2 hash.Hash
+
+	switch authProtocol {
+	default:
+		h = md5.New()
+		h2 = md5.New()
+	case SHA:
+		h = sha1.New()
+		h2 = sha1.New()
+	}
+
+	h.Write(k1[:])
+	h.Write(msg)
+	d1 := h.Sum(nil)
+	h2.Write(k2[:])
+	h2.Write(d1)
+
+	result := h2.Sum(nil)[:12]
+	for k, v := range []byte(authParams) {
+		if result[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
 // MD5 HMAC key calculation algorithm
 func md5HMAC(password string, engineID string) []byte {
 	comp := md5.New()
