@@ -276,8 +276,11 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 		if err != nil {
 			continue
 		}
-
-		result, err = x.unmarshal(resp)
+		result = new(SnmpPacket)
+		if x.Version == Version3 {
+			result.SecurityParameters = x.SecurityParameters.Copy()
+		}
+		err = unmarshal(resp, result)
 		if err != nil {
 			err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 			continue
@@ -892,8 +895,10 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 
 // -- Unmarshalling Logic ------------------------------------------------------
 
-func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
-	response := new(SnmpPacket)
+func unmarshal(packet []byte, response *SnmpPacket) error {
+	if response == nil {
+		return fmt.Errorf("Cannot unmarshal response into nil packet reference")
+	}
 	response.Variables = make([]SnmpPDU, 0, 5)
 
 	// Start parsing the packet
@@ -901,12 +906,12 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 	// First bytes should be 0x30
 	if PDUType(packet[0]) != Sequence {
-		return nil, fmt.Errorf("Invalid packet header\n")
+		return fmt.Errorf("Invalid packet header\n")
 	}
 
 	length, cursor := parseLength(packet)
 	if len(packet) != length {
-		return nil, fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
+		return fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
 	}
 	if LoggingDisabled != true {
 		slog.Printf("Packet sanity verified, we got all the bytes (%d)", length)
@@ -915,7 +920,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 	// Parse SNMP Version
 	rawVersion, count, err := parseRawField(packet[cursor:], "version")
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing SNMP packet version: %s", err.Error())
+		return fmt.Errorf("Error parsing SNMP packet version: %s", err.Error())
 	}
 
 	cursor += count
@@ -929,7 +934,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 		// Parse community
 		rawCommunity, count, err := parseRawField(packet[cursor:], "community")
 		if err != nil {
-			return nil, fmt.Errorf("Error parsing community string: %s", err.Error())
+			return fmt.Errorf("Error parsing community string: %s", err.Error())
 		}
 		cursor += count
 		if community, ok := rawCommunity.(string); ok {
@@ -940,7 +945,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 		}
 	} else {
 		if PDUType(packet[cursor]) != Sequence {
-			return nil, fmt.Errorf("Invalid SNMPV3 Header\n")
+			return fmt.Errorf("Invalid SNMPV3 Header\n")
 		}
 
 		_, cursorTmp := parseLength(packet[cursor:])
@@ -948,7 +953,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 		rawMsgID, count, err := parseRawField(packet[cursor:], "msgID")
 		if err != nil {
-			return nil, fmt.Errorf("Error parsing SNMPV3 message ID: %s", err.Error())
+			return fmt.Errorf("Error parsing SNMPV3 message ID: %s", err.Error())
 		}
 		cursor += count
 		if MsgID, ok := rawMsgID.(int); ok {
@@ -961,14 +966,14 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 		// discard msg max size
 		_, count, err = parseRawField(packet[cursor:], "maxMsgSize")
 		if err != nil {
-			return nil, fmt.Errorf("Error parsing SNMPV3 maxMsgSize: %s", err.Error())
+			return fmt.Errorf("Error parsing SNMPV3 maxMsgSize: %s", err.Error())
 		}
 		cursor += count
 		// discard msg max size
 
 		rawMsgFlags, count, err := parseRawField(packet[cursor:], "msgFlags")
 		if err != nil {
-			return nil, fmt.Errorf("Error parsing SNMPV3 msgFlags: %s", err.Error())
+			return fmt.Errorf("Error parsing SNMPV3 msgFlags: %s", err.Error())
 		}
 		cursor += count
 		if MsgFlags, ok := rawMsgFlags.(string); ok {
@@ -980,7 +985,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 		rawSecModel, count, err := parseRawField(packet[cursor:], "msgSecurityModel")
 		if err != nil {
-			return nil, fmt.Errorf("Error parsing SNMPV3 msgSecModel: %s", err.Error())
+			return fmt.Errorf("Error parsing SNMPV3 msgSecModel: %s", err.Error())
 		}
 		cursor += count
 		if SecModel, ok := rawSecModel.(int); ok {
@@ -991,31 +996,26 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 		}
 
 		if PDUType(packet[cursor]) != OctetString {
-			return nil, fmt.Errorf("Invalid SNMPV3 Security Parameters\n")
+			return fmt.Errorf("Invalid SNMPV3 Security Parameters\n")
 		}
 		_, cursorTmp = parseLength(packet[cursor:])
 		cursor += cursorTmp
 
 		if response.SecurityModel == UserSecurityModel {
-			var secParameters UsmSecurityParameters
-			if x.SecurityModel == UserSecurityModel {
-				baseSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
-				if !ok || baseSecParams == nil {
-					return nil, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
-				}
-				secParameters.AuthenticationProtocol = baseSecParams.AuthenticationProtocol
-				secParameters.PrivacyProtocol = baseSecParams.PrivacyProtocol
-				secParameters.PrivacyPassphrase = baseSecParams.PrivacyPassphrase
+			secParameters, ok := response.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || secParameters == nil {
+				return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
 			}
+
 			if PDUType(packet[cursor]) != Sequence {
-				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model parameters\n")
+				return fmt.Errorf("Error parsing SNMPV3 User Security Model parameters\n")
 			}
 			_, cursorTmp = parseLength(packet[cursor:])
 			cursor += cursorTmp
 
 			rawMsgAuthoritativeEngineID, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineID")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineID: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineID: %s", err.Error())
 			}
 			cursor += count
 			if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
@@ -1027,7 +1027,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 			rawMsgAuthoritativeEngineBoots, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineBoots: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineBoots: %s", err.Error())
 			}
 			cursor += count
 			if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
@@ -1039,7 +1039,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 			rawMsgAuthoritativeEngineTime, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineTime: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineTime: %s", err.Error())
 			}
 			cursor += count
 			if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
@@ -1051,7 +1051,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 			rawMsgUserName, count, err := parseRawField(packet[cursor:], "msgUserName")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgUserName: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 User Security Model msgUserName: %s", err.Error())
 			}
 			cursor += count
 			if msgUserName, ok := rawMsgUserName.(string); ok {
@@ -1063,7 +1063,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 			rawMsgAuthParameters, count, err := parseRawField(packet[cursor:], "msgAuthenticationParameters")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
 			}
 			cursor += count
 			if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
@@ -1075,7 +1075,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 			rawMsgPrivacyParameters, count, err := parseRawField(packet[cursor:], "msgPrivacyParameters")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 User Security Model msgPrivacyParameters: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 User Security Model msgPrivacyParameters: %s", err.Error())
 			}
 			cursor += count
 			if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
@@ -1085,7 +1085,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 				}
 			}
 
-			response.SecurityParameters = &secParameters
+			//response.SecurityParameters = &secParameters
 		}
 		switch PDUType(packet[cursor]) {
 		case OctetString:
@@ -1097,7 +1097,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 				var secParams *UsmSecurityParameters
 				secParams, ok := response.SecurityParameters.(*UsmSecurityParameters)
 				if !ok || secParams == nil {
-					return nil, fmt.Errorf("response.SecurityModel indicates the User Security Model, but response.SecurityParameters is not of type &UsmSecurityParameters")
+					return fmt.Errorf("response.SecurityModel indicates the User Security Model, but response.SecurityParameters is not of type &UsmSecurityParameters")
 				}
 				var privkey = genlocalkey(secParams.AuthenticationProtocol,
 					secParams.PrivacyPassphrase,
@@ -1111,7 +1111,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 
 					block, err := aes.NewCipher(privkey[:16])
 					if err != nil {
-						return nil, err
+						return err
 					}
 					stream := cipher.NewCFBDecrypter(block, iv[:])
 					plaintext := make([]byte, len(packet[cursorTmp:]))
@@ -1120,7 +1120,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 					packet = packet[:cursor+len(plaintext)]
 				default:
 					if len(packet[cursorTmp:])%des.BlockSize != 0 {
-						return nil, fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
+						return fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
 					}
 					preiv := privkey[8:]
 					var iv [8]byte
@@ -1129,7 +1129,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 					}
 					block, err := des.NewCipher(privkey[:8])
 					if err != nil {
-						return nil, err
+						return err
 					}
 					mode := cipher.NewCBCDecrypter(block, iv[:])
 
@@ -1152,7 +1152,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 			cursor += cursorTmp
 			rawContextEngineID, count, err := parseRawField(packet[cursor:], "contextEngineID")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 contextEngineID: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 contextEngineID: %s", err.Error())
 			}
 			cursor += count
 			if contextEngineID, ok := rawContextEngineID.(string); ok {
@@ -1163,7 +1163,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 			}
 			rawContextName, count, err := parseRawField(packet[cursor:], "contextName")
 			if err != nil {
-				return nil, fmt.Errorf("Error parsing SNMPV3 contextName: %s", err.Error())
+				return fmt.Errorf("Error parsing SNMPV3 contextName: %s", err.Error())
 			}
 			cursor += count
 			if contextName, ok := rawContextName.(string); ok {
@@ -1174,7 +1174,7 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 			}
 
 		default:
-			return nil, fmt.Errorf("Error parsing SNMPV3 scoped PDU\n")
+			return fmt.Errorf("Error parsing SNMPV3 scoped PDU\n")
 		}
 	}
 	// Parse SNMP packet type
@@ -1184,12 +1184,12 @@ func (x *GoSNMP) unmarshal(packet []byte) (*SnmpPacket, error) {
 	case GetResponse, GetNextRequest, GetBulkRequest, Report:
 		response, err = unmarshalResponse(packet[cursor:], response, length, requestType)
 		if err != nil {
-			return nil, fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
+			return fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
 		}
 	default:
-		return nil, fmt.Errorf("Unknown PDUType %#x", requestType)
+		return fmt.Errorf("Unknown PDUType %#x", requestType)
 	}
-	return response, nil
+	return nil
 }
 
 func unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestType PDUType) (*SnmpPacket, error) {
