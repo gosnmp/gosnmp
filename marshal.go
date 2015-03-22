@@ -277,7 +277,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			continue
 		}
 		result = new(SnmpPacket)
-		if x.Version == Version3 {
+		if x.SecurityParameters != nil {
 			result.SecurityParameters = x.SecurityParameters.Copy()
 		}
 		err = unmarshal(resp, result)
