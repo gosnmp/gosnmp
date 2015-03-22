@@ -831,6 +831,12 @@ func unmarshal(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("Cannot unmarshal response into nil packet reference")
 	}
 	var OrigMsgFlags = response.MsgFlags
+	var OrigAuthEngineID string
+
+	secParameters, ok := response.SecurityParameters.(*UsmSecurityParameters)
+	if ok && secParameters != nil {
+		OrigAuthEngineID = secParameters.AuthoritativeEngineID
+	}
 	response.Variables = make([]SnmpPDU, 0, 5)
 
 	// Start parsing the packet
@@ -1011,10 +1017,12 @@ func unmarshal(packet []byte, response *SnmpPacket) error {
 				}
 				blank := make([]byte, 12)
 				copy(packet[cursor+2:cursor+14], blank)
+				// secParameters.AuthenticationProtocol and secParameters.AuthenticationPassphrase are not written to in this function,
+				// so no need to save an 'original' to authenticate against
 				if !isAuthentic(packet, secParameters.AuthenticationParameters,
 					secParameters.AuthenticationProtocol,
 					secParameters.AuthenticationPassphrase,
-					secParameters.AuthoritativeEngineID) {
+					OrigAuthEngineID) {
 					return fmt.Errorf("Incoming packet is not authentic, discarding")
 				}
 			}
