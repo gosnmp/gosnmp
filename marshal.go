@@ -9,12 +9,9 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des"
-	"crypto/md5"
-	"crypto/sha1"
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
-	"hash"
 	"io/ioutil"
 	"log"
 	"net"
@@ -494,62 +491,6 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	}
 
 	return authenticatedMessage, nil
-}
-
-func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byte, error) {
-	defer func() {
-		if e := recover(); e != nil {
-			fmt.Printf("recover: %v\n", e)
-		}
-	}()
-	if packet.Version != Version3 {
-		return msg, nil
-	}
-	if packet.MsgFlags&AuthNoPriv == 0 {
-		return msg, nil
-	}
-	if packet.SecurityModel != UserSecurityModel {
-		return nil, fmt.Errorf("Error authenticating message: Unknown security model.")
-	}
-
-	var secParams *UsmSecurityParameters
-	secParams, ok := packet.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || secParams == nil {
-		return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
-	}
-	var secretKey = genlocalkey(secParams.AuthenticationProtocol,
-		secParams.AuthenticationPassphrase,
-		secParams.AuthoritativeEngineID)
-
-	var extkey [64]byte
-
-	copy(extkey[:], secretKey)
-
-	var k1, k2 [64]byte
-
-	for i := 0; i < 64; i++ {
-		k1[i] = extkey[i] ^ 0x36
-		k2[i] = extkey[i] ^ 0x5c
-	}
-
-	var h, h2 hash.Hash
-
-	switch secParams.AuthenticationProtocol {
-	default:
-		h = md5.New()
-		h2 = md5.New()
-	case SHA:
-		h = sha1.New()
-		h2 = sha1.New()
-	}
-
-	h.Write(k1[:])
-	h.Write(msg)
-	d1 := h.Sum(nil)
-	h2.Write(k2[:])
-	h2.Write(d1)
-	copy(msg[authParamStart:authParamStart+12], h2.Sum(nil)[:12])
-	return msg, nil
 }
 
 func marshalUvarInt(x uint32) []byte {

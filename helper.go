@@ -10,8 +10,6 @@ package gosnmp
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -660,57 +658,4 @@ func (s SnmpVersion) String() string {
 		return "2c"
 	}
 	return "3"
-}
-
-// MD5 HMAC key calculation algorithm
-func md5HMAC(password string, engineID string) []byte {
-	comp := md5.New()
-	var pi int // password index
-	for i := 0; i < 1048576; i += 64 {
-		var chunk []byte
-		for e := 0; e < 64; e++ {
-			chunk = append(chunk, password[pi%len(password)])
-			pi++
-		}
-		comp.Write(chunk)
-	}
-	compressed := comp.Sum(nil)
-	local := md5.New()
-	local.Write(compressed)
-	local.Write([]byte(engineID))
-	local.Write(compressed)
-	final := local.Sum(nil)
-	return final
-}
-
-// SHA HMAC key calculation algorithm
-func shaHMAC(password string, engineID string) []byte {
-	hash := sha1.New()
-	var pi int // password index
-	for i := 0; i < 1048576; i += 64 {
-		var chunk []byte
-		for e := 0; e < 64; e++ {
-			chunk = append(chunk, password[pi%len(password)])
-			pi++
-		}
-		hash.Write(chunk)
-	}
-	hashed := hash.Sum(nil)
-	local := sha1.New()
-	local.Write(hashed)
-	local.Write([]byte(engineID))
-	local.Write(hashed)
-	final := local.Sum(nil)
-	return final
-}
-
-func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) []byte {
-	var secretKey []byte
-	switch authProtocol {
-	default:
-		secretKey = md5HMAC(passphrase, engineID)
-	case SHA:
-		secretKey = shaHMAC(passphrase, engineID)
-	}
-	return secretKey
 }
