@@ -5,11 +5,13 @@ gosnmp
 [![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
 https://github.com/soniah/gosnmp
 
-
 GoSNMP is an SNMP client library written fully in Go. Currently it
 provides GetRequest, GetNext, GetBulk, Walk (beta, see below), and
 SetRequest (beta, see below). It supports IPv4 and IPv6, using
 __SNMPv2c__ or __SNMPv3__.
+
+Travis red build failure is just due to __SNMPv3__ secrets not
+being setup in Travis; code is building correctly. Will be fixed soon.
 
 About
 -----
