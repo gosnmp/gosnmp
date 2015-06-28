@@ -8,10 +8,8 @@ https://github.com/soniah/gosnmp
 
 GoSNMP is an SNMP client library written fully in Go. Currently it
 provides GetRequest, GetNext, GetBulk, Walk (beta, see below), and
-SetRequest (beta, see below). It supports IPv4 and IPv6.
-
-We are currently working on integrating __SNMPv3__; if you want to use
-SNMPv3 right now, see the various `snmpv3_*` branches.
+SetRequest (beta, see below). It supports IPv4 and IPv6, using
+__SNMPv2c__ or __SNMPv3__.
 
 About
 -----
@@ -79,7 +77,7 @@ server for full documentation, as well as the examples.
 Usage
 -----
 
-Here is code from **example/example.go**, demonstrating how to use GoSNMP:
+Here is code from **examples/example.go**, demonstrating how to use GoSNMP:
 
 ```go
     // Default is a pointer to a GoSNMP struct that contains sensible defaults
@@ -120,10 +118,12 @@ Running this example gives the following output (from my printer):
     0: oid: 1.3.6.1.2.1.1.4.0 string: Administrator
     1: oid: 1.3.6.1.2.1.1.7.0 number: 104
 
-**example/example2.go** is similar to example.go, however is uses a custom
+**examples/example2.go** is similar to example.go, however is uses a custom
 ```&GoSNMP``` rather than ```g.Default```.
 
-**example/walkexample.go** demonstrates using ```BulkWalk```.
+**examples/walkexample.go** demonstrates using ```BulkWalk```.
+
+**examples/example3.go** demonstrates __SNMPv3__.
 
 Bugs
 ----
