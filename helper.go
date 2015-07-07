@@ -266,7 +266,7 @@ func marshalUvarInt(x uint32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, x)
 	i := 0
-	for ; i < 4; i++ {
+	for ; i < 3; i++ {
 		if buf[i] != 0 {
 			break
 		}
