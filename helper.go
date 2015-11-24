@@ -563,9 +563,9 @@ func parseRawField(data []byte, msg string) (interface{}, int, error) {
 		length, cursor := parseLength(data)
 		return string(data[cursor:length]), length, nil
 	case ObjectIdentifier:
-		length := int(data[1])
-		oid, err := parseObjectIdentifier(data[2 : 2+length])
-		return oid, length + 2, err
+		length, cursor := parseLength(data)
+		oid, err := parseObjectIdentifier(data[cursor: length])
+		return oid, length, err
 	default:
 		return nil, 0, fmt.Errorf("Unknown field type: %x\n", data[0])
 	}
