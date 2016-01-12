@@ -225,7 +225,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
 	// LoggingDisabled = false          // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
@@ -245,7 +245,7 @@ func TestEnmarshalVBL(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
 	// LoggingDisabled = false          // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -269,7 +269,7 @@ func TestEnmarshalPDU(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
 	// LoggingDisabled = false          // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -293,7 +293,7 @@ func TestEnmarshalMsg(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
 	// LoggingDisabled = false          // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.slog = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -606,14 +606,14 @@ func TestUnmarshal(t *testing.T) {
 
 	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
 	// LoggingDisabled = false          // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.slog = log.New(ioutil.Discard, "", 0)
 
 SANITY:
 	for i, test := range testsUnmarshal {
 		var err error
 		var res = new(SnmpPacket)
 
-		if err = unmarshal(test.in(), res); err != nil {
+		if err = Default.unmarshal(test.in(), res); err != nil {
 			t.Errorf("#%d, Unmarshal returned err: %v", i, err)
 			continue SANITY
 		} else if res == nil {

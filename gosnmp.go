@@ -30,11 +30,13 @@ const (
 	defaultMaxRepetitions = 50
 )
 
-// LoggingDisabled is set if the Logger is nil, short circuits any 'slog' calls
-var LoggingDisabled bool
-
 // GoSNMP represents GoSNMP library state
 type GoSNMP struct {
+	// slog is a global variable that is used for debug logging
+	slog Logger
+
+	// LoggingDisabled is set if the Logger is nil, short circuits any 'slog' calls
+	LoggingDisabled bool
 
 	// Target is an ipv4 address
 	Target string
@@ -149,7 +151,7 @@ const (
 // Connect initiates a connection to the target host
 func (x *GoSNMP) Connect() error {
 	if x.Logger == nil {
-		LoggingDisabled = true
+		x.LoggingDisabled = true
 	}
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
 	var err error
