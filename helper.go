@@ -30,9 +30,9 @@ type variable struct {
 
 // -- helper functions (mostly) in alphabetical order --------------------------
 
-func decodeValue(data []byte, msg string) (retVal *variable, err error) {
-	if LoggingDisabled != true {
-		dumpBytes1(data, fmt.Sprintf("decodeValue: %s", msg), 16)
+func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
+	if x.LoggingDisabled != true {
+		x.dumpBytes1(data, fmt.Sprintf("decodeValue: %s", msg), 16)
 	}
 	retVal = new(variable)
 
@@ -40,15 +40,15 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 
 	case Integer:
 		// 0x02. signed
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is Integer")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is Integer")
 		}
 		length, cursor := parseLength(data)
 		var ret int
 		var err error
 		if ret, err = parseInt(data[cursor:length]); err != nil {
-			if LoggingDisabled != true {
-				slog.Printf("%v:", err)
+			if x.LoggingDisabled != true {
+				x.slog.Printf("%v:", err)
 			}
 			return retVal, fmt.Errorf("bytes: % x err: %v", data, err)
 		}
@@ -56,25 +56,25 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		retVal.Value = ret
 	case OctetString:
 		// 0x04
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is OctetString")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is OctetString")
 		}
 		length, cursor := parseLength(data)
 		retVal.Type = OctetString
 		retVal.Value = []byte(data[cursor:length])
 	case Null:
 		// 0x05
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is Null")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is Null")
 		}
 		retVal.Type = Null
 		retVal.Value = nil
 	case ObjectIdentifier:
 		// 0x06
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is ObjectIdentifier")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is ObjectIdentifier")
 		}
-		rawOid, _, err := parseRawField(data, "OID")
+		rawOid, _, err := x.parseRawField(data, "OID")
 		if err != nil {
 			return nil, fmt.Errorf("Error parsing OID Value: %s", err.Error())
 		}
@@ -87,8 +87,8 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		retVal.Value = oidToString(oid)
 	case IPAddress:
 		// 0x40
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is IPAddress")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is IPAddress")
 		}
 		retVal.Type = IPAddress
 		switch data[1] {
@@ -109,14 +109,14 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		}
 	case Counter32:
 		// 0x41. unsigned
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is Counter32")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is Counter32")
 		}
 		length, cursor := parseLength(data)
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			if LoggingDisabled != true {
-				slog.Printf("decodeValue: err is %v", err)
+			if x.LoggingDisabled != true {
+				x.slog.Printf("decodeValue: err is %v", err)
 			}
 			break
 		}
@@ -124,14 +124,14 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		retVal.Value = ret
 	case Gauge32:
 		// 0x42. unsigned
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is Gauge32")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is Gauge32")
 		}
 		length, cursor := parseLength(data)
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			if LoggingDisabled != true {
-				slog.Printf("decodeValue: err is %v", err)
+			if x.LoggingDisabled != true {
+				x.slog.Printf("decodeValue: err is %v", err)
 			}
 			break
 		}
@@ -139,14 +139,14 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		retVal.Value = ret
 	case TimeTicks:
 		// 0x43
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is TimeTicks")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is TimeTicks")
 		}
 		length, cursor := parseLength(data)
 		ret, err := parseInt(data[cursor:length])
 		if err != nil {
-			if LoggingDisabled != true {
-				slog.Printf("decodeValue: err is %v", err)
+			if x.LoggingDisabled != true {
+				x.slog.Printf("decodeValue: err is %v", err)
 			}
 			break
 		}
@@ -154,14 +154,14 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		retVal.Value = ret
 	case Counter64:
 		// 0x46
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is Counter64")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is Counter64")
 		}
 		length, cursor := parseLength(data)
 		ret, err := parseInt64(data[cursor:length])
 		if err != nil {
-			if LoggingDisabled != true {
-				slog.Printf("decodeValue: err is %v", err)
+			if x.LoggingDisabled != true {
+				x.slog.Printf("decodeValue: err is %v", err)
 			}
 			break
 		}
@@ -169,40 +169,40 @@ func decodeValue(data []byte, msg string) (retVal *variable, err error) {
 		retVal.Value = ret
 	case NoSuchObject:
 		// 0x80
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is NoSuchObject")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is NoSuchObject")
 		}
 		retVal.Type = NoSuchObject
 		retVal.Value = nil
 	case NoSuchInstance:
 		// 0x81
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is NoSuchInstance")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is NoSuchInstance")
 		}
 		retVal.Type = NoSuchInstance
 		retVal.Value = nil
 	case EndOfMibView:
 		// 0x82
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type is EndOfMibView")
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type is EndOfMibView")
 		}
 		retVal.Type = EndOfMibView
 		retVal.Value = nil
 	default:
-		if LoggingDisabled != true {
-			slog.Print("decodeValue: type %x isn't implemented", data[0])
+		if x.LoggingDisabled != true {
+			x.slog.Print("decodeValue: type %x isn't implemented", data[0])
 		}
 		retVal.Type = UnknownType
 		retVal.Value = nil
 	}
-	if LoggingDisabled != true {
-		slog.Printf("decodeValue: value is %#v", retVal.Value)
+	if x.LoggingDisabled != true {
+		x.slog.Printf("decodeValue: value is %#v", retVal.Value)
 	}
 	return
 }
 
 // dump bytes in a format similar to Wireshark
-func dumpBytes1(data []byte, msg string, maxlength int) {
+func (x *GoSNMP) dumpBytes1(data []byte, msg string, maxlength int) {
 	var buffer bytes.Buffer
 	buffer.WriteString(msg)
 	length := maxlength
@@ -242,7 +242,7 @@ func dumpBytes1(data []byte, msg string, maxlength int) {
 		}
 	}
 	buffer.WriteString("\n")
-	slog.Print(buffer.String())
+	x.slog.Print(buffer.String())
 }
 
 // dump bytes in one row, up to about screen width. Returns a string
@@ -548,8 +548,8 @@ func parseObjectIdentifier(bytes []byte) (s []int, err error) {
 	return
 }
 
-func parseRawField(data []byte, msg string) (interface{}, int, error) {
-	dumpBytes1(data, fmt.Sprintf("parseRawField: %s", msg), 16)
+func (x *GoSNMP) parseRawField(data []byte, msg string) (interface{}, int, error) {
+	x.dumpBytes1(data, fmt.Sprintf("parseRawField: %s", msg), 16)
 
 	switch Asn1BER(data[0]) {
 	case Integer:
@@ -564,7 +564,7 @@ func parseRawField(data []byte, msg string) (interface{}, int, error) {
 		return string(data[cursor:length]), length, nil
 	case ObjectIdentifier:
 		length, cursor := parseLength(data)
-		oid, err := parseObjectIdentifier(data[cursor: length])
+		oid, err := parseObjectIdentifier(data[cursor:length])
 		return oid, length, err
 	default:
 		return nil, 0, fmt.Errorf("Unknown field type: %x\n", data[0])
