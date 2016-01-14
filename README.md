@@ -190,11 +190,11 @@ Tests are grouped as follows:
 
 The generic end-to-end integration test `generic_e2e_test.go` should
 work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
-To use, set the environment variables GOSNMP_TARGET & GOSNMP_PORT, for
+To use, set the environment variables `GOSNMP_TARGET` & `GOSNMP_PORT`, for
 example:
 
-   export GOSNMP_TARGET=1.2.3.4
-   export GOSNMP_PORT=161
+    export GOSNMP_TARGET=1.2.3.4
+    export GOSNMP_PORT=161
 
 To profile cpu usage:
 

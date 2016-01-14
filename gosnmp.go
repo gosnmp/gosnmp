@@ -240,9 +240,10 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 
 // Set sends an SNMP SET request
 func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
+	var packetOut *SnmpPacket
 	switch pdus[0].Type {
 	case Integer, OctetString:
-		packetOut := x.mkSnmpPacket(SetRequest, 0, 0)
+		packetOut = x.mkSnmpPacket(SetRequest, 0, 0)
 	default:
 		return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers and OctetStrings")
 	}
