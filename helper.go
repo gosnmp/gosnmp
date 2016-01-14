@@ -190,7 +190,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		retVal.Value = nil
 	default:
 		if x.loggingEnabled {
-			x.Logger.Print("decodeValue: type %x isn't implemented", data[0])
+			x.Logger.Printf("decodeValue: type %x isn't implemented", data[0])
 		}
 		retVal.Type = UnknownType
 		retVal.Value = nil
@@ -566,16 +566,9 @@ func (x *GoSNMP) parseRawField(data []byte, msg string) (interface{}, int, error
 		length, cursor := parseLength(data)
 		oid, err := parseObjectIdentifier(data[cursor:length])
 		return oid, length, err
-	default:
-		return nil, 0, fmt.Errorf("Unknown field type: %x\n", data[0])
 	}
 
-	return nil, 0, nil
-}
-
-func parseUint16(content []byte) int {
-	number := uint8(content[1]) | uint8(content[0])<<8
-	return int(number)
+	return nil, 0, fmt.Errorf("Unknown field type: %x\n", data[0])
 }
 
 // parseUint64 treats the given bytes as a big-endian, unsigned integer and returns
