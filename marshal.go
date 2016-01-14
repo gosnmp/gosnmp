@@ -186,7 +186,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 	for retries := 0; ; retries++ {
 		if retries > 0 {
 			if x.LoggingDisabled != true {
-				x.slog.Printf("Retry number %d. Last error was: %v", retries, err)
+				x.Logger.Printf("Retry number %d. Last error was: %v", retries, err)
 			}
 			if time.Now().After(finalDeadline) {
 				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
@@ -322,7 +322,6 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	if x.Logger == nil {
 		x.Logger = log.New(ioutil.Discard, "", 0)
 	}
-	x.slog = x.Logger // global variable for debug logging
 
 	if x.Retries < 0 {
 		x.Retries = 0
@@ -849,7 +848,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
 	}
 	if x.LoggingDisabled != true {
-		x.slog.Printf("Packet sanity verified, we got all the bytes (%d)", length)
+		x.Logger.Printf("Packet sanity verified, we got all the bytes (%d)", length)
 	}
 
 	// Parse SNMP Version
@@ -862,7 +861,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 	if version, ok := rawVersion.(int); ok {
 		response.Version = SnmpVersion(version)
 		if x.LoggingDisabled != true {
-			x.slog.Printf("Parsed version %d", version)
+			x.Logger.Printf("Parsed version %d", version)
 		}
 	}
 	if response.Version != Version3 {
@@ -875,7 +874,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 		if community, ok := rawCommunity.(string); ok {
 			response.Community = community
 			if x.LoggingDisabled != true {
-				x.slog.Printf("Parsed community %s", community)
+				x.Logger.Printf("Parsed community %s", community)
 			}
 		}
 	} else {
@@ -894,7 +893,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 		if MsgID, ok := rawMsgID.(int); ok {
 			response.MsgID = uint32(MsgID)
 			if x.LoggingDisabled != true {
-				x.slog.Printf("Parsed message ID %d", MsgID)
+				x.Logger.Printf("Parsed message ID %d", MsgID)
 
 			}
 		}
@@ -914,7 +913,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 		if MsgFlags, ok := rawMsgFlags.(string); ok {
 			response.MsgFlags = SnmpV3MsgFlags(MsgFlags[0])
 			if x.LoggingDisabled != true {
-				x.slog.Printf("parsed msg flags %s", MsgFlags)
+				x.Logger.Printf("parsed msg flags %s", MsgFlags)
 			}
 		}
 
@@ -926,7 +925,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 		if SecModel, ok := rawSecModel.(int); ok {
 			response.SecurityModel = SnmpV3SecurityModel(SecModel)
 			if x.LoggingDisabled != true {
-				x.slog.Printf("Parsed security model %d", SecModel)
+				x.Logger.Printf("Parsed security model %d", SecModel)
 			}
 		}
 
@@ -956,7 +955,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
 				secParameters.AuthoritativeEngineID = AuthoritativeEngineID
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
+					x.Logger.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
 				}
 			}
 
@@ -968,7 +967,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
 				secParameters.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots)
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
+					x.Logger.Printf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
 				}
 			}
 
@@ -980,7 +979,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
 				secParameters.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime)
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
+					x.Logger.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
 				}
 			}
 
@@ -992,7 +991,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if msgUserName, ok := rawMsgUserName.(string); ok {
 				secParameters.UserName = msgUserName
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed userName %s", msgUserName)
+					x.Logger.Printf("Parsed userName %s", msgUserName)
 				}
 			}
 
@@ -1004,7 +1003,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
 				secParameters.AuthenticationParameters = msgAuthenticationParameters
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed authenticationParameters %s", msgAuthenticationParameters)
+					x.Logger.Printf("Parsed authenticationParameters %s", msgAuthenticationParameters)
 				}
 			}
 			// use the authoritative copy of MsgFlags to determine whether this message should be authenticated
@@ -1033,7 +1032,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
 				secParameters.PrivacyParameters = []byte(msgPrivacyParameters)
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
+					x.Logger.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
 				}
 			}
 
@@ -1110,7 +1109,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if contextEngineID, ok := rawContextEngineID.(string); ok {
 				response.ContextEngineID = contextEngineID
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed contextEngineID %s", contextEngineID)
+					x.Logger.Printf("Parsed contextEngineID %s", contextEngineID)
 				}
 			}
 			rawContextName, count, err := x.parseRawField(packet[cursor:], "contextName")
@@ -1121,7 +1120,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			if contextName, ok := rawContextName.(string); ok {
 				response.ContextName = contextName
 				if x.LoggingDisabled != true {
-					x.slog.Printf("Parsed contextName %s", contextName)
+					x.Logger.Printf("Parsed contextName %s", contextName)
 				}
 			}
 
@@ -1154,7 +1153,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		return nil, fmt.Errorf("Error verifying Response sanity: Got %d Expected: %d\n", len(packet), getResponseLength)
 	}
 	if x.LoggingDisabled != true {
-		x.slog.Printf("getResponseLength: %d", getResponseLength)
+		x.Logger.Printf("getResponseLength: %d", getResponseLength)
 	}
 
 	// Parse Request-ID
@@ -1166,7 +1165,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 	if requestid, ok := rawRequestID.(int); ok {
 		response.RequestID = uint32(requestid)
 		if x.LoggingDisabled != true {
-			x.slog.Printf("requestID: %d", response.RequestID)
+			x.Logger.Printf("requestID: %d", response.RequestID)
 		}
 	}
 
@@ -1200,7 +1199,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		if errorStatus, ok := rawError.(int); ok {
 			response.Error = uint8(errorStatus)
 			if x.LoggingDisabled != true {
-				x.slog.Printf("errorStatus: %d", uint8(errorStatus))
+				x.Logger.Printf("errorStatus: %d", uint8(errorStatus))
 			}
 		}
 
@@ -1213,7 +1212,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		if errorindex, ok := rawErrorIndex.(int); ok {
 			response.ErrorIndex = uint8(errorindex)
 			if x.LoggingDisabled != true {
-				x.slog.Printf("error-index: %d", uint8(errorindex))
+				x.Logger.Printf("error-index: %d", uint8(errorindex))
 			}
 		}
 	}
@@ -1239,7 +1238,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 			len(packet), vblLength)
 	}
 	if x.LoggingDisabled != true {
-		x.slog.Printf("vblLength: %d", vblLength)
+		x.Logger.Printf("vblLength: %d", vblLength)
 	}
 
 	// check for an empty response
@@ -1271,7 +1270,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 		}
 		oidStr := oidToString(oid)
 		if x.LoggingDisabled != true {
-			x.slog.Printf("OID: %s", oidStr)
+			x.Logger.Printf("OID: %s", oidStr)
 		}
 
 		// Parse Value
@@ -1330,7 +1329,7 @@ func (x *GoSNMP) dispatch(c net.Conn, outBuf []byte, expected int) ([]byte, erro
 			copy(resp2, resp)
 			return resp2, nil
 		}
-		x.slog.Printf("Retrying. Buffer size was too small. (size %d)", bufSize)
+		x.Logger.Printf("Retrying. Buffer size was too small. (size %d)", bufSize)
 	}
 	return resp, fmt.Errorf("Response bufSize exceeded rxBufSizeMax (%d)", rxBufSizeMax)
 }

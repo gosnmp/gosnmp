@@ -32,10 +32,13 @@ const (
 
 // GoSNMP represents GoSNMP library state
 type GoSNMP struct {
-	// slog is a global variable that is used for debug logging
-	slog Logger
+	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
+	// output will be discarded (/dev/null). For verbose logging to stdout:
+	// x.Logger = log.New(os.Stdout, "", 0)
+	Logger Logger
 
-	// LoggingDisabled is set if the Logger is nil, short circuits any 'slog' calls
+	// LoggingDisabled is set if the Logger is nil, short circuits any 'Logger' calls
+	// TODO
 	LoggingDisabled bool
 
 	// Target is an ipv4 address
@@ -74,12 +77,7 @@ type GoSNMP struct {
 	// Conn is net connection to use, typically establised using GoSNMP.Connect()
 	Conn net.Conn
 
-	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
-	// output will be discarded (/dev/null). For verbose logging to stdout:
-	// x.Logger = log.New(os.Stdout, "", 0)
-	Logger Logger
-
-	// MaxRepititions sets the GETBULK max-repetitions used by BulkWalk*
+	// MaxRepetitions sets the GETBULK max-repetitions used by BulkWalk*
 	// (default: 50)
 	MaxRepetitions int
 

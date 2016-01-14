@@ -6,10 +6,14 @@ go:
 - 1.3
 - 1.4
 
+env:
+  global:
+    - GOSNMP_TARGET=127.0.0.1
+    - GOSNMP_PORT=161
+
 before_install:
  - sudo apt-get update -qq
  - sudo apt-get install snmpd
- - echo '127.0.0.1 gosnmp-test-host' | sudo tee -a /etc/hosts
 
 install:
  - go get github.com/soniah/gosnmp

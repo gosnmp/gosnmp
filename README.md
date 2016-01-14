@@ -186,12 +186,15 @@ Tests are grouped as follows:
 * Public API consistency tests:
    * `gosnmp_api_test.go`
 * End-to-end integration tests:
-   * `generic_e2e_test.go` - currently disabled
-   * (deprecated) Verax tests - see readme in verax directory
+   * `generic_e2e_test.go`
 
 The generic end-to-end integration test `generic_e2e_test.go` should
 work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
-To use, edit your host file so `gosnmp-test-host` resolves to the system's IP.
+To use, set the environment variables GOSNMP_TARGET & GOSNMP_PORT, for
+example:
+
+   export GOSNMP_TARGET=1.2.3.4
+   export GOSNMP_PORT=161
 
 To profile cpu usage:
 

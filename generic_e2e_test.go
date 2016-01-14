@@ -13,26 +13,34 @@ package gosnmp
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-const (
-	testTarget = "gosnmp-test-host" // Don't modify here - set in your hosts file.
-	testPort   = 161
-)
-
 func setupConnection(t *testing.T) {
-	if len(testTarget) < 1 {
-		t.Skip("Skipping Generic tests! Is %s a valid SNMP host?")
+	envTarget := os.Getenv("GOSNMP_TARGET")
+	envPort := os.Getenv("GOSNMP_PORT")
+
+	if len(envTarget) <= 0 {
+		t.Fatalf("environment variable not set: GOSNMP_TARGET")
 	}
-	Default.Target = testTarget
-	Default.Port = testPort
+	Default.Target = envTarget
+
+	if len(envPort) <= 0 {
+		t.Fatalf("environment variable not set: GOSNMP_PORT")
+	}
+	port, _ := strconv.ParseUint(envPort, 10, 16)
+	Default.Port = uint16(port)
+
 	err := Default.Connect()
 	if err != nil {
-		t.Fatalf("Connection failed. Is %s defined in your hosts file? \n(err: %v)",
-			testTarget, err)
+		if len(envTarget) > 0 {
+			t.Fatalf("Connection failed. Is snmpd reachable on %s:%s?\n(err: %v)",
+				envTarget, envPort, err)
+		}
 	}
 }
 
