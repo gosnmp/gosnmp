@@ -12,6 +12,8 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"math/big"
 	"math/rand"
 	"net"
@@ -32,15 +34,6 @@ const (
 
 // GoSNMP represents GoSNMP library state
 type GoSNMP struct {
-	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
-	// output will be discarded (/dev/null). For verbose logging to stdout:
-	// x.Logger = log.New(os.Stdout, "", 0)
-	Logger Logger
-
-	// LoggingDisabled is set if the Logger is nil, short circuits any 'Logger' calls
-	// TODO
-	LoggingDisabled bool
-
 	// Target is an ipv4 address
 	Target string
 
@@ -52,6 +45,20 @@ type GoSNMP struct {
 
 	// Community is an SNMP Community string
 	Community string
+
+	// Timeout is the timeout for the SNMP Query
+	Timeout time.Duration
+
+	// Set the number of retries to attempt within timeout.
+	Retries int
+
+	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
+	// output will be discarded (/dev/null). For verbose logging to stdout:
+	// x.Logger = log.New(os.Stdout, "", 0)
+	Logger Logger
+
+	// loggingEnabled is set if the Logger is nil, short circuits any 'Logger' calls
+	loggingEnabled bool
 
 	// MsgFlags is an SNMPV3 MsgFlags
 	MsgFlags SnmpV3MsgFlags
@@ -67,12 +74,6 @@ type GoSNMP struct {
 
 	// ContextName is SNMPV3 ContextName in ScopedPDU
 	ContextName string
-
-	// Timeout is the timeout for the SNMP Query
-	Timeout time.Duration
-
-	// Set the number of retries to attempt within timeout.
-	Retries int
 
 	// Conn is net connection to use, typically establised using GoSNMP.Connect()
 	Conn net.Conn
@@ -149,8 +150,11 @@ const (
 // Connect initiates a connection to the target host
 func (x *GoSNMP) Connect() error {
 	if x.Logger == nil {
-		x.LoggingDisabled = true
+		x.Logger = log.New(ioutil.Discard, "", 0)
+	} else {
+		x.loggingEnabled = true
 	}
+
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
 	var err error
 	x.Conn, err = net.DialTimeout("udp", addr, x.Timeout)

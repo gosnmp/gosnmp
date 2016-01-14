@@ -222,9 +222,6 @@ func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 // ie check each varbind is working, then the varbind list, etc
 
 func TestEnmarshalVarbind(t *testing.T) {
-
-	// Logger = log.New(os.Stdout, "", 0) // for verbose debugging
-	// LoggingDisabled = false          // for verbose debugging
 	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -242,9 +239,6 @@ func TestEnmarshalVarbind(t *testing.T) {
 }
 
 func TestEnmarshalVBL(t *testing.T) {
-
-	// Logger = log.New(os.Stdout, "", 0) // for verbose debugging
-	// LoggingDisabled = false          // for verbose debugging
 	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -266,9 +260,6 @@ func TestEnmarshalVBL(t *testing.T) {
 }
 
 func TestEnmarshalPDU(t *testing.T) {
-
-	// Logger = log.New(os.Stdout, "", 0) // for verbose debugging
-	// LoggingDisabled = false          // for verbose debugging
 	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -290,9 +281,6 @@ func TestEnmarshalPDU(t *testing.T) {
 }
 
 func TestEnmarshalMsg(t *testing.T) {
-
-	// Logger = log.New(os.Stdout, "", 0) // for verbose debugging
-	// LoggingDisabled = false          // for verbose debugging
 	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
@@ -601,11 +589,7 @@ var testsUnmarshal = []struct {
 	},
 }
 
-// TODO TODO
 func TestUnmarshal(t *testing.T) {
-
-	// Logger = log.New(os.Stdout, "", 0) // for verbose debugging
-	// LoggingDisabled = false          // for verbose debugging
 	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 SANITY:
