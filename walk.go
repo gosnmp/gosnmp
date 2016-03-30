@@ -48,6 +48,11 @@ RequestLoop:
 			break RequestLoop
 		}
 
+		if response.Error == NoSuchName {
+			x.Logger.Print("Walk terminated with NoSuchName")
+			break RequestLoop
+		}
+
 		for _, v := range response.Variables {
 			if v.Type == EndOfMibView || v.Type == NoSuchObject || v.Type == NoSuchInstance {
 				x.Logger.Printf("BulkWalk terminated with type 0x%x", v.Type)
