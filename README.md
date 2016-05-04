@@ -33,23 +33,20 @@ GoSNMP has the following SNMP functions:
 * **BulkWalk** - retrieves a subtree of values using GETBULK.
 * **Set** (beta - currently supports Integers and OctetStrings)
 
-GoSNMP also has the following helper functions:
+GoSNMP has support for **receiving** traps; see the file
+**examples/trapserver.go** for usage.
+
+GoSNMP will have support for **sending** traps. Kripakaran Karlekar sent
+a patch May/2016; I haven't yet had time to explore or integrate his
+code, it's in the branch **traps2**.
+
+GoSNMP also has the following **helper** functions:
 
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
-GoSNMP has rudimentry support for *receiving* traps. This code needs work
-(pull request welcome) - see the branch **traps**. The developer
-[@jda](https://github.com/jda) says "I'm working on the best level of
-abstraction but I'm able to receive traps from a Cisco switch and
-Net-SNMP".
-
-In addition, *Kripakaran Karlekar* has just (May/2016) sent a
-diff for *sending* traps. I haven't yet had time to
-explore or integrate his code, it's in the branch **traps2**.
-
-**soniah/gosnmp** has diverged from **alouca/gosnmp** - your existing
-code will require modification:
+**soniah/gosnmp** has diverged _significantly_ from **alouca/gosnmp**.
+Your code will require modification in these (and other) locations:
 
 * the **Get** function has a different method signature
 * the **NewGoSNMP** function has been removed, use **Connect** instead
@@ -66,7 +63,7 @@ type Logger interface {
 }
 ```
 
-gosnmp is still under development, therefore API's may change and bugs
+GoSNMP is still under development, therefore API's may change and bugs
 will be squashed. Test Driven Development is used - you can help by
 sending packet captures (see Packet Captures below). There may be more
 than one branch on github. **master** is safe to pull from, other
@@ -148,6 +145,8 @@ Running this example gives the following output (from my printer):
 **examples/walkexample.go** demonstrates using `BulkWalk`.
 
 **examples/example3.go** demonstrates `SNMPv3`
+
+**examples/trapserver.go** demonstrates writing an SNMP v2c trap server
 
 Bugs
 ----

@@ -1131,7 +1131,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 	requestType := PDUType(packet[cursor])
 	switch requestType {
 	// known, supported types
-	case GetResponse, GetNextRequest, GetBulkRequest, Report:
+	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPV2Trap:
 		response, err = x.unmarshalResponse(packet[cursor:], response, length, requestType)
 		if err != nil {
 			return fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
