@@ -242,7 +242,9 @@ func (x *GoSNMP) dumpBytes1(data []byte, msg string, maxlength int) {
 		}
 	}
 	buffer.WriteString("\n")
-	x.Logger.Print(buffer.String())
+	if x.loggingEnabled {
+		x.Logger.Print(buffer.String())
+	}
 }
 
 // dump bytes in one row, up to about screen width. Returns a string
