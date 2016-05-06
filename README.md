@@ -38,6 +38,11 @@ GoSNMP also has the following helper functions:
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
+GoSNMP has rudimentry support for receiving traps. This code needs work
+(pull request welcome) - see the branch **traps**. The developer @jda
+says "I'm working on the best level of abstraction but I'm able to
+receive traps from a Cisco switch and Net-SNMP".
+
 **soniah/gosnmp** has diverged from **alouca/gosnmp** - your existing
 code will require modification:
 
