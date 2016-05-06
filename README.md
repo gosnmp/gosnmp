@@ -39,9 +39,10 @@ GoSNMP also has the following helper functions:
 * **Partition** - facilitates dividing up large slices of OIDs
 
 GoSNMP has rudimentry support for receiving traps. This code needs work
-(pull request welcome) - see the branch **traps**. The developer @jda
-says "I'm working on the best level of abstraction but I'm able to
-receive traps from a Cisco switch and Net-SNMP".
+(pull request welcome) - see the branch **traps**. The developer
+[@jda](https://github.com/jda) says "I'm working on the best level of
+abstraction but I'm able to receive traps from a Cisco switch and
+Net-SNMP".
 
 **soniah/gosnmp** has diverged from **alouca/gosnmp** - your existing
 code will require modification:
@@ -67,7 +68,7 @@ sending packet captures (see Packet Captures below). There may be more
 than one branch on github. **master** is safe to pull from, other
 branches unsafe as history may be rewritten.
 
-Sonia Hamilton, sonia@snowfrog.net, http://blog.snowfrog.net.
+Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
 
 Installation
 ------------
@@ -146,6 +147,10 @@ Running this example gives the following output (from my printer):
 
 Bugs
 ----
+
+Rane's document [SNMP: Simple? Network Management
+Protocol](http://www.rane.com/note161.html) was useful for me when
+learning the SNMP protocol.
 
 Please create an [issue](https://github.com/soniah/gosnmp/issues) on
 Github with packet captures (upload capture to Google Drive, Dropbox, or
