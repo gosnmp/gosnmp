@@ -127,7 +127,7 @@ type SnmpPacket struct {
 	PDUType            PDUType
 	MsgID              uint32
 	RequestID          uint32
-	Error              uint8
+	Error              SNMPError
 	ErrorIndex         uint8
 	NonRepeaters       uint8
 	MaxRepetitions     uint8
@@ -1191,7 +1191,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		}
 		cursor += count
 		if errorStatus, ok := rawError.(int); ok {
-			response.Error = uint8(errorStatus)
+			response.Error = SNMPError(errorStatus)
 			if x.loggingEnabled {
 				x.Logger.Printf("errorStatus: %d", uint8(errorStatus))
 			}

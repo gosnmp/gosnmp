@@ -143,9 +143,11 @@ const (
 	EndOfMibView              = 0x82
 )
 
+// SNMPError is the type for standard SNMP errors.
+type SNMPError uint8
 // SNMP Errors
 const (
-	NoError             = iota  // No error occurred. This code is also used in all request PDUs, since they have no error status to report.
+	NoError SNMPError   = iota  // No error occurred. This code is also used in all request PDUs, since they have no error status to report.
 	TooBig                      // The size of the Response-PDU would be too large to transport.
 	NoSuchName                  // The name of a requested object was not found.
 	BadValue                    // A value in the request didn't match the structure that the recipient of the request had for the object. For example, an object in the request was specified with an incorrect length or type.
