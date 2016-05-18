@@ -587,6 +587,49 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
+	{ciscoTrapResponseBytes,
+		&SnmpPacket{
+			Version:    Version2c,
+			Community:  "MDUOPS",
+			PDUType:    SNMPV2Trap,
+			RequestID:  40,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables: []SnmpPDU{
+				{
+					Name:  ".1.3.6.1.2.1.1.3.0",
+					Type:  TimeTicks,
+					Value: 1658000,
+				},
+				{
+
+					Name:  ".1.3.6.1.6.3.1.1.4.1.0",
+					Type:  ObjectIdentifier,
+					Value: ".1.3.6.1.6.3.1.1.5.4",
+				},
+				{
+					Name:  ".1.3.6.1.2.1.2.2.1.1.53",
+					Type:  Integer,
+					Value: 53,
+				},
+				{
+					Name:  ".1.3.6.1.2.1.2.2.1.2.53",
+					Type:  OctetString,
+					Value: []byte{0x56, 0x6c, 0x61, 0x6e, 0x31, 0x30, 0x31},
+				},
+				{
+					Name:  ".1.3.6.1.2.1.2.2.1.3.53",
+					Type:  Integer,
+					Value: 53,
+				},
+				{
+					Name:  ".1.3.6.1.4.1.9.2.2.1.1.20.53",
+					Type:  OctetString,
+					Value: []byte{0x75, 0x70},
+				},
+			},
+		},
+	},
 }
 
 func TestUnmarshal(t *testing.T) {
@@ -1156,5 +1199,55 @@ func counter64Response() []byte {
 		0x02, 0x01, 0x00, 0x30, 0x14, 0x30, 0x12, 0x06, 0x0b, 0x2b, 0x06, 0x01,
 		0x02, 0x01, 0x1f, 0x01, 0x01, 0x01, 0x0a, 0x01, 0x46, 0x03, 0x17, 0x50,
 		0x87,
+	}
+}
+
+/*
+Issue 33, test SNMP trap unmarshal.
+
+Simple Network Management Protocol
+    version: v2c (1)
+    community: MDUOPS
+    data: snmpV2-trap (7)
+        snmpV2-trap
+            request-id: 40
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 6 items
+                1.3.6.1.2.1.1.3.0: 1658000
+                    Object Name: 1.3.6.1.2.1.1.3.0 (iso.3.6.1.2.1.1.3.0)
+                    Value (Timeticks): 1658000
+                1.3.6.1.6.3.1.1.4.1.0: 1.3.6.1.6.3.1.1.5.4 (iso.3.6.1.6.3.1.1.5.4)
+                    Object Name: 1.3.6.1.6.3.1.1.4.1.0 (iso.3.6.1.6.3.1.1.4.1.0)
+                    Value (OID): 1.3.6.1.6.3.1.1.5.4 (iso.3.6.1.6.3.1.1.5.4)
+                1.3.6.1.2.1.2.2.1.1.53:
+                    Object Name: 1.3.6.1.2.1.2.2.1.1.53 (iso.3.6.1.2.1.2.2.1.1.53)
+                    Value (Integer32): 53
+                1.3.6.1.2.1.2.2.1.2.53: 566c616e313031
+                    Object Name: 1.3.6.1.2.1.2.2.1.2.53 (iso.3.6.1.2.1.2.2.1.2.53)
+                    Value (OctetString): 566c616e313031
+                1.3.6.1.2.1.2.2.1.3.53:
+                    Object Name: 1.3.6.1.2.1.2.2.1.3.53 (iso.3.6.1.2.1.2.2.1.3.53)
+                    Value (Integer32): 53
+                1.3.6.1.4.1.9.2.2.1.1.20.53: 7570
+                    Object Name: 1.3.6.1.4.1.9.2.2.1.1.20.53 (iso.3.6.1.4.1.9.2.2.1.1.20.53)
+                    Value (OctetString): 7570
+*/
+func ciscoTrapResponseBytes() []byte {
+	return []byte{
+		0x30, 0x81, 0x90, 0x02, 0x01, 0x01, 0x04, 0x06, 0x4d, 0x44, 0x55,
+		0x4f, 0x50, 0x53, 0xa7, 0x81, 0x82, 0x02, 0x01, 0x28, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x30, 0x77, 0x30, 0x0f, 0x06, 0x08, 0x2b,
+		0x06, 0x01, 0x02, 0x01, 0x01, 0x03, 0x00, 0x43, 0x03, 0x19, 0x4c,
+		0x90, 0x30, 0x17, 0x06, 0x0a, 0x2b, 0x06, 0x01, 0x06, 0x03, 0x01,
+		0x01, 0x04, 0x01, 0x00, 0x06, 0x09, 0x2b, 0x06, 0x01, 0x06, 0x03,
+		0x01, 0x01, 0x05, 0x04, 0x30, 0x0f, 0x06, 0x0a, 0x2b, 0x06, 0x01,
+		0x02, 0x01, 0x02, 0x02, 0x01, 0x01, 0x35, 0x02, 0x01, 0x35, 0x30,
+		0x15, 0x06, 0x0a, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01,
+		0x02, 0x35, 0x04, 0x07, 0x56, 0x6c, 0x61, 0x6e, 0x31, 0x30, 0x31,
+		0x30, 0x0f, 0x06, 0x0a, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x02, 0x02,
+		0x01, 0x03, 0x35, 0x02, 0x01, 0x35, 0x30, 0x12, 0x06, 0x0c, 0x2b,
+		0x06, 0x01, 0x04, 0x01, 0x09, 0x02, 0x02, 0x01, 0x01, 0x14, 0x35,
+		0x04, 0x02, 0x75, 0x70,
 	}
 }
