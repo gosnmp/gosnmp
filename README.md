@@ -123,7 +123,7 @@ for i, variable := range result.Variables {
     // interface{}. You could do a type switch...
     switch variable.Type {
     case g.OctetString:
-        bytes := variable.Value.([]bytes)
+        bytes := variable.Value.([]byte)
         fmt.Printf("string: %s\n", string(bytes))
     default:
         // ... or often you're just interested in numeric values.
