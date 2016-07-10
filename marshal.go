@@ -158,7 +158,7 @@ const (
 )
 
 const (
-	rxBufSizeMin = 1024   // Minimal buffer size to handle 1 OID (see dispatch())
+	rxBufSizeMin = 1024   // Minimal buffer size to handle 1 OID (see receive())
 	rxBufSizeMax = 131072 // 2 x max MTU size (65507)
 )
 
@@ -257,6 +257,11 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			break
 		}
 
+		_, err = x.Conn.Write(outBuf)
+		if err != nil {
+			continue
+		}
+
 		var expected int
 		if packetOut.PDUType == GetBulkRequest {
 			expected = int(packetOut.MaxRepetitions)
@@ -264,39 +269,51 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			expected = len(pdus)
 		}
 
-		var resp []byte
-		resp, err = x.dispatch(x.Conn, outBuf, expected)
+		for {
+			// Receive response and try receiving again on any decoding error.
+			// Let the deadline abort us if we don't receive a valid response.
+
+			var resp []byte
+			resp, err = x.receive(expected)
+			if err != nil {
+				// receive error. retrying won't help. abort
+				break
+			}
+			result = new(SnmpPacket)
+			result.MsgFlags = packetOut.MsgFlags
+			if packetOut.SecurityParameters != nil {
+				result.SecurityParameters = packetOut.SecurityParameters.Copy()
+			}
+			err = x.unmarshal(resp, result)
+			if err != nil {
+				err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+				continue
+			}
+			if result == nil || len(result.Variables) < 1 {
+				err = fmt.Errorf("Unable to decode packet: nil")
+				continue
+			}
+
+			validID := false
+			for _, id := range allReqIDs {
+				if id == result.RequestID {
+					validID = true
+				}
+			}
+			if result.RequestID == 0 {
+				validID = true
+			}
+			if !validID {
+				err = fmt.Errorf("Out of order response")
+				continue
+			}
+
+			break
+		}
 		if err != nil {
-			continue
-		}
-		result = new(SnmpPacket)
-		result.MsgFlags = packetOut.MsgFlags
-		if packetOut.SecurityParameters != nil {
-			result.SecurityParameters = packetOut.SecurityParameters.Copy()
-		}
-		err = x.unmarshal(resp, result)
-		if err != nil {
-			err = fmt.Errorf("Unable to decode packet: %s", err.Error())
-			continue
-		}
-		if result == nil || len(result.Variables) < 1 {
-			err = fmt.Errorf("Unable to decode packet: nil")
 			continue
 		}
 
-		validID := false
-		for _, id := range allReqIDs {
-			if id == result.RequestID {
-				validID = true
-			}
-		}
-		if result.RequestID == 0 {
-			validID = true
-		}
-		if !validID {
-			err = fmt.Errorf("Out of order response")
-			continue
-		}
 		// Success!
 		return result, nil
 	}
@@ -1279,23 +1296,19 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 	return response, nil
 }
 
-// dispatch request on network, and read the results into a byte array
+// receive response from network and read into a byte array
 //
 // Previously, resp was allocated rxBufSize (65536) bytes ie a fixed size for
 // all responses. To decrease memory usage, resp is dynamically sized, at the
 // cost of possible additional network round trips.
-func (x *GoSNMP) dispatch(c net.Conn, outBuf []byte, expected int) ([]byte, error) {
+func (x *GoSNMP) receive(expected int) ([]byte, error) {
 	if expected <= 0 {
 		expected = 1
 	}
 	var resp []byte
 	for bufSize := rxBufSizeMin * expected; bufSize < rxBufSizeMax; bufSize *= 2 {
 		resp = make([]byte, bufSize)
-		_, err := c.Write(outBuf)
-		if err != nil {
-			return resp, fmt.Errorf("Error writing to socket: %s", err.Error())
-		}
-		n, err := c.Read(resp)
+		n, err := x.Conn.Read(resp)
 		if err != nil {
 			// On Windows we don't get a partial read and truncation. Instead
 			// we get an error if buff is too small - WSAEMSGSIZE 10040.

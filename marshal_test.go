@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"testing"
+	"time"
 )
 
 var _ = fmt.Sprintf("dummy") // dummy
@@ -1156,5 +1158,70 @@ func counter64Response() []byte {
 		0x02, 0x01, 0x00, 0x30, 0x14, 0x30, 0x12, 0x06, 0x0b, 0x2b, 0x06, 0x01,
 		0x02, 0x01, 0x1f, 0x01, 0x01, 0x01, 0x0a, 0x01, 0x46, 0x03, 0x17, 0x50,
 		0x87,
+	}
+}
+
+func TestSendOneRequest_dups(t *testing.T) {
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	clnt, err := net.DialUDP("udp4", nil, srvr.LocalAddr().(*net.UDPAddr))
+
+	x := &GoSNMP{
+		Version: Version2c,
+		Conn:    clnt,
+		Timeout: time.Second,
+		Logger:  log.New(ioutil.Discard, "", 0),
+		Retries: 2,
+	}
+
+	go func() {
+		defer srvr.Close()
+		buf := make([]byte, 256)
+		for {
+			n, addr, err := srvr.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			buf := buf[:n]
+
+			var reqPkt SnmpPacket
+			err = x.unmarshal(buf, &reqPkt)
+			if err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			rspPkt := x.mkSnmpPacket(GetResponse, 0, 0)
+			rspPkt.RequestID = reqPkt.RequestID
+			rspPkt.Variables = []SnmpPDU{
+				{
+					Name:  ".1.2",
+					Type:  Integer,
+					Value: 123,
+				},
+			}
+			outBuf, err := rspPkt.marshalMsg(rspPkt.Variables, rspPkt.PDUType, rspPkt.MsgID, rspPkt.RequestID)
+			if err != nil {
+				t.Errorf("ERR: %s", err)
+			}
+			srvr.WriteTo(outBuf, addr)
+			for i := 0; i <= x.Retries; i++ {
+				srvr.WriteTo(outBuf, addr)
+			}
+		}
+	}()
+
+	defer clnt.Close()
+
+	reqPkt := x.mkSnmpPacket(GetResponse, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
+	reqPDU := SnmpPDU{Name: ".1.2", Type: Null}
+
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+		return
+	}
+
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+		return
 	}
 }
