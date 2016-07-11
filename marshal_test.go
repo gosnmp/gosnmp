@@ -1163,18 +1163,20 @@ func counter64Response() []byte {
 
 func TestSendOneRequest_dups(t *testing.T) {
 	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
-	clnt, err := net.DialUDP("udp4", nil, srvr.LocalAddr().(*net.UDPAddr))
+	defer srvr.Close()
 
 	x := &GoSNMP{
 		Version: Version2c,
-		Conn:    clnt,
-		Timeout: time.Second,
-		Logger:  log.New(ioutil.Discard, "", 0),
+		Target:  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout: time.Millisecond * 100,
 		Retries: 2,
+	}
+	if err := x.Connect(); err != nil {
+		t.Fatalf("Error connecting: %s", err)
 	}
 
 	go func() {
-		defer srvr.Close()
 		buf := make([]byte, 256)
 		for {
 			n, addr, err := srvr.ReadFrom(buf)
@@ -1208,8 +1210,6 @@ func TestSendOneRequest_dups(t *testing.T) {
 		}
 	}()
 
-	defer clnt.Close()
-
 	reqPkt := x.mkSnmpPacket(GetResponse, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
 	reqPDU := SnmpPDU{Name: ".1.2", Type: Null}
 
@@ -1223,5 +1223,56 @@ func TestSendOneRequest_dups(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %s", err)
 		return
+	}
+}
+
+func BenchmarkSendOneRequest(b *testing.B) {
+	b.StopTimer()
+
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version: Version2c,
+		Target:  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout: time.Millisecond * 100,
+		Retries: 2,
+	}
+	if err := x.Connect(); err != nil {
+		b.Fatalf("Error connecting: %s", err)
+	}
+
+	go func() {
+		buf := make([]byte, 256)
+		outBuf := counter64Response()
+		for {
+			_, addr, err := srvr.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+
+			copy(outBuf[17:21], buf[11:15]) // evil: copy request ID
+			srvr.WriteTo(outBuf, addr)
+		}
+	}()
+
+	reqPkt := x.mkSnmpPacket(GetRequest, 0, 0)
+	reqPDU := SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}
+
+	// make sure everything works before starting the test
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		b.Fatalf("Precheck failed: %s", err)
+	}
+
+	b.StartTimer()
+
+	for n := 0; n < b.N; n++ {
+		_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+		if err != nil {
+			b.Fatalf("Error: %s", err)
+			return
+		}
 	}
 }
