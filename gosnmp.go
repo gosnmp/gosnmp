@@ -90,6 +90,8 @@ type GoSNMP struct {
 	requestID uint32
 	random    *rand.Rand
 
+	rxBuf *[rxBufSize]byte // has to be pointer due to https://github.com/golang/go/issues/11728
+
 	// Internal - used to sync requests to responses - snmpv3
 	msgID uint32
 }
@@ -195,6 +197,8 @@ func (x *GoSNMP) Connect() error {
 	x.msgID = uint32(x.random.Int31())
 	// RequestID is Integer32 from SNMPV2-SMI and uses all 32 bits
 	x.requestID = x.random.Uint32()
+
+	x.rxBuf = new([rxBufSize]byte)
 
 	if x.Version == Version3 {
 		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
