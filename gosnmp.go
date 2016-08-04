@@ -22,11 +22,11 @@ import (
 )
 
 const (
-	// maxOids is the maximum number of oids allowed in a Get()
-	maxOids = 60
-
 	// Base OID for MIB-2 defined SNMP variables
 	baseOid = ".1.3.6.1.2.1"
+
+	// Default MaxOids value, 60 is reasonable
+	maxOids = 60
 
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
@@ -78,6 +78,10 @@ type GoSNMP struct {
 	// Conn is net connection to use, typically establised using GoSNMP.Connect()
 	Conn net.Conn
 
+	// MaxOids is the maximum number of oids allowed in a Get()
+	// (default: 60)
+	MaxOids int
+
 	// MaxRepetitions sets the GETBULK max-repetitions used by BulkWalk*
 	// (default: 50)
 	MaxRepetitions int
@@ -101,6 +105,7 @@ var Default = &GoSNMP{
 	Version:   Version2c,
 	Timeout:   time.Duration(2) * time.Second,
 	Retries:   3,
+	MaxOids:   60,
 }
 
 // SnmpPDU will be used when doing SNMP Set's
@@ -181,6 +186,12 @@ func (x *GoSNMP) Connect() error {
 		x.loggingEnabled = true
 	}
 
+	if x.MaxOids == 0 {
+		x.MaxOids = maxOids
+	} else if x.MaxOids < 0 {
+		return fmt.Errorf("MaxOids cannot be less than 0")
+	}
+
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
 	var err error
 	x.Conn, err = net.DialTimeout("udp", addr, x.Timeout)
@@ -250,9 +261,9 @@ func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetition
 // Get sends an SNMP GET request
 func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 	oidCount := len(oids)
-	if oidCount > maxOids {
-		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
-			oidCount, maxOids)
+	if oidCount > x.MaxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than MaxOids (%d)",
+			oidCount, x.MaxOids)
 	}
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
@@ -279,9 +290,9 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 // GetNext sends an SNMP GETNEXT request
 func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	oidCount := len(oids)
-	if oidCount > maxOids {
-		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
-			oidCount, maxOids)
+	if oidCount > x.MaxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than MaxOids (%d)",
+			oidCount, x.MaxOids)
 	}
 
 	// convert oids slice to pdu slice
@@ -299,9 +310,9 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 // GetBulk sends an SNMP GETBULK request
 func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8) (result *SnmpPacket, err error) {
 	oidCount := len(oids)
-	if oidCount > maxOids {
-		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
-			oidCount, maxOids)
+	if oidCount > x.MaxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than MaxOids (%d)",
+			oidCount, x.MaxOids)
 	}
 
 	// convert oids slice to pdu slice
