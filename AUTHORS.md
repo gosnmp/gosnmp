@@ -14,5 +14,6 @@
 * Nathan Owens (@virtuallynathan)
 * Whitham Reeve (@wdreeveii)
 * Benjamin Thomas (@benjamin-thomas)
+* Ross Wilson (@schotlandzegtja)
 
 In alphabetical order of surname. In vim: highlight, then `!sort -k3`.
