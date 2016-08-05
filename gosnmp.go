@@ -22,11 +22,13 @@ import (
 )
 
 const (
+	// Default MaxOids value; too many can cause remote devices to fail
+	// strangely. 60 seems to be a common value that works, but you will
+	// want to change this in the GoSNMP struct
+	MaxOids = 60
+
 	// Base OID for MIB-2 defined SNMP variables
 	baseOid = ".1.3.6.1.2.1"
-
-	// Default MaxOids value, 60 is reasonable
-	maxOids = 60
 
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
@@ -79,7 +81,7 @@ type GoSNMP struct {
 	Conn net.Conn
 
 	// MaxOids is the maximum number of oids allowed in a Get()
-	// (default: 60)
+	// (default: MaxOids)
 	MaxOids int
 
 	// MaxRepetitions sets the GETBULK max-repetitions used by BulkWalk*
@@ -105,7 +107,7 @@ var Default = &GoSNMP{
 	Version:   Version2c,
 	Timeout:   time.Duration(2) * time.Second,
 	Retries:   3,
-	MaxOids:   60,
+	MaxOids:   MaxOids,
 }
 
 // SnmpPDU will be used when doing SNMP Set's
@@ -187,7 +189,7 @@ func (x *GoSNMP) Connect() error {
 	}
 
 	if x.MaxOids == 0 {
-		x.MaxOids = maxOids
+		x.MaxOids = MaxOids
 	} else if x.MaxOids < 0 {
 		return fmt.Errorf("MaxOids cannot be less than 0")
 	}
