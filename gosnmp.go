@@ -85,7 +85,7 @@ type GoSNMP struct {
 	MaxOids int
 
 	// MaxRepetitions sets the GETBULK max-repetitions used by BulkWalk*
-	// (default: 50)
+	// (default: 50) TODO fix "magic number", should this be defaultMaxRepetitions?
 	MaxRepetitions int
 
 	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*
