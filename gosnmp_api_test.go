@@ -29,6 +29,7 @@ func TestAPIConfigTypes(t *testing.T) {
 	g.Timeout = time.Duration(0)
 	g.Retries = 0
 	g.Logger = log.New(ioutil.Discard, "", 0)
+	g.MaxOids = 0
 	g.MaxRepetitions = 0
 	g.NonRepeaters = 0
 

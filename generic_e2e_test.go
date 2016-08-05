@@ -131,6 +131,39 @@ func TestGenericBulkWalk(t *testing.T) {
 
 // Standard exception/error tests
 
+func TestMaxOids(t *testing.T) {
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	Default.MaxOids = 1
+
+	var err error
+	oids := []string{".1.3.6.1.2.1.1.7.0",
+		".1.3.6.1.2.1.2.2.1.10.1"} // 2 arbitrary Oids
+	errString := "oid count (2) is greater than MaxOids (1)"
+
+	_, err = Default.Get(oids)
+	if err == nil {
+		t.Fatalf("Expected too many oids failure. Got nil")
+	} else if err.Error() != errString {
+		t.Fatalf("Expected too many oids failure. Got => %v", err)
+	}
+
+	_, err = Default.GetNext(oids)
+	if err == nil {
+		t.Fatalf("Expected too many oids failure. Got nil")
+	} else if err.Error() != errString {
+		t.Fatalf("Expected too many oids failure. Got => %v", err)
+	}
+
+	_, err = Default.GetBulk(oids, 0, 0)
+	if err == nil {
+		t.Fatalf("Expected too many oids failure. Got nil")
+	} else if err.Error() != errString {
+		t.Fatalf("Expected too many oids failure. Got => %v", err)
+	}
+}
+
 func TestGenericFailureUnknownHost(t *testing.T) {
 	unknownHost := fmt.Sprintf("gosnmp-test-unknown-host-%d", time.Now().UTC().UnixNano())
 	Default.Target = unknownHost
