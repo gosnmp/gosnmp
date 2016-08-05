@@ -25,6 +25,9 @@ const (
 	// Base OID for MIB-2 defined SNMP variables
 	baseOid = ".1.3.6.1.2.1"
 
+	// Default MaxOids value, 60 is reasonable
+	maxOids = 60
+
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
 )
@@ -76,6 +79,7 @@ type GoSNMP struct {
 	Conn net.Conn
 
 	// MaxOids is the maximum number of oids allowed in a Get()
+	// (default: 60)
 	MaxOids int
 
 	// MaxRepetitions sets the GETBULK max-repetitions used by BulkWalk*
@@ -180,6 +184,12 @@ func (x *GoSNMP) Connect() error {
 		x.Logger = log.New(ioutil.Discard, "", 0)
 	} else {
 		x.loggingEnabled = true
+	}
+
+	if x.MaxOids == 0 {
+		x.MaxOids = maxOids
+	} else if x.MaxOids < 0 {
+		return fmt.Errorf("MaxOids cannot be less than 0")
 	}
 
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
