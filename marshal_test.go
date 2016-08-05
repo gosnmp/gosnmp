@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"testing"
+	"time"
 )
 
 var _ = fmt.Sprintf("dummy") // dummy
@@ -1156,5 +1158,121 @@ func counter64Response() []byte {
 		0x02, 0x01, 0x00, 0x30, 0x14, 0x30, 0x12, 0x06, 0x0b, 0x2b, 0x06, 0x01,
 		0x02, 0x01, 0x1f, 0x01, 0x01, 0x01, 0x0a, 0x01, 0x46, 0x03, 0x17, 0x50,
 		0x87,
+	}
+}
+
+func TestSendOneRequest_dups(t *testing.T) {
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version: Version2c,
+		Target:  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout: time.Millisecond * 100,
+		Retries: 2,
+	}
+	if err := x.Connect(); err != nil {
+		t.Fatalf("Error connecting: %s", err)
+	}
+
+	go func() {
+		buf := make([]byte, 256)
+		for {
+			n, addr, err := srvr.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			buf := buf[:n]
+
+			var reqPkt SnmpPacket
+			err = x.unmarshal(buf, &reqPkt)
+			if err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			rspPkt := x.mkSnmpPacket(GetResponse, 0, 0)
+			rspPkt.RequestID = reqPkt.RequestID
+			rspPkt.Variables = []SnmpPDU{
+				{
+					Name:  ".1.2",
+					Type:  Integer,
+					Value: 123,
+				},
+			}
+			outBuf, err := rspPkt.marshalMsg(rspPkt.Variables, rspPkt.PDUType, rspPkt.MsgID, rspPkt.RequestID)
+			if err != nil {
+				t.Errorf("ERR: %s", err)
+			}
+			srvr.WriteTo(outBuf, addr)
+			for i := 0; i <= x.Retries; i++ {
+				srvr.WriteTo(outBuf, addr)
+			}
+		}
+	}()
+
+	reqPkt := x.mkSnmpPacket(GetResponse, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
+	reqPDU := SnmpPDU{Name: ".1.2", Type: Null}
+
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+		return
+	}
+
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+		return
+	}
+}
+
+func BenchmarkSendOneRequest(b *testing.B) {
+	b.StopTimer()
+
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version: Version2c,
+		Target:  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout: time.Millisecond * 100,
+		Retries: 2,
+	}
+	if err := x.Connect(); err != nil {
+		b.Fatalf("Error connecting: %s", err)
+	}
+
+	go func() {
+		buf := make([]byte, 256)
+		outBuf := counter64Response()
+		for {
+			_, addr, err := srvr.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+
+			copy(outBuf[17:21], buf[11:15]) // evil: copy request ID
+			srvr.WriteTo(outBuf, addr)
+		}
+	}()
+
+	reqPkt := x.mkSnmpPacket(GetRequest, 0, 0)
+	reqPDU := SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}
+
+	// make sure everything works before starting the test
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		b.Fatalf("Precheck failed: %s", err)
+	}
+
+	b.StartTimer()
+
+	for n := 0; n < b.N; n++ {
+		_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+		if err != nil {
+			b.Fatalf("Error: %s", err)
+			return
+		}
 	}
 }
