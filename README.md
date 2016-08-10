@@ -5,10 +5,9 @@ gosnmp
 [![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
 https://github.com/soniah/gosnmp
 
-GoSNMP is an SNMP client library written fully in Go. Currently it
-provides GetRequest, GetNext, GetBulk, Walk (beta, see below), and
-SetRequest (beta, see below). It supports IPv4 and IPv6, using
-__SNMPv2c__ or __SNMPv3__.
+GoSNMP is an SNMP client library fully written in Go. It provides Get,
+GetNext, GetBulk, Walk, BulkWalk and Set. It supports IPv4 and IPv6,
+using __SNMPv2c__ or __SNMPv3__.
 
 About
 -----
@@ -21,6 +20,8 @@ these project collaborators:
 * Nathan Owens ([@virtuallynathan](https://github.com/virtuallynathan/))
 * Whitham Reeve ([@wdreeveii](https://github.com/wdreeveii/))
 
+Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
+
 Overview
 --------
 
@@ -31,16 +32,13 @@ GoSNMP has the following SNMP functions:
 * **GetBulk**
 * **Walk** - retrieves a subtree of values using GETNEXT.
 * **BulkWalk** - retrieves a subtree of values using GETBULK.
-* **Set** (beta - currently supports Integers and OctetStrings)
+* **Set** - supports Integers and OctetStrings
+* **SendTrap** - currently being integrated
 
-GoSNMP has support for **receiving** traps; see the file
+GoSNMP also has support for **receiving** traps; see the file
 **examples/trapserver.go** for usage.
 
-GoSNMP will have support for **sending** traps. Kripakaran Karlekar sent
-a patch May/2016; I haven't yet had time to explore or integrate his
-code, it's in the branch **traps2**.
-
-GoSNMP also has the following **helper** functions:
+GoSNMP has the following **helper** functions:
 
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
@@ -68,8 +66,6 @@ will be squashed. Test Driven Development is used - you can help by
 sending packet captures (see Packet Captures below). There may be more
 than one branch on github. **master** is safe to pull from, other
 branches unsafe as history may be rewritten.
-
-Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
 
 Installation
 ------------
