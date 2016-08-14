@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	// Default MaxOids value; too many can cause remote devices to fail
-	// strangely. 60 seems to be a common value that works, but you will
-	// want to change this in the GoSNMP struct
+	// MaxOids is the maximum number of OIDs permitted in a single call,
+	// otherwise error. MaxOids too high can cause remote devices to fail
+	// strangely. 60 seems to be a common value that works, but you will want
+	// to change this in the GoSNMP struct
 	MaxOids = 60
 
 	// Base OID for MIB-2 defined SNMP variables
