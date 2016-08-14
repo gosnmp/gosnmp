@@ -6,19 +6,12 @@ package gosnmp
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
-	"os"
 	"testing"
 	"time"
 )
-
-var _ = fmt.Sprintf("dummy") // dummy
-var _ = ioutil.Discard       // dummy
-var _ = os.DevNull           // dummy
-var _ = bytes.MinRead        // dummy
 
 // Tests in alphabetical order of function being tested
 

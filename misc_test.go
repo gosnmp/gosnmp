@@ -6,12 +6,9 @@ package gosnmp
 
 import (
 	"bytes"
-	"fmt"
 	"reflect"
 	"testing"
 )
-
-var _ = fmt.Sprintf("dummy") // dummy
 
 // Tests in alphabetical order of function being tested
 
