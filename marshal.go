@@ -130,6 +130,7 @@ type SnmpPacket struct {
 	NonRepeaters       uint8
 	MaxRepetitions     uint8
 	Variables          []SnmpPDU
+	Logger             Logger
 }
 
 // VarBind struct represents an SNMP Varbind.
@@ -268,6 +269,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 				break
 			}
 			result = new(SnmpPacket)
+			result.Logger = x.Logger
 			result.MsgFlags = packetOut.MsgFlags
 			if packetOut.SecurityParameters != nil {
 				result.SecurityParameters = packetOut.SecurityParameters.Copy()
@@ -344,6 +346,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 					SecurityModel:      UserSecurityModel,
 					SecurityParameters: &UsmSecurityParameters{},
 					PDUType:            GetRequest,
+					Logger:             x.Logger,
 				}
 				var emptyPdus []SnmpPDU
 				result, err := x.sendOneRequest(emptyPdus, blankPacket)
@@ -1279,7 +1282,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 		}
 		valueLength, _ := parseLength(packet[cursor:])
 		cursor += valueLength
-		response.Variables = append(response.Variables, SnmpPDU{oidStr, v.Type, v.Value})
+		response.Variables = append(response.Variables, SnmpPDU{oidStr, v.Type, v.Value, x.Logger})
 	}
 	return response, nil
 }

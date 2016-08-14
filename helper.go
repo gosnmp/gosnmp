@@ -14,9 +14,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -29,6 +31,37 @@ type variable struct {
 }
 
 // -- helper functions (mostly) in alphabetical order --------------------------
+
+// Check makes checking errors easy, so they actually get a minimal check
+func (x *GoSNMP) Check(err error) {
+	if err != nil {
+		x.Logger.Printf("Check: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// Check makes checking errors easy, so they actually get a minimal check
+func (p *SnmpPacket) Check(err error) {
+	if err != nil {
+		p.Logger.Printf("Check: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// Check makes checking errors easy, so they actually get a minimal check
+func (p *SnmpPDU) Check(err error) {
+	if err != nil {
+		p.Logger.Printf("Check: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// Check makes checking errors easy, so they actually get a minimal check
+func Check(err error) {
+	if err != nil {
+		log.Fatalf("Check: %v\n", err)
+	}
+}
 
 func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
 	if x.loggingEnabled {
