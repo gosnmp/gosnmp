@@ -17,6 +17,7 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -29,6 +30,14 @@ type variable struct {
 }
 
 // -- helper functions (mostly) in alphabetical order --------------------------
+
+// Check makes checking errors easy, so they actually get a minimal check
+func (x *GoSNMP) Check(err error) {
+	if err != nil {
+		x.Logger.Print(err)
+		os.Exit(1)
+	}
+}
 
 func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
 	if x.loggingEnabled {
