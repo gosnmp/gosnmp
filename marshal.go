@@ -12,6 +12,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
+	"net"
 	"sync/atomic"
 	"time"
 )
@@ -812,6 +813,27 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.WriteByte(byte(len(oid) + len(octetStringBytes) + 4))
 		pduBuf.Write(tmpBuf.Bytes())
 
+	case IPAddress:
+		//Oid
+		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
+		tmpBuf.Write(oid)
+		//OctetString
+		var ipAddressBytes []byte
+		switch value := pdu.Value.(type) {
+		case []byte:
+			ipAddressBytes = value
+		case string:
+			ip := net.ParseIP(value)
+			ipAddressBytes = IPv4toBytes(ip)
+		default:
+			return nil, fmt.Errorf("Unable to marshal PDU IPAddress; not []byte or String.")
+		}
+		tmpBuf.Write([]byte{byte(IPAddress), byte(len(ipAddressBytes))})
+		tmpBuf.Write(ipAddressBytes)
+		// Sequence, length of oid + octetstring, then oid/octetstring data
+		pduBuf.WriteByte(byte(Sequence))
+		pduBuf.WriteByte(byte(len(oid) + len(ipAddressBytes) + 4))
+		pduBuf.Write(tmpBuf.Bytes())
 	default:
 		return nil, fmt.Errorf("Unable to marshal PDU: unknown BER type %d", pdu.Type)
 	}
