@@ -718,3 +718,8 @@ func Int16ToBytes(value int) (rs []byte) {
 
 	return
 }
+
+// convert golang net.IP into []bytes IPv4 address
+func IPv4toBytes(ip net.IP) []byte {
+	return []byte(ip)[12:]
+}
