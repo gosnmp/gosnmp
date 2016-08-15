@@ -9,7 +9,11 @@
 package gosnmp
 
 import (
+	crand "crypto/rand"
+	"encoding/binary"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"math/big"
 	"math/rand"
 	"net"
@@ -18,8 +22,11 @@ import (
 )
 
 const (
-	// maxOids is the maximum number of oids allowed in a Get()
-	maxOids = 60
+	// MaxOids is the maximum number of OIDs permitted in a single call,
+	// otherwise error. MaxOids too high can cause remote devices to fail
+	// strangely. 60 seems to be a common value that works, but you will want
+	// to change this in the GoSNMP struct
+	MaxOids = 60
 
 	// Base OID for MIB-2 defined SNMP variables
 	baseOid = ".1.3.6.1.2.1"
@@ -28,23 +35,19 @@ const (
 	defaultMaxRepetitions = 50
 )
 
-// LoggingDisabled is set if the Logger is nil, short circuits any 'slog' calls
-var LoggingDisabled bool
-
 // GoSNMP represents GoSNMP library state
 type GoSNMP struct {
-
 	// Target is an ipv4 address
 	Target string
 
 	// Port is a udp port
 	Port uint16
 
-	// Community is an SNMP Community string
-	Community string
-
 	// Version is an SNMP Version
 	Version SnmpVersion
+
+	// Community is an SNMP Community string
+	Community string
 
 	// Timeout is the timeout for the SNMP Query
 	Timeout time.Duration
@@ -52,16 +55,38 @@ type GoSNMP struct {
 	// Set the number of retries to attempt within timeout.
 	Retries int
 
-	// Conn is net connection to use, typically establised using GoSNMP.Connect()
-	Conn net.Conn
-
 	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
 	// output will be discarded (/dev/null). For verbose logging to stdout:
 	// x.Logger = log.New(os.Stdout, "", 0)
 	Logger Logger
 
-	// MaxRepititions sets the GETBULK max-repetitions used by BulkWalk*
-	// (default: 50)
+	// loggingEnabled is set if the Logger is nil, short circuits any 'Logger' calls
+	loggingEnabled bool
+
+	// MsgFlags is an SNMPV3 MsgFlags
+	MsgFlags SnmpV3MsgFlags
+
+	// SecurityModel is an SNMPV3 Security Model
+	SecurityModel SnmpV3SecurityModel
+
+	// SecurityParameters is an SNMPV3 Security Model paramaters struct
+	SecurityParameters SnmpV3SecurityParameters
+
+	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU
+	ContextEngineID string
+
+	// ContextName is SNMPV3 ContextName in ScopedPDU
+	ContextName string
+
+	// Conn is net connection to use, typically establised using GoSNMP.Connect()
+	Conn net.Conn
+
+	// MaxOids is the maximum number of oids allowed in a Get()
+	// (default: MaxOids)
+	MaxOids int
+
+	// MaxRepetitions sets the GETBULK max-repetitions used by BulkWalk*
+	// (default: 50) TODO fix "magic number", should this be defaultMaxRepetitions?
 	MaxRepetitions int
 
 	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*
@@ -71,6 +96,11 @@ type GoSNMP struct {
 	// Internal - used to sync requests to responses
 	requestID uint32
 	random    *rand.Rand
+
+	rxBuf *[rxBufSize]byte // has to be pointer due to https://github.com/golang/go/issues/11728
+
+	// Internal - used to sync requests to responses - snmpv3
+	msgID uint32
 }
 
 // The default connection settings
@@ -80,6 +110,7 @@ var Default = &GoSNMP{
 	Version:   Version2c,
 	Timeout:   time.Duration(2) * time.Second,
 	Retries:   3,
+	MaxOids:   MaxOids,
 }
 
 // SnmpPDU will be used when doing SNMP Set's
@@ -122,6 +153,32 @@ const (
 	EndOfMibView              = 0x82
 )
 
+// SNMPError is the type for standard SNMP errors.
+type SNMPError uint8
+
+// SNMP Errors
+const (
+	NoError             SNMPError = iota // No error occurred. This code is also used in all request PDUs, since they have no error status to report.
+	TooBig                               // The size of the Response-PDU would be too large to transport.
+	NoSuchName                           // The name of a requested object was not found.
+	BadValue                             // A value in the request didn't match the structure that the recipient of the request had for the object. For example, an object in the request was specified with an incorrect length or type.
+	ReadOnly                             // An attempt was made to set a variable that has an Access value indicating that it is read-only.
+	GenErr                               // An error occurred other than one indicated by a more specific error code in this table.
+	NoAccess                             // Access was denied to the object for security reasons.
+	WrongType                            // The object type in a variable binding is incorrect for the object.
+	WrongLength                          // A variable binding specifies a length incorrect for the object.
+	WrongEncoding                        // A variable binding specifies an encoding incorrect for the object.
+	WrongValue                           // The value given in a variable binding is not possible for the object.
+	NoCreation                           // A specified variable does not exist and cannot be created.
+	InconsistentValue                    // A variable binding specifies a value that could be held by the variable but cannot be assigned to it at this time.
+	ResourceUnavailable                  // An attempt to set a variable required a resource that is not available.
+	CommitFailed                         // An attempt to set a particular variable failed.
+	UndoFailed                           // An attempt to set a particular variable as part of a group of variables failed, and the attempt to then undo the setting of other variables was not successful.
+	AuthorizationError                   // A problem occurred in authorization.
+	NotWritable                          // The variable cannot be written or created.
+	InconsistentName                     // The name in a variable binding specifies a variable that does not exist.
+)
+
 //
 // Public Functions (main interface)
 //
@@ -129,27 +186,91 @@ const (
 // Connect initiates a connection to the target host
 func (x *GoSNMP) Connect() error {
 	if x.Logger == nil {
-		LoggingDisabled = true
-	}
-	Conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:%d", x.Target, x.Port), x.Timeout)
-	if err == nil {
-		x.Conn = Conn
+		x.Logger = log.New(ioutil.Discard, "", 0)
 	} else {
+		x.loggingEnabled = true
+	}
+
+	if x.MaxOids == 0 {
+		x.MaxOids = MaxOids
+	} else if x.MaxOids < 0 {
+		return fmt.Errorf("MaxOids cannot be less than 0")
+	}
+
+	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
+	var err error
+	x.Conn, err = net.DialTimeout("udp", addr, x.Timeout)
+	if err != nil {
 		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
 	if x.random == nil {
 		x.random = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	}
+	// http://tools.ietf.org/html/rfc3412#section-6 - msgID only
+	// uses the first 31 bits
+	// msgID INTEGER (0..2147483647)
+	x.msgID = uint32(x.random.Int31())
+	// RequestID is Integer32 from SNMPV2-SMI and uses all 32 bits
 	x.requestID = x.random.Uint32()
+
+	x.rxBuf = new([rxBufSize]byte)
+
+	if x.Version == Version3 {
+		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
+		if x.SecurityModel == UserSecurityModel {
+			secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || secParams == nil {
+				return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+			}
+			switch secParams.PrivacyProtocol {
+			case AES:
+				salt := make([]byte, 8)
+				_, err = crand.Read(salt)
+				if err != nil {
+					return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+				}
+				secParams.localAESSalt = binary.BigEndian.Uint64(salt)
+			case DES:
+				salt := make([]byte, 4)
+				_, err = crand.Read(salt)
+				if err != nil {
+					return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+				}
+				secParams.localDESSalt = binary.BigEndian.Uint32(salt)
+			}
+		}
+	}
+
 	return nil
+}
+
+func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
+	var newSecParams SnmpV3SecurityParameters
+	if x.SecurityParameters != nil {
+		newSecParams = x.SecurityParameters.Copy()
+	}
+	return &SnmpPacket{
+		Version:            x.Version,
+		Community:          x.Community,
+		MsgFlags:           x.MsgFlags,
+		SecurityModel:      x.SecurityModel,
+		SecurityParameters: newSecParams,
+		ContextEngineID:    x.ContextEngineID,
+		ContextName:        x.ContextName,
+		Error:              0,
+		ErrorIndex:         0,
+		PDUType:            pdutype,
+		NonRepeaters:       nonRepeaters,
+		MaxRepetitions:     maxRepetitions,
+	}
 }
 
 // Get sends an SNMP GET request
 func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 	oidCount := len(oids)
-	if oidCount > maxOids {
-		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
-			oidCount, maxOids)
+	if oidCount > x.MaxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than MaxOids (%d)",
+			oidCount, x.MaxOids)
 	}
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
@@ -157,32 +278,18 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
 	// build up SnmpPacket
-	packetOut := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    GetRequest,
-		Version:    x.Version,
-	}
+	packetOut := x.mkSnmpPacket(GetRequest, 0, 0)
 	return x.send(pdus, packetOut)
 }
 
 // Set sends an SNMP SET request
 func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
-	if len(pdus) != 1 {
-		return nil, fmt.Errorf("gosnmp currently only supports SNMP SETs for one oid")
-	}
-	//fmt.Println("pduType:", pdus[0].Type)
-	// if pdus[0].Type != Integer || pdus[0].Type != OctetString {
-	// 	return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers")
-	// }
-	// build up SnmpPacket
-	packetOut := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    SetRequest,
-		Version:    x.Version,
+	var packetOut *SnmpPacket
+	switch pdus[0].Type {
+	case Integer, OctetString:
+		packetOut = x.mkSnmpPacket(SetRequest, 0, 0)
+	default:
+		return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers and OctetStrings")
 	}
 	return x.send(pdus, packetOut)
 }
@@ -190,9 +297,9 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 // GetNext sends an SNMP GETNEXT request
 func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	oidCount := len(oids)
-	if oidCount > maxOids {
-		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
-			oidCount, maxOids)
+	if oidCount > x.MaxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than MaxOids (%d)",
+			oidCount, x.MaxOids)
 	}
 
 	// convert oids slice to pdu slice
@@ -202,13 +309,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	}
 
 	// Marshal and send the packet
-	packetOut := &SnmpPacket{
-		Community:  x.Community,
-		Error:      0,
-		ErrorIndex: 0,
-		PDUType:    GetNextRequest,
-		Version:    x.Version,
-	}
+	packetOut := x.mkSnmpPacket(GetNextRequest, 0, 0)
 
 	return x.send(pdus, packetOut)
 }
@@ -216,9 +317,9 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 // GetBulk sends an SNMP GETBULK request
 func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8) (result *SnmpPacket, err error) {
 	oidCount := len(oids)
-	if oidCount > maxOids {
-		return nil, fmt.Errorf("oid count (%d) is greater than maxOids (%d)",
-			oidCount, maxOids)
+	if oidCount > x.MaxOids {
+		return nil, fmt.Errorf("oid count (%d) is greater than MaxOids (%d)",
+			oidCount, x.MaxOids)
 	}
 
 	// convert oids slice to pdu slice
@@ -228,13 +329,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 	}
 
 	// Marshal and send the packet
-	packetOut := &SnmpPacket{
-		Community:      x.Community,
-		PDUType:        GetBulkRequest,
-		Version:        x.Version,
-		NonRepeaters:   nonRepeaters,
-		MaxRepetitions: maxRepetitions,
-	}
+	packetOut := x.mkSnmpPacket(GetBulkRequest, nonRepeaters, maxRepetitions)
 	return x.send(pdus, packetOut)
 }
 

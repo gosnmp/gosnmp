@@ -6,16 +6,12 @@ package gosnmp
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
+	"net"
 	"testing"
+	"time"
 )
-
-var _ = fmt.Sprintf("dummy") // dummy
-var _ = ioutil.Discard       // dummy
-var _ = os.DevNull           // dummy
 
 // Tests in alphabetical order of function being tested
 
@@ -26,12 +22,15 @@ var _ = os.DevNull           // dummy
 type testsEnmarshalVarbindPosition struct {
 	oid string
 	// start and finish position of bytes are calculated with application layer
-	// starting at byte 0. The easiest way to calculate these values is to use
-	// ghex (or similar) to delete the bytes from the lower layers of the
-	// capture. Then open the capture in wireshark, right-click, "decode as..."
+	// starting at byte 0. The easiest way to calculate these values is to select
+	// "Simple Network Management Protocal" line in Wiresharks middle pane, then right click
+	// and choose "Export Selected Package Bytes..." (don't use ghex etc, too hard).
+	// Then open the capture in wireshark, right-click, "decode as..."
 	// and choose snmp. Click on each varbind and the "packet bytes" window
 	// will highlight the corresponding bytes, then the "eyeball tool" can be
 	// used to find the start and finish values...
+	//
+	// Then use `~/bin/go-bindata -nocompress foo.pcap` to generate function.
 	start    int
 	finish   int
 	pduType  Asn1BER
@@ -43,6 +42,7 @@ type testsEnmarshalT struct {
 	community   string
 	requestType PDUType
 	requestid   uint32
+	msgid       uint32
 	// function and function name returning bytes from tcpdump
 	goodBytes func() []byte
 	funcName  string // could do this via reflection
@@ -62,6 +62,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"public",
 		GetRequest,
 		1871507044,
+		0,
 		kyoceraRequestBytes,
 		"kyocera_request",
 		0x0e, // pdu start
@@ -83,6 +84,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"privatelab",
 		SetRequest,
 		526895288,
+		0,
 		portOnOutgoing1,
 		"portOnOutgoing1",
 		0x11, // pdu start
@@ -97,6 +99,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		"privatelab",
 		SetRequest,
 		1826072803,
+		0,
 		portOffOutgoing1,
 		"portOffOutgoing1",
 		0x11, // pdu start
@@ -105,6 +108,72 @@ var testsEnmarshal = []testsEnmarshalT{
 		[]testsEnmarshalVarbindPosition{
 			{".1.3.6.1.4.1.318.1.1.4.4.2.1.3.5", 0x21, 0x36, Integer, 2},
 		},
+	},
+	// MrSpock Set stuff
+	{
+		Version2c,
+		"private",
+		SetRequest,
+		756726019,
+		0,
+		setOctet1,
+		"setOctet1",
+		0x0e, // pdu start
+		0x1c, // vbl start
+		0x32, // finish
+		[]testsEnmarshalVarbindPosition{
+			{".1.3.6.1.4.1.2863.205.1.1.75.1.0",
+				0x1e, 0x32, OctetString, []byte{0x80}},
+		},
+	},
+	{
+		Version2c,
+		"private",
+		SetRequest,
+		1000552357,
+		0,
+		setOctet2,
+		"setOctet2",
+		0x0e, // pdu start
+		0x1c, // vbl start
+		0x37, // finish
+		[]testsEnmarshalVarbindPosition{
+			{".1.3.6.1.4.1.2863.205.1.1.75.2.0",
+				0x1e, 0x36, OctetString, "telnet"},
+		},
+	},
+	// MrSpock Set stuff
+	{
+		Version2c,
+		"private",
+		SetRequest,
+		1664317637,
+		0,
+		setInteger1,
+		"setInteger1",
+		0x0e, // pdu start
+		0x1c, // vbl start
+		0x7f, // finish
+		[]testsEnmarshalVarbindPosition{
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2", 0x1e, 0x36, Integer, 5001},
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2", 0x37, 0x4f, Integer, 5001},
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2", 0x50, 0x67, Integer, 2},
+			{".1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2", 0x68, 0x7f, Integer, 1},
+		},
+	},
+	// Issue 35, empty responses.
+	{
+		Version2c,
+		"public",
+		GetRequest,
+		1883298028,
+		0,
+		emptyErrRequest,
+		"emptyErrRequest",
+		0x0d, // pdu start
+		0x1b, // vbl start
+		0x1c, // finish
+		[]testsEnmarshalVarbindPosition{},
 	},
 }
 
@@ -148,9 +217,7 @@ func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 // ie check each varbind is working, then the varbind list, etc
 
 func TestEnmarshalVarbind(t *testing.T) {
-
-	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
@@ -167,9 +234,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 }
 
 func TestEnmarshalVBL(t *testing.T) {
-
-	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -190,9 +255,7 @@ func TestEnmarshalVBL(t *testing.T) {
 }
 
 func TestEnmarshalPDU(t *testing.T) {
-
-	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -213,9 +276,7 @@ func TestEnmarshalPDU(t *testing.T) {
 }
 
 func TestEnmarshalMsg(t *testing.T) {
-
-	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -223,11 +284,12 @@ func TestEnmarshalMsg(t *testing.T) {
 			Version:   test.version,
 			PDUType:   test.requestType,
 			RequestID: test.requestid,
+			MsgID:     test.msgid,
 		}
 		pdus := vbPosPdus(test)
 
 		testBytes, err := x.marshalMsg(pdus,
-			test.requestType, test.requestid)
+			test.requestType, test.msgid, test.requestid)
 		if err != nil {
 			t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
 		}
@@ -493,19 +555,44 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
+	{emptyErrResponse,
+		&SnmpPacket{
+			Version:   Version2c,
+			Community: "public",
+			PDUType:   GetResponse,
+			RequestID: 1883298028,
+			Error:     0,
+			Variables: []SnmpPDU{},
+		},
+	},
+	{counter64Response,
+		&SnmpPacket{
+			Version:    Version2c,
+			Community:  "public",
+			PDUType:    GetResponse,
+			RequestID:  190378322,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables: []SnmpPDU{
+				{
+					Name:  ".1.3.6.1.2.1.31.1.1.1.10.1",
+					Type:  Counter64,
+					Value: 1527943,
+				},
+			},
+		},
+	},
 }
 
 func TestUnmarshal(t *testing.T) {
-
-	// slog = log.New(os.Stdout, "", 0) // for verbose debugging
-	slog = log.New(ioutil.Discard, "", 0)
+	Default.Logger = log.New(ioutil.Discard, "", 0)
 
 SANITY:
 	for i, test := range testsUnmarshal {
 		var err error
-		var res *SnmpPacket
+		var res = new(SnmpPacket)
 
-		if res, err = unmarshal(test.in()); err != nil {
+		if err = Default.unmarshal(test.in(), res); err != nil {
 			t.Errorf("#%d, Unmarshal returned err: %v", i, err)
 			continue SANITY
 		} else if res == nil {
@@ -812,6 +899,106 @@ func portOffIncoming1() []byte {
 	}
 }
 
+// MrSpock START
+
+/*
+setOctet1:
+Simple Network Management Protocol
+  version: v2c (1)
+  community: private
+  data: set-request (3)
+    set-request
+      request-id: 756726019
+      error-status: noError (0)
+      error-index: 0
+      variable-bindings: 1 item
+        1.3.6.1.4.1.2863.205.1.1.75.1.0: 80
+          Object Name: 1.3.6.1.4.1.2863.205.1.1.75.1.0 (iso.3.6.1.4.1.2863.205.1.1.75.1.0)
+          Value (OctetString): 80
+
+setOctet2:
+Simple Network Management Protocol
+    version: v2c (1)
+    community: private
+    data: set-request (3)
+        set-request
+            request-id: 1000552357
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 1 item
+                1.3.6.1.4.1.2863.205.1.1.75.2.0: 74656c6e6574
+                    Object Name: 1.3.6.1.4.1.2863.205.1.1.75.2.0 (iso.3.6.1.4.1.2863.205.1.1.75.2.0)
+                    Value (OctetString): 74656c6e6574 ("telnet")
+*/
+
+func setOctet1() []byte {
+	return []byte{
+		0x30, 0x31, 0x02, 0x01, 0x01, 0x04, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0xa3, 0x23, 0x02, 0x04, 0x2d, 0x1a, 0xb9, 0x03, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x30, 0x15, 0x30, 0x13, 0x06, 0x0e, 0x2b, 0x06,
+		0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x01, 0x01, 0x4b, 0x01, 0x00,
+		0x04, 0x01, 0x80,
+	}
+}
+
+func setOctet2() []byte {
+	return []byte{
+		0x30, 0x36, 0x02, 0x01, 0x01, 0x04, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0xa3, 0x28, 0x02, 0x04, 0x3b, 0xa3, 0x37, 0xa5, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x30, 0x1a, 0x30, 0x18, 0x06, 0x0e, 0x2b, 0x06,
+		0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x01, 0x01, 0x4b, 0x02, 0x00,
+		0x04, 0x06, 0x74, 0x65, 0x6c, 0x6e, 0x65, 0x74,
+	}
+}
+
+/* setInteger1:
+snmpset -c private -v2c 10.80.0.14 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2 i 5001 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2 i 5001 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2 i 2 \
+	.1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2 i 1
+
+Simple Network Management Protocol
+ version: v2c (1)
+ community: private
+ data: set-request (3)
+  set-request
+   request-id: 1664317637
+   error-status: noError (0)
+   error-index: 0
+   variable-bindings: 4 items
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.2.2)
+     Value (Integer32): 5001
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.3.2)
+     Value (Integer32): 5001
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.4.2)
+     Value (Integer32): 2
+    1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2:
+     Object Name: 1.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2 (iso.3.6.1.4.1.2863.205.10.1.33.2.5.1.5.2)
+     Value (Integer32): 1
+*/
+
+func setInteger1() []byte {
+	return []byte{
+		0x30, 0x7e, 0x02, 0x01, 0x01, 0x04, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61,
+		0x74, 0x65, 0xa3, 0x70, 0x02, 0x04, 0x63, 0x33, 0x78, 0xc5, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x30, 0x62, 0x30, 0x17, 0x06, 0x11, 0x2b, 0x06,
+		0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21, 0x02, 0x05,
+		0x01, 0x02, 0x02, 0x02, 0x02, 0x13, 0x89, 0x30, 0x17, 0x06, 0x11, 0x2b,
+		0x06, 0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21, 0x02,
+		0x05, 0x01, 0x03, 0x02, 0x02, 0x02, 0x13, 0x89, 0x30, 0x16, 0x06, 0x11,
+		0x2b, 0x06, 0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21,
+		0x02, 0x05, 0x01, 0x04, 0x02, 0x02, 0x01, 0x02, 0x30, 0x16, 0x06, 0x11,
+		0x2b, 0x06, 0x01, 0x04, 0x01, 0x96, 0x2f, 0x81, 0x4d, 0x0a, 0x01, 0x21,
+		0x02, 0x05, 0x01, 0x05, 0x02, 0x02, 0x01, 0x01,
+	}
+}
+
+// MrSpock FINISH
+
 func ciscoGetnextResponseBytes() []byte {
 	return []byte{
 		0x30, 0x81,
@@ -897,5 +1084,188 @@ func ciscoGetbulkResponseBytes() []byte {
 		0x06, 0x08, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x01,
 		0x03, 0x30, 0x0f, 0x06, 0x0a, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x02, 0x02,
 		0x01, 0x01, 0x01, 0x02, 0x01, 0x01,
+	}
+}
+
+/*
+Issue 35, empty responses.
+Simple Network Management Protocol
+    version: v2c (1)
+    community: public
+    data: get-request (0)
+        get-request
+            request-id: 1883298028
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 0 items
+*/
+func emptyErrRequest() []byte {
+	return []byte{
+		0x30, 0x1b, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
+		0x63, 0xa0, 0x0e, 0x02, 0x04, 0x70, 0x40, 0xd8, 0xec, 0x02, 0x01, 0x00,
+		0x02, 0x01, 0x00, 0x30, 0x00,
+	}
+}
+
+/*
+Issue 35, empty responses.
+
+Simple Network Management Protocol
+    version: v2c (1)
+    community: public
+    data: get-response (2)
+        get-response
+            request-id: 1883298028
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 0 items
+*/
+func emptyErrResponse() []byte {
+	return []byte{
+		0x30, 0x1b, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
+		0x63, 0xa2, 0x0e, 0x02, 0x04, 0x70, 0x40, 0xd8, 0xec, 0x02, 0x01, 0x00,
+		0x02, 0x01, 0x00, 0x30, 0x00,
+	}
+}
+
+/*
+Issue 15, test Counter64.
+
+Simple Network Management Protocol
+    version: v2c (1)
+    community: public
+    data: get-response (2)
+        get-response
+            request-id: 190378322
+            error-status: noError (0)
+            error-index: 0
+            variable-bindings: 1 item
+                1.3.6.1.2.1.31.1.1.1.10.1: 1527943
+                    Object Name: 1.3.6.1.2.1.31.1.1.1.10.1 (iso.3.6.1.2.1.31.1.1.1.10.1)
+                    Value (Counter64): 1527943
+*/
+func counter64Response() []byte {
+	return []byte{
+		0x30, 0x2f, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
+		0x63, 0xa2, 0x22, 0x02, 0x04, 0x0b, 0x58, 0xf1, 0x52, 0x02, 0x01, 0x00,
+		0x02, 0x01, 0x00, 0x30, 0x14, 0x30, 0x12, 0x06, 0x0b, 0x2b, 0x06, 0x01,
+		0x02, 0x01, 0x1f, 0x01, 0x01, 0x01, 0x0a, 0x01, 0x46, 0x03, 0x17, 0x50,
+		0x87,
+	}
+}
+
+func TestSendOneRequest_dups(t *testing.T) {
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version: Version2c,
+		Target:  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout: time.Millisecond * 100,
+		Retries: 2,
+	}
+	if err := x.Connect(); err != nil {
+		t.Fatalf("Error connecting: %s", err)
+	}
+
+	go func() {
+		buf := make([]byte, 256)
+		for {
+			n, addr, err := srvr.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			buf := buf[:n]
+
+			var reqPkt SnmpPacket
+			err = x.unmarshal(buf, &reqPkt)
+			if err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			rspPkt := x.mkSnmpPacket(GetResponse, 0, 0)
+			rspPkt.RequestID = reqPkt.RequestID
+			rspPkt.Variables = []SnmpPDU{
+				{
+					Name:  ".1.2",
+					Type:  Integer,
+					Value: 123,
+				},
+			}
+			outBuf, err := rspPkt.marshalMsg(rspPkt.Variables, rspPkt.PDUType, rspPkt.MsgID, rspPkt.RequestID)
+			if err != nil {
+				t.Errorf("ERR: %s", err)
+			}
+			srvr.WriteTo(outBuf, addr)
+			for i := 0; i <= x.Retries; i++ {
+				srvr.WriteTo(outBuf, addr)
+			}
+		}
+	}()
+
+	reqPkt := x.mkSnmpPacket(GetResponse, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
+	reqPDU := SnmpPDU{Name: ".1.2", Type: Null}
+
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+		return
+	}
+
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+		return
+	}
+}
+
+func BenchmarkSendOneRequest(b *testing.B) {
+	b.StopTimer()
+
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version: Version2c,
+		Target:  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout: time.Millisecond * 100,
+		Retries: 2,
+	}
+	if err := x.Connect(); err != nil {
+		b.Fatalf("Error connecting: %s", err)
+	}
+
+	go func() {
+		buf := make([]byte, 256)
+		outBuf := counter64Response()
+		for {
+			_, addr, err := srvr.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+
+			copy(outBuf[17:21], buf[11:15]) // evil: copy request ID
+			srvr.WriteTo(outBuf, addr)
+		}
+	}()
+
+	reqPkt := x.mkSnmpPacket(GetRequest, 0, 0)
+	reqPDU := SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}
+
+	// make sure everything works before starting the test
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	if err != nil {
+		b.Fatalf("Precheck failed: %s", err)
+	}
+
+	b.StartTimer()
+
+	for n := 0; n < b.N; n++ {
+		_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+		if err != nil {
+			b.Fatalf("Error: %s", err)
+			return
+		}
 	}
 }

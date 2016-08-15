@@ -13,26 +13,34 @@ package gosnmp
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-const (
-	testTarget = "gosnmp-test-host" // Don't modify here - set in your hosts file.
-	testPort   = 161
-)
-
 func setupConnection(t *testing.T) {
-	if len(testTarget) < 1 {
-		t.Skip("Skipping Generic tests! Is %s a valid SNMP host?")
+	envTarget := os.Getenv("GOSNMP_TARGET")
+	envPort := os.Getenv("GOSNMP_PORT")
+
+	if len(envTarget) <= 0 {
+		t.Fatalf("environment variable not set: GOSNMP_TARGET")
 	}
-	Default.Target = testTarget
-	Default.Port = testPort
+	Default.Target = envTarget
+
+	if len(envPort) <= 0 {
+		t.Fatalf("environment variable not set: GOSNMP_PORT")
+	}
+	port, _ := strconv.ParseUint(envPort, 10, 16)
+	Default.Port = uint16(port)
+
 	err := Default.Connect()
 	if err != nil {
-		t.Fatalf("Connection failed. Is %s defined in your hosts file? \n(err: %v)",
-			testTarget, err)
+		if len(envTarget) > 0 {
+			t.Fatalf("Connection failed. Is snmpd reachable on %s:%s?\n(err: %v)",
+				envTarget, envPort, err)
+		}
 	}
 }
 
@@ -123,6 +131,39 @@ func TestGenericBulkWalk(t *testing.T) {
 
 // Standard exception/error tests
 
+func TestMaxOids(t *testing.T) {
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	Default.MaxOids = 1
+
+	var err error
+	oids := []string{".1.3.6.1.2.1.1.7.0",
+		".1.3.6.1.2.1.2.2.1.10.1"} // 2 arbitrary Oids
+	errString := "oid count (2) is greater than MaxOids (1)"
+
+	_, err = Default.Get(oids)
+	if err == nil {
+		t.Fatalf("Expected too many oids failure. Got nil")
+	} else if err.Error() != errString {
+		t.Fatalf("Expected too many oids failure. Got => %v", err)
+	}
+
+	_, err = Default.GetNext(oids)
+	if err == nil {
+		t.Fatalf("Expected too many oids failure. Got nil")
+	} else if err.Error() != errString {
+		t.Fatalf("Expected too many oids failure. Got => %v", err)
+	}
+
+	_, err = Default.GetBulk(oids, 0, 0)
+	if err == nil {
+		t.Fatalf("Expected too many oids failure. Got nil")
+	} else if err.Error() != errString {
+		t.Fatalf("Expected too many oids failure. Got => %v", err)
+	}
+}
+
 func TestGenericFailureUnknownHost(t *testing.T) {
 	unknownHost := fmt.Sprintf("gosnmp-test-unknown-host-%d", time.Now().UTC().UnixNano())
 	Default.Target = unknownHost
@@ -167,5 +208,189 @@ func TestGenericFailureConnectionRefused(t *testing.T) {
 	}
 	if !(strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "forcibly closed")) {
 		t.Fatalf("Expected connection refused error. Got => %v", err)
+	}
+}
+
+func TestSnmpV3NoAuthNoPrivBasicGet(t *testing.T) {
+	Default.Version = Version3
+	Default.MsgFlags = NoAuthNoPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "noAuthNoPrivUser"}
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
+	}
+}
+
+func TestSnmpV3AuthNoPrivMD5Get(t *testing.T) {
+	Default.Version = Version3
+	Default.MsgFlags = AuthNoPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authMD5OnlyUser", AuthenticationProtocol: MD5, AuthenticationPassphrase: "testingpass0123456789"}
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
+	}
+}
+
+func TestSnmpV3AuthNoPrivSHAGet(t *testing.T) {
+	Default.Version = Version3
+	Default.MsgFlags = AuthNoPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authSHAOnlyUser", AuthenticationProtocol: SHA, AuthenticationPassphrase: "testingpass9876543210"}
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
+	}
+}
+
+func TestSnmpV3AuthMD5PrivDESGet(t *testing.T) {
+	Default.Version = Version3
+	Default.MsgFlags = AuthPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authMD5PrivDESUser",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "testingpass9876543210",
+		PrivacyProtocol:          DES,
+		PrivacyPassphrase:        "testingpass9876543210"}
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
+	}
+}
+
+func TestSnmpV3AuthSHAPrivDESGet(t *testing.T) {
+	Default.Version = Version3
+	Default.MsgFlags = AuthPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authSHAPrivDESUser",
+		AuthenticationProtocol:   SHA,
+		AuthenticationPassphrase: "testingpassabc6543210",
+		PrivacyProtocol:          DES,
+		PrivacyPassphrase:        "testingpassabc6543210"}
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
+	}
+}
+
+func TestSnmpV3AuthMD5PrivAESGet(t *testing.T) {
+	Default.Version = Version3
+	Default.MsgFlags = AuthPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authMD5PrivAESUser",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "AEStestingpass9876543210",
+		PrivacyProtocol:          AES,
+		PrivacyPassphrase:        "AEStestingpass9876543210"}
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
+	}
+}
+
+func TestSnmpV3AuthSHAPrivAESGet(t *testing.T) {
+	Default.Version = Version3
+	Default.MsgFlags = AuthPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authSHAPrivAESUser",
+		AuthenticationProtocol:   SHA,
+		AuthenticationPassphrase: "AEStestingpassabc6543210",
+		PrivacyProtocol:          AES,
+		PrivacyPassphrase:        "AEStestingpassabc6543210"}
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
 	}
 }
