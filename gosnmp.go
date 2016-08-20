@@ -186,7 +186,13 @@ const (
 // Public Functions (main interface)
 //
 
-// Connect initiates a connection to the target host
+// Connect creates and opens a socket. Because UDP is a connectionless
+// protocol, you won't know if the remote host is responding until you send
+// packets. And if the host is regularly disappearing and reappearing, you won't
+// know if you've only done a Connect().
+//
+// For historical reasons (ie this is part of the public API), the method won't
+// be renamed.
 func (x *GoSNMP) Connect() error {
 	if x.Logger == nil {
 		x.Logger = log.New(ioutil.Discard, "", 0)
