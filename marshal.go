@@ -284,51 +284,9 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 		x.Retries = 0
 	}
 
-	// http://tools.ietf.org/html/rfc2574#section-2.2.3
-	// This code does not check if the last message received was more than 150 seconds ago
-	// The snmpds that this code was tested on emit an 'out of time window' error with the new
-	// time and this code will retransmit when that is received.
 	if packetOut.Version == Version3 {
-		if packetOut.SecurityModel == UserSecurityModel {
-			secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
-			if !ok || secParams == nil {
-				return nil, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
-			}
-			if secParams.AuthoritativeEngineID == "" {
-				// send blank packet to discover authoriative engine ID/boots/time
-				blankPacket := &SnmpPacket{
-					Version:            Version3,
-					MsgFlags:           Reportable | NoAuthNoPriv,
-					SecurityModel:      UserSecurityModel,
-					SecurityParameters: &UsmSecurityParameters{},
-					PDUType:            GetRequest,
-					Logger:             x.Logger,
-				}
-				var emptyPdus []SnmpPDU
-				result, err := x.sendOneRequest(emptyPdus, blankPacket, wait)
-
-				if err != nil {
-					return nil, err
-				}
-				// store the authoritative engine parameters
-				newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
-				if ok && newSecParams != nil {
-					secParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
-					secParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
-					secParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
-
-					// it seems common to use the authoritative engine id as the default
-					// context engine id when it is not specified
-					if packetOut.ContextEngineID == "" {
-						packetOut.ContextEngineID = newSecParams.AuthoritativeEngineID
-					}
-					// store for base connection as well
-					if x.ContextEngineID == "" {
-						x.ContextEngineID = newSecParams.AuthoritativeEngineID
-					}
-				}
-
-			}
+		if packetOut, err = x.setAuthoritativeEngine(packetOut, wait); err != nil {
+			return &SnmpPacket{}, err
 		}
 	}
 
