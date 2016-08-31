@@ -147,3 +147,44 @@ func (x *GoSNMP) setAuthoritativeEngine(packetOut *SnmpPacket, wait bool) (*Snmp
 	}
 	return packetOut, nil
 }
+
+// refactor: this probably does something else than
+// setAuthoritativeEngine, but the code is *opaque*
+func (x *GoSNMP) setAuthoritativeEngine2(packetOut *SnmpPacket, result *SnmpPacket, pdus []SnmpPDU, wait bool) (*SnmpPacket, error) {
+
+	secParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || secParams == nil {
+		return &SnmpPacket{}, fmt.Errorf("result.SecurityModel indicates the User Security Model, but result.SecurityParameters is not of type &UsmSecurityParameters")
+	}
+	if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
+		connSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || connSecParams != nil {
+			connSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
+			connSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
+			connSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+		}
+		if x.ContextEngineID == "" {
+			x.ContextEngineID = secParams.AuthoritativeEngineID
+		}
+	}
+
+	if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
+
+		// out of time window -- but since we just renegotiated the authoritative engine parameters,
+		// just resubmit the packet with updated parameters
+		pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || pktSecParams == nil {
+			return &SnmpPacket{}, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+		}
+		pktSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
+		pktSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
+		pktSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+
+		if packetOut.ContextEngineID == "" {
+			packetOut.ContextEngineID = secParams.AuthoritativeEngineID
+		}
+
+		return x.sendOneRequest(pdus, packetOut, wait)
+	}
+	return x.sendOneRequest(pdus, packetOut, wait)
+}
