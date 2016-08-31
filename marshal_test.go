@@ -1248,13 +1248,13 @@ func TestSendOneRequest_dups(t *testing.T) {
 	reqPkt := x.mkSnmpPacket(GetResponse, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
 	reqPDU := SnmpPDU{Name: ".1.2", Type: Null}
 
-	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 		return
 	}
 
-	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 		return
@@ -1296,7 +1296,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 	reqPDU := SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}
 
 	// make sure everything works before starting the test
-	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
 	if err != nil {
 		b.Fatalf("Precheck failed: %s", err)
 	}
@@ -1304,7 +1304,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 	b.StartTimer()
 
 	for n := 0; n < b.N; n++ {
-		_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+		_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
 		if err != nil {
 			b.Fatalf("Error: %s", err)
 			return
