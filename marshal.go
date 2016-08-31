@@ -307,13 +307,19 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	pdutype PDUType, msgid uint32, requestid uint32) ([]byte, error) {
+	var err error
 	var authParamStart uint32
 	buf := new(bytes.Buffer)
 
 	// version
 	buf.Write([]byte{2, 1, byte(packet.Version)})
 
-	if packet.Version != Version3 {
+	if packet.Version == Version3 {
+		buf, authParamStart, err = packet.prepV3pPDU(msgid, buf, pdus, requestid)
+		if err != nil {
+			return nil, err
+		}
+	} else {
 		// community
 		buf.Write([]byte{4, uint8(len(packet.Community))})
 		buf.WriteString(packet.Community)
@@ -323,36 +329,6 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 			return nil, err
 		}
 		buf.Write(pdu)
-	} else {
-		header, err := packet.marshalSnmpV3Header(msgid)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write([]byte{byte(Sequence), byte(len(header))})
-		buf.Write(header)
-
-		var securityParameters []byte
-		if packet.SecurityModel == UserSecurityModel {
-			securityParameters, authParamStart, err = packet.marshalSnmpV3UsmSecurityParameters()
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		buf.Write([]byte{byte(OctetString)})
-		secParamLen, err := marshalLength(len(securityParameters))
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(secParamLen)
-		authParamStart += uint32(buf.Len())
-		buf.Write(securityParameters)
-
-		scopedPdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(scopedPdu)
 	}
 
 	// build up resulting msg - sequence, length then the tail (buf)

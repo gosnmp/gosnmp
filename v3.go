@@ -1,6 +1,7 @@
 package gosnmp
 
 import (
+	"bytes"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -23,6 +24,12 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 		localAESSalt:             sp.localAESSalt,
 	}
 }
+
+/*
+this file is a refactoring of Whit's snmpv3 work, because it is a little
+*difficult* to understand. Hence some of the function names may not
+reflect their true purpose. Sonia.
+*/
 
 func (x *GoSNMP) buildPacket3(msgID uint32, allMsgIDs []uint32,
 	packetOut *SnmpPacket) (*SnmpPacket, error) {
@@ -187,4 +194,45 @@ func (x *GoSNMP) setAuthoritativeEngine2(packetOut *SnmpPacket, result *SnmpPack
 		return x.sendOneRequest(pdus, packetOut, wait)
 	}
 	return x.sendOneRequest(pdus, packetOut, wait)
+}
+
+func (packet *SnmpPacket) prepV3pPDU(
+	msgid uint32,
+	buf *bytes.Buffer,
+	pdus []SnmpPDU,
+	requestid uint32) (*bytes.Buffer, uint32, error) {
+
+	emptyBuffer := new(bytes.Buffer) // used when returning errors
+	var authParamStart uint32
+
+	header, err := packet.marshalSnmpV3Header(msgid)
+	if err != nil {
+		return emptyBuffer, 0, err
+	}
+	buf.Write([]byte{byte(Sequence), byte(len(header))})
+	buf.Write(header)
+
+	var securityParameters []byte
+	if packet.SecurityModel == UserSecurityModel {
+		securityParameters, authParamStart, err = packet.marshalSnmpV3UsmSecurityParameters()
+		if err != nil {
+			return emptyBuffer, 0, err
+		}
+	}
+
+	buf.Write([]byte{byte(OctetString)})
+	secParamLen, err := marshalLength(len(securityParameters))
+	if err != nil {
+		return emptyBuffer, 0, err
+	}
+	buf.Write(secParamLen)
+	authParamStart += uint32(buf.Len())
+	buf.Write(securityParameters)
+
+	scopedPdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
+	if err != nil {
+		return emptyBuffer, 0, err
+	}
+	buf.Write(scopedPdu)
+	return buf, authParamStart, nil
 }
