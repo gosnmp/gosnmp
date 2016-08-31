@@ -12,6 +12,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
+	"net"
 	"sync/atomic"
 	"time"
 )
@@ -149,10 +150,10 @@ const (
 	GetNextRequest PDUType = 0xa1
 	GetResponse    PDUType = 0xa2
 	SetRequest     PDUType = 0xa3
-	Trap           PDUType = 0xa4
+	Trap           PDUType = 0xa4 // v1
 	GetBulkRequest PDUType = 0xa5
 	InformRequest  PDUType = 0xa6
-	SNMPV2Trap     PDUType = 0xa7
+	SNMPv2Trap     PDUType = 0xa7 // v2c, v3
 	Report         PDUType = 0xa8
 )
 
@@ -172,7 +173,8 @@ type Logger interface {
 }
 
 // send/receive one snmp request
-func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
+func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
+	wait bool) (result *SnmpPacket, err error) {
 	finalDeadline := time.Now().Add(x.Timeout)
 
 	allReqIDs := make([]uint32, 0, x.Retries+1)
@@ -258,6 +260,11 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 			continue
 		}
 
+		// all sends wait for the return packet, except for SNMPv2Trap
+		if wait == false {
+			return &SnmpPacket{}, nil
+		}
+
 		for {
 			// Receive response and try receiving again on any decoding error.
 			// Let the deadline abort us if we don't receive a valid response.
@@ -313,7 +320,10 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket) (result *
 }
 
 // generic "sender" that negotiate any version of snmp request
-func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket, err error) {
+//
+// all sends wait for the return packet, except for SNMPv2Trap
+func (x *GoSNMP) send(pdus []SnmpPDU,
+	packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("recover: %v", e)
@@ -349,7 +359,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 					Logger:             x.Logger,
 				}
 				var emptyPdus []SnmpPDU
-				result, err := x.sendOneRequest(emptyPdus, blankPacket)
+				result, err := x.sendOneRequest(emptyPdus, blankPacket, wait)
 
 				if err != nil {
 					return nil, err
@@ -377,7 +387,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 	}
 
 	// perform request
-	result, err = x.sendOneRequest(pdus, packetOut)
+	result, err = x.sendOneRequest(pdus, packetOut, wait)
 	if err != nil {
 		return result, err
 	}
@@ -415,7 +425,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU, packetOut *SnmpPacket) (result *SnmpPacket
 				packetOut.ContextEngineID = secParams.AuthoritativeEngineID
 			}
 
-			return x.sendOneRequest(pdus, packetOut)
+			return x.sendOneRequest(pdus, packetOut, wait)
 		}
 	}
 	return result, err
@@ -772,32 +782,70 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(oid)
 		pduBuf.Write([]byte{Null, 0x00})
 
+	/*
+		NUMBERS:
+
+		Integer32 and INTEGER:
+		-2^31 and 2^31-1 inclusive (-2147483648 to 2147483647 decimal)
+
+		Counter32, Gauge32, TimeTicks, Unsigned32:
+		non-negative integer, maximum value of 2^32-1 (4294967295 decimal)
+	*/
+
 	case Integer:
 		// TODO tests currently only cover positive integers
+
 		// Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
-		// Integer
+
+		// Number
 		var intBytes []byte
 		switch value := pdu.Value.(type) {
 		case byte:
 			intBytes = []byte{byte(pdu.Value.(int))}
 		case int:
-			intBytes = marshalInt16(value)
+			intBytes, err = marshalInt16(value)
+			pdu.Check(err)
 		default:
 			return nil, fmt.Errorf("Unable to marshal PDU Integer; not byte or int.")
 		}
 		tmpBuf.Write([]byte{byte(Integer), byte(len(intBytes))})
 		tmpBuf.Write(intBytes)
+
+		// Sequence, length of oid + integer, then oid/integer data
+		pduBuf.WriteByte(byte(Sequence))
+		pduBuf.WriteByte(byte(len(oid) + len(intBytes) + 4))
+		pduBuf.Write(tmpBuf.Bytes())
+
+	case Counter32, Gauge32, TimeTicks, Uinteger32:
+		// Oid
+		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
+		tmpBuf.Write(oid)
+
+		// Number
+		var intBytes []byte
+		switch value := pdu.Value.(type) {
+		case uint32:
+			intBytes, err = marshalUint32(value)
+			pdu.Check(err)
+		default:
+			return nil, fmt.Errorf("Unable to marshal pdu.Type %v; unknown pdu.Value %v", pdu.Type, pdu.Value)
+		}
+		tmpBuf.Write([]byte{byte(pdu.Type), byte(len(intBytes))})
+		tmpBuf.Write(intBytes)
+
 		// Sequence, length of oid + integer, then oid/integer data
 		pduBuf.WriteByte(byte(Sequence))
 		pduBuf.WriteByte(byte(len(oid) + len(intBytes) + 4))
 		pduBuf.Write(tmpBuf.Bytes())
 
 	case OctetString:
+
 		//Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
+
 		//OctetString
 		var octetStringBytes []byte
 		switch value := pdu.Value.(type) {
@@ -810,13 +858,55 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		}
 		tmpBuf.Write([]byte{byte(OctetString), byte(len(octetStringBytes))})
 		tmpBuf.Write(octetStringBytes)
+
 		// Sequence, length of oid + octetstring, then oid/octetstring data
 		pduBuf.WriteByte(byte(Sequence))
 		pduBuf.WriteByte(byte(len(oid) + len(octetStringBytes) + 4))
 		pduBuf.Write(tmpBuf.Bytes())
 
+	case ObjectIdentifier:
+
+		//Oid
+		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
+		tmpBuf.Write(oid)
+		value := pdu.Value.(string)
+		oidBytes, err := marshalOID(value)
+		pdu.Check(err)
+
+		//Oid data
+		tmpBuf.Write([]byte{byte(pdu.Type), byte(len(oidBytes))})
+		tmpBuf.Write(oidBytes)
+
+		// Sequence, length of oid + oid, then oid/oid data
+		pduBuf.WriteByte(byte(Sequence))
+		pduBuf.WriteByte(byte(len(oid) + len(oidBytes) + 4))
+		pduBuf.Write(tmpBuf.Bytes())
+
+	// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
+	case IPAddress:
+		//Oid
+		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
+		tmpBuf.Write(oid)
+		//OctetString
+		var ipAddressBytes []byte
+		switch value := pdu.Value.(type) {
+		case []byte:
+			ipAddressBytes = value
+		case string:
+			ip := net.ParseIP(value)
+			ipAddressBytes = ipv4toBytes(ip)
+		default:
+			return nil, fmt.Errorf("Unable to marshal PDU IPAddress; not []byte or String.")
+		}
+		tmpBuf.Write([]byte{byte(IPAddress), byte(len(ipAddressBytes))})
+		tmpBuf.Write(ipAddressBytes)
+		// Sequence, length of oid + octetstring, then oid/octetstring data
+		pduBuf.WriteByte(byte(Sequence))
+		pduBuf.WriteByte(byte(len(oid) + len(ipAddressBytes) + 4))
+		pduBuf.Write(tmpBuf.Bytes())
+
 	default:
-		return nil, fmt.Errorf("Unable to marshal PDU: unknown BER type %d", pdu.Type)
+		return nil, fmt.Errorf("Unable to marshal PDU: unknown BER type %q", pdu.Type)
 	}
 
 	return pduBuf.Bytes(), nil
@@ -1134,7 +1224,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 	requestType := PDUType(packet[cursor])
 	switch requestType {
 	// known, supported types
-	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPV2Trap:
+	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPv2Trap:
 		response, err = x.unmarshalResponse(packet[cursor:], response, length, requestType)
 		if err != nil {
 			return fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
@@ -1147,7 +1237,6 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 
 func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestType PDUType) (*SnmpPacket, error) {
 	cursor := 0
-	x.dumpBytes1(packet, "SNMP Packet is GET RESPONSE", 16)
 	response.PDUType = requestType
 
 	getResponseLength, cursor := parseLength(packet)
@@ -1226,7 +1315,6 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 	length int) (*SnmpPacket, error) {
 
-	x.dumpBytes1(packet, "\n=== unmarshalVBL()", 32)
 	var cursor, cursorInc int
 	var vblLength int
 	if packet[cursor] != 0x30 {
@@ -1250,7 +1338,6 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 
 	// Loop & parse Varbinds
 	for cursor < vblLength {
-		x.dumpBytes1(packet[cursor:], fmt.Sprintf("\nSTARTING a varbind. Cursor %d", cursor), 32)
 		if packet[cursor] != 0x30 {
 			return nil, fmt.Errorf("Expected a sequence when unmarshalling a VB, got %x", packet[cursor])
 		}

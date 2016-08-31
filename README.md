@@ -1,13 +1,12 @@
 gosnmp
 ======
 [![Build Status](https://travis-ci.org/soniah/gosnmp.svg?branch=master)](https://travis-ci.org/soniah/gosnmp)
-[![Coverage](http://gocover.io/_badge/github.com/soniah/gosnmp)](http://gocover.io/github.com/soniah/gosnmp)
 [![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
 https://github.com/soniah/gosnmp
 
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
-GetNext, GetBulk, Walk, BulkWalk and Set. It supports IPv4 and IPv6,
-using __SNMPv2c__ or __SNMPv3__.
+GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
+IPv6, using __SNMPv2c__ or __SNMPv3__.
 
 About
 -----
@@ -33,10 +32,8 @@ GoSNMP has the following SNMP functions:
 * **Walk** - retrieves a subtree of values using GETNEXT.
 * **BulkWalk** - retrieves a subtree of values using GETBULK.
 * **Set** - supports Integers and OctetStrings
-* **SendTrap** - currently being integrated
-
-GoSNMP also has support for **receiving** traps; see the file
-**examples/trapserver.go** for usage.
+* **SendTrap** - send TRAPs
+* **Listen** - act as an NMS for receiving TRAPs
 
 GoSNMP has the following **helper** functions:
 
@@ -167,6 +164,7 @@ The following BER types have been implemented:
 * 0x42 Gauge32
 * 0x43 TimeTicks
 * 0x46 Counter64
+* 0x47 Uinteger32
 * 0x80 NoSuchObject
 * 0x81 NoSuchInstance
 * 0x82 EndOfMibView
@@ -180,7 +178,6 @@ time or haven't been able to find example devices to query:
 * 0x07 ObjectDescription
 * 0x44 Opaque
 * 0x45 NsapAddress
-* 0x47 Uinteger32
 
 Packet Captures
 ---------------

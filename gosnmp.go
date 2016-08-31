@@ -122,7 +122,8 @@ type SnmpPDU struct {
 	// The type of the value eg Integer
 	Type Asn1BER
 
-	// The value to be set by the SNMP set
+	// The value to be set by the SNMP set, or the value when
+	// sending a trap
 	Value interface{}
 
 	// Logger implements the Logger interface
@@ -288,7 +289,7 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 	}
 	// build up SnmpPacket
 	packetOut := x.mkSnmpPacket(GetRequest, 0, 0)
-	return x.send(pdus, packetOut)
+	return x.send(pdus, packetOut, true)
 }
 
 // Set sends an SNMP SET request
@@ -300,7 +301,7 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	default:
 		return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers and OctetStrings")
 	}
-	return x.send(pdus, packetOut)
+	return x.send(pdus, packetOut, true)
 }
 
 // GetNext sends an SNMP GETNEXT request
@@ -320,7 +321,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	// Marshal and send the packet
 	packetOut := x.mkSnmpPacket(GetNextRequest, 0, 0)
 
-	return x.send(pdus, packetOut)
+	return x.send(pdus, packetOut, true)
 }
 
 // GetBulk sends an SNMP GETBULK request
@@ -339,7 +340,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 
 	// Marshal and send the packet
 	packetOut := x.mkSnmpPacket(GetBulkRequest, nonRepeaters, maxRepetitions)
-	return x.send(pdus, packetOut)
+	return x.send(pdus, packetOut, true)
 }
 
 //

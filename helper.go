@@ -9,6 +9,7 @@
 package gosnmp
 
 import (
+	// "bytes"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -64,9 +65,6 @@ func Check(err error) {
 }
 
 func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
-	if x.loggingEnabled {
-		x.dumpBytes1(data, fmt.Sprintf("decodeValue: %s", msg), 16)
-	}
 	retVal = new(variable)
 
 	switch Asn1BER(data[0]) {
@@ -235,7 +233,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 }
 
 // dump bytes in a format similar to Wireshark
-func (x *GoSNMP) dumpBytes1(data []byte, msg string, maxlength int) {
+func dumpBytes1(data []byte, msg string, maxlength int) {
 	var buffer bytes.Buffer
 	buffer.WriteString(msg)
 	length := maxlength
@@ -275,9 +273,6 @@ func (x *GoSNMP) dumpBytes1(data []byte, msg string, maxlength int) {
 		}
 	}
 	buffer.WriteString("\n")
-	if x.loggingEnabled {
-		x.Logger.Print(buffer.String())
-	}
 }
 
 // dump bytes in one row, up to about screen width. Returns a string
@@ -295,6 +290,29 @@ func dumpBytes2(desc string, bb []byte, cursor int) string {
 		result += fmt.Sprintf(" %02x", b)
 	}
 	return result
+}
+
+func checkByteEquality2(a, b []byte) bool {
+
+	if a == nil && b == nil {
+		return true
+	}
+
+	if a == nil || b == nil {
+		return false
+	}
+
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func marshalUvarInt(x uint32) []byte {
@@ -342,17 +360,34 @@ func marshalBase128Int(out *bytes.Buffer, n int64) (err error) {
 
 // marshalInt16 builds a byte representation of
 // a 16 bit int in BigEndian form.
-// TODO add an error return, like other marshals
-func marshalInt16(value int) (rs []byte) {
+func marshalInt16(value int) (rs []byte, err error) {
 	if value <= 0xff {
 		rs = []byte{byte(value)}
-		return
+		return rs, nil
 	}
 	if value > 0xff && value <= 0xffff {
 		rs = []byte{byte(((value >> 8) & 0xff)), byte((value & 0xff))}
-		return
+		return rs, nil
 	}
-	return
+	return nil, fmt.Errorf("Unable to marshal %v", rs)
+}
+
+// Counter32, Gauge32, TimeTicks, Unsigned32
+func marshalUint32(v interface{}) ([]byte, error) {
+	bs := make([]byte, 4)
+	source := v.(uint32)
+	binary.BigEndian.PutUint32(bs, source) // will panic on failure
+	// truncate leading zeros. Cleaner technique?
+	if source <= 0xff {
+		return bs[3:], nil
+	}
+	if source <= 0xffff {
+		return bs[2:], nil
+	}
+	if source <= 0xffffff {
+		return bs[1:], nil
+	}
+	return bs, nil
 }
 
 // marshalLength builds a byte representation of length
@@ -449,6 +484,11 @@ func oidToString(oid []int) (ret string) {
 	}
 
 	return strings.Join(oidAsString, ".")
+}
+
+// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
+func ipv4toBytes(ip net.IP) []byte {
+	return []byte(ip)[12:]
 }
 
 // parseBase128Int parses a base-128 encoded int from the given offset in the
@@ -584,8 +624,6 @@ func parseObjectIdentifier(bytes []byte) (s []int, err error) {
 }
 
 func (x *GoSNMP) parseRawField(data []byte, msg string) (interface{}, int, error) {
-	x.dumpBytes1(data, fmt.Sprintf("parseRawField: %s", msg), 16)
-
 	switch Asn1BER(data[0]) {
 	case Integer:
 		length, cursor := parseLength(data)
