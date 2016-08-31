@@ -1,6 +1,7 @@
 package gosnmp
 
 import (
+	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"sync/atomic"
@@ -67,4 +68,32 @@ func (x *GoSNMP) buildPacket3(msgID uint32, allMsgIDs []uint32,
 		}
 	}
 	return packetOut, nil
+}
+
+func (x *GoSNMP) setSalt() error {
+	var err error
+	x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
+	if x.SecurityModel == UserSecurityModel {
+		secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || secParams == nil {
+			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+		}
+		switch secParams.PrivacyProtocol {
+		case AES:
+			salt := make([]byte, 8)
+			_, err = crand.Read(salt)
+			if err != nil {
+				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+			}
+			secParams.localAESSalt = binary.BigEndian.Uint64(salt)
+		case DES:
+			salt := make([]byte, 4)
+			_, err = crand.Read(salt)
+			if err != nil {
+				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+			}
+			secParams.localDESSalt = binary.BigEndian.Uint32(salt)
+		}
+	}
+	return nil
 }
