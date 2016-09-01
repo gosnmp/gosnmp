@@ -256,5 +256,5 @@ conditions as the Go language. The rest of the code is under a BSD license.
 
 See the LICENSE file for more details.
 
-The remaining code is Copyright 2012-2014 the GoSNMP Authors - see
+The remaining code is Copyright 2012-2016 the GoSNMP Authors - see
 AUTHORS.md for a list of authors.
