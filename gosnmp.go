@@ -192,13 +192,13 @@ const (
 // For historical reasons (ie this is part of the public API), the method won't
 // be renamed.
 func (x *GoSNMP) Connect() error {
+	var err error
 	err = x.validateParameters()
 	if err != nil {
 		return err
 	}
 
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
-	var err error
 	x.Conn, err = net.DialTimeout("udp", addr, x.Timeout)
 	if err != nil {
 		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
@@ -224,7 +224,7 @@ func (x *GoSNMP) Connect() error {
 	return nil
 }
 
-func (x *GoSnmp) validateParameters() error {
+func (x *GoSNMP) validateParameters() error {
 	if x.Logger == nil {
 		x.Logger = log.New(ioutil.Discard, "", 0)
 	} else {

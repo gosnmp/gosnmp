@@ -36,7 +36,7 @@ func (x *GoSNMP) validateParametersV3() error {
 
 	switch securityLevel {
 	case AuthPriv:
-		if usm.PrivacyProtocol > NoPriv {
+		if usm.PrivacyProtocol <= NoPriv {
 			return fmt.Errorf("SecurityParameters.PrivacyProtocol is required")
 		}
 		if usm.PrivacyPassphrase == "" {
@@ -44,7 +44,7 @@ func (x *GoSNMP) validateParametersV3() error {
 		}
 		fallthrough
 	case AuthNoPriv:
-		if usm.AuthenticationProtocol > NoAuth {
+		if usm.AuthenticationProtocol <= NoAuth {
 			return fmt.Errorf("SecurityParameters.AuthenticationProtocol is required")
 		}
 		if usm.AuthenticationPassphrase == "" {
@@ -58,6 +58,8 @@ func (x *GoSNMP) validateParametersV3() error {
 	default:
 		return fmt.Errorf("MsgFlags must be populated with an appropriate security level")
 	}
+
+	return nil
 }
 
 // Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
