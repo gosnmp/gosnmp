@@ -22,6 +22,44 @@ import (
 	"sync/atomic"
 )
 
+func (x *GoSNMP) validateParametersV3() error {
+	if x.SecurityModel != UserSecurityModel {
+		return fmt.Errorf("The SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
+	}
+
+	usm, ok := x.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || usm == nil {
+		return fmt.Errorf("The SecurityParameters field does not contain a populated instance of UsmSecurityParameters")
+	}
+
+	securityLevel := x.MsgFlags & AuthPriv
+
+	switch securityLevel {
+	case AuthPriv:
+		if usm.PrivacyProtocol > NoPriv {
+			return fmt.Errorf("SecurityParameters.PrivacyProtocol is required")
+		}
+		if usm.PrivacyPassphrase == "" {
+			return fmt.Errorf("SecurityParameters.PrivacyPassphrase is required")
+		}
+		fallthrough
+	case AuthNoPriv:
+		if usm.AuthenticationProtocol > NoAuth {
+			return fmt.Errorf("SecurityParameters.AuthenticationProtocol is required")
+		}
+		if usm.AuthenticationPassphrase == "" {
+			return fmt.Errorf("SecurityParameters.AuthenticationPassphrase is required")
+		}
+		fallthrough
+	case NoAuthNoPriv:
+		if usm.UserName == "" {
+			return fmt.Errorf("SecurityParameters.UserName is required")
+		}
+	default:
+		return fmt.Errorf("MsgFlags must be populated with an appropriate security level")
+	}
+}
+
 // Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
 func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,

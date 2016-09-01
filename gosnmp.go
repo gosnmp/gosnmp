@@ -192,16 +192,9 @@ const (
 // For historical reasons (ie this is part of the public API), the method won't
 // be renamed.
 func (x *GoSNMP) Connect() error {
-	if x.Logger == nil {
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	} else {
-		x.loggingEnabled = true
-	}
-
-	if x.MaxOids == 0 {
-		x.MaxOids = MaxOids
-	} else if x.MaxOids < 0 {
-		return fmt.Errorf("MaxOids cannot be less than 0")
+	err = x.validateParameters()
+	if err != nil {
+		return err
 	}
 
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
@@ -226,6 +219,26 @@ func (x *GoSNMP) Connect() error {
 		if err = x.setSalt(); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (x *GoSnmp) validateParameters() error {
+	if x.Logger == nil {
+		x.Logger = log.New(ioutil.Discard, "", 0)
+	} else {
+		x.loggingEnabled = true
+	}
+
+	if x.MaxOids == 0 {
+		x.MaxOids = MaxOids
+	} else if x.MaxOids < 0 {
+		return fmt.Errorf("MaxOids cannot be less than 0")
+	}
+
+	if x.Version == Version3 {
+		return x.validateParametersV3()
 	}
 
 	return nil
