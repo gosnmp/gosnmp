@@ -712,13 +712,27 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		default:
 			return nil, fmt.Errorf("Unable to marshal PDU OctetString; not []byte or String.")
 		}
-		tmpBuf.Write([]byte{byte(OctetString), byte(len(octetStringBytes))})
+
+		var length []byte
+		length, err = marshalLength(len(octetStringBytes))
+		if err != nil {
+			return nil, err
+		}
+		tmpBuf.WriteByte(byte(OctetString))
+		tmpBuf.Write(length)
 		tmpBuf.Write(octetStringBytes)
 
+		tmpBytes := tmpBuf.Bytes()
+
+		length, err = marshalLength(len(tmpBytes))
+		if err != nil {
+			return nil, err
+		}
 		// Sequence, length of oid + octetstring, then oid/octetstring data
 		pduBuf.WriteByte(byte(Sequence))
-		pduBuf.WriteByte(byte(len(oid) + len(octetStringBytes) + 4))
-		pduBuf.Write(tmpBuf.Bytes())
+
+		pduBuf.Write(length)
+		pduBuf.Write(tmpBytes)
 
 	case ObjectIdentifier:
 
@@ -730,13 +744,24 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pdu.Check(err)
 
 		//Oid data
-		tmpBuf.Write([]byte{byte(pdu.Type), byte(len(oidBytes))})
+		var length []byte
+		length, err = marshalLength(len(oidBytes))
+		if err != nil {
+			return nil, err
+		}
+		tmpBuf.WriteByte(byte(pdu.Type))
+		tmpBuf.Write(length)
 		tmpBuf.Write(oidBytes)
 
+		tmpBytes := tmpBuf.Bytes()
+		length, err = marshalLength(len(tmpBytes))
+		if err != nil {
+			return nil, err
+		}
 		// Sequence, length of oid + oid, then oid/oid data
 		pduBuf.WriteByte(byte(Sequence))
-		pduBuf.WriteByte(byte(len(oid) + len(oidBytes) + 4))
-		pduBuf.Write(tmpBuf.Bytes())
+		pduBuf.Write(length)
+		pduBuf.Write(tmpBytes)
 
 	// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
 	case IPAddress:
