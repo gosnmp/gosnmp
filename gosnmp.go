@@ -35,17 +35,20 @@ const (
 
 // GoSNMP represents GoSNMP library state
 type GoSNMP struct {
+	// Conn is net connection to use, typically established using GoSNMP.Connect()
+	Conn net.Conn
+
 	// Target is an ipv4 address
 	Target string
 
 	// Port is a udp port
 	Port uint16
 
-	// Version is an SNMP Version
-	Version SnmpVersion
-
 	// Community is an SNMP Community string
 	Community string
+
+	// Version is an SNMP Version
+	Version SnmpVersion
 
 	// Timeout is the timeout for the SNMP Query
 	Timeout time.Duration
@@ -60,24 +63,6 @@ type GoSNMP struct {
 
 	// loggingEnabled is set if the Logger is nil, short circuits any 'Logger' calls
 	loggingEnabled bool
-
-	// MsgFlags is an SNMPV3 MsgFlags
-	MsgFlags SnmpV3MsgFlags
-
-	// SecurityModel is an SNMPV3 Security Model
-	SecurityModel SnmpV3SecurityModel
-
-	// SecurityParameters is an SNMPV3 Security Model paramaters struct
-	SecurityParameters SnmpV3SecurityParameters
-
-	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU
-	ContextEngineID string
-
-	// ContextName is SNMPV3 ContextName in ScopedPDU
-	ContextName string
-
-	// Conn is net connection to use, typically establised using GoSNMP.Connect()
-	Conn net.Conn
 
 	// MaxOids is the maximum number of oids allowed in a Get()
 	// (default: MaxOids)
@@ -96,6 +81,21 @@ type GoSNMP struct {
 	random    *rand.Rand
 
 	rxBuf *[rxBufSize]byte // has to be pointer due to https://github.com/golang/go/issues/11728
+
+	// MsgFlags is an SNMPV3 MsgFlags
+	MsgFlags SnmpV3MsgFlags
+
+	// SecurityModel is an SNMPV3 Security Model
+	SecurityModel SnmpV3SecurityModel
+
+	// SecurityParameters is an SNMPV3 Security Model paramaters struct
+	SecurityParameters SnmpV3SecurityParameters
+
+	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU
+	ContextEngineID string
+
+	// ContextName is SNMPV3 ContextName in ScopedPDU
+	ContextName string
 
 	// Internal - used to sync requests to responses - snmpv3
 	msgID uint32
