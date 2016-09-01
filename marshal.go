@@ -285,7 +285,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 	}
 
 	if packetOut.Version == Version3 {
-		if packetOut, err = x.setAuthoritativeEngine(packetOut, wait); err != nil {
+		if packetOut, err = x.negotiateInitialSecurityParameters(packetOut, wait); err != nil {
 			return &SnmpPacket{}, err
 		}
 	}
@@ -296,8 +296,17 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 		return result, err
 	}
 
-	if result.Version == Version3 && result.SecurityModel == UserSecurityModel {
-		result, err = x.setAuthoritativeEngine2(packetOut, result, pdus, wait)
+	if result.Version == Version3 {
+		err = x.storeSecurityParameters(result)
+
+		// detect out-of-time-window error and retransmit with updated auth engine parameters
+		if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
+			err = x.updatePktSecurityParameters(packetOut)
+			if err != nil {
+				return nil, err
+			}
+			result, err = x.sendOneRequest(pdus, packetOut, wait)
+		}
 	}
 	return result, err
 }

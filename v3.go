@@ -277,7 +277,15 @@ func (x *GoSNMP) setSalt() error {
 // snmpds that this code was tested on emit an 'out of time window'
 // error with the new time and this code will retransmit when that is
 // received.
-func (x *GoSNMP) setAuthoritativeEngine(packetOut *SnmpPacket, wait bool) (*SnmpPacket, error) {
+func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket, wait bool) (*SnmpPacket, error) {
+	if x.Version != Version3 || packetOut.Version != Version3 {
+		return nil, fmt.Errorf("negotiateInitialSecurityParameters called with non Version3 connection or packet")
+	}
+
+	if x.SecurityModel != packetOut.SecurityModel {
+		return nil, fmt.Errorf("connection security model does not match security model defined in packet")
+	}
+
 	if packetOut.SecurityModel == UserSecurityModel {
 		secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
 		if !ok || secParams == nil {
@@ -299,68 +307,84 @@ func (x *GoSNMP) setAuthoritativeEngine(packetOut *SnmpPacket, wait bool) (*Snmp
 			if err != nil {
 				return nil, err
 			}
-			// store the authoritative engine parameters
-			newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
-			if ok && newSecParams != nil {
-				secParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
-				secParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
-				secParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
 
-				// it seems common to use the authoritative engine id as the default
-				// context engine id when it is not specified
-				if packetOut.ContextEngineID == "" {
-					packetOut.ContextEngineID = newSecParams.AuthoritativeEngineID
-				}
-				// store for base connection as well
-				if x.ContextEngineID == "" {
-					x.ContextEngineID = newSecParams.AuthoritativeEngineID
-				}
+			err = x.storeSecurityParameters(result)
+			if err != nil {
+				return nil, err
 			}
 
+			err = x.updatePktSecurityParameters(packetOut)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return packetOut, nil
 }
 
-// refactor: this probably does something else than
-// setAuthoritativeEngine, but the code is *opaque*
-func (x *GoSNMP) setAuthoritativeEngine2(packetOut *SnmpPacket, result *SnmpPacket, pdus []SnmpPDU, wait bool) (*SnmpPacket, error) {
+// save the connection security parameters after a request/response
+func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 
-	secParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || secParams == nil {
-		return &SnmpPacket{}, fmt.Errorf("result.SecurityModel indicates the User Security Model, but result.SecurityParameters is not of type &UsmSecurityParameters")
+	if x.Version != Version3 || result.Version != Version3 {
+		return fmt.Errorf("storeParameters called with non Version3 connection or packet")
 	}
-	if x.Version == Version3 && x.SecurityModel == UserSecurityModel {
-		connSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || connSecParams != nil {
-			connSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
-			connSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
-			connSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+
+	if x.SecurityModel != result.SecurityModel {
+		return fmt.Errorf("connection security model does not match security model extracted from packet")
+	}
+
+	if result.SecurityModel == UserSecurityModel {
+
+		newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || newSecParams == nil {
+			return fmt.Errorf("result.SecurityModel indicates the User Security Model, but result.SecurityParameters is not of type &UsmSecurityParameters")
+		}
+		connSecParams, _ := x.SecurityParameters.(*UsmSecurityParameters)
+		if connSecParams != nil {
+			connSecParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
+			connSecParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
+			connSecParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
 		}
 		if x.ContextEngineID == "" {
-			x.ContextEngineID = secParams.AuthoritativeEngineID
+			x.ContextEngineID = newSecParams.AuthoritativeEngineID
 		}
 	}
 
-	if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
+	return nil
 
-		// out of time window -- but since we just renegotiated the authoritative engine parameters,
-		// just resubmit the packet with updated parameters
+}
+
+// update packet security parameters to match connection security parameters
+func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
+	if x.Version != Version3 || packetOut.Version != Version3 {
+		return fmt.Errorf("updatePktSecurityParameters called with non Version3 connection or packet")
+	}
+
+	if x.SecurityModel != packetOut.SecurityModel {
+		return fmt.Errorf("connection security model does not match security model extracted from packet")
+	}
+
+	if x.SecurityModel == UserSecurityModel {
+		connectionSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || connectionSecParams == nil {
+			return fmt.Errorf("connection indicates UserSecurityModel but connection SecurityParameters are not of type *UsmSecurityParameters")
+		}
+
 		pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
 		if !ok || pktSecParams == nil {
-			return &SnmpPacket{}, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+			return fmt.Errorf("packetOut.SecurityModel indicates the UserSecurityModel, but packetOut.SecurityParameters is not of type *UsmSecurityParameters")
 		}
-		pktSecParams.AuthoritativeEngineID = secParams.AuthoritativeEngineID
-		pktSecParams.AuthoritativeEngineBoots = secParams.AuthoritativeEngineBoots
-		pktSecParams.AuthoritativeEngineTime = secParams.AuthoritativeEngineTime
+		pktSecParams.AuthoritativeEngineID = connectionSecParams.AuthoritativeEngineID
+		pktSecParams.AuthoritativeEngineBoots = connectionSecParams.AuthoritativeEngineBoots
+		pktSecParams.AuthoritativeEngineTime = connectionSecParams.AuthoritativeEngineTime
 
-		if packetOut.ContextEngineID == "" {
-			packetOut.ContextEngineID = secParams.AuthoritativeEngineID
-		}
-
-		return x.sendOneRequest(pdus, packetOut, wait)
 	}
-	return x.sendOneRequest(pdus, packetOut, wait)
+
+	if packetOut.ContextEngineID == "" {
+		packetOut.ContextEngineID = x.ContextEngineID
+	}
+
+	return nil
 }
 
 func (packet *SnmpPacket) prepV3pPDU(
