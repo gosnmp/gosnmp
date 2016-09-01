@@ -21,7 +21,7 @@ func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) e
 	oid := rootOid
 	requests := 0
 	maxReps := x.MaxRepetitions
-	if maxReps <= 0 {
+	if maxReps == 0 {
 		maxReps = defaultMaxRepetitions
 	}
 

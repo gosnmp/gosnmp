@@ -69,8 +69,7 @@ type GoSNMP struct {
 	MaxOids int
 
 	// MaxRepetitions sets the GETBULK max-repetitions used by BulkWalk*
-	// (default: 50) TODO fix "magic number", should this be defaultMaxRepetitions?
-	MaxRepetitions int
+	MaxRepetitions uint8
 
 	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*
 	// (default: 0 as per RFC 1905)
@@ -303,6 +302,8 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 }
 
 // GetBulk sends an SNMP GETBULK request
+//
+// For maxRepetitions greater than 255, use BulkWalk() or BulkWalkAll()
 func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8) (result *SnmpPacket, err error) {
 	oidCount := len(oids)
 	if oidCount > x.MaxOids {
