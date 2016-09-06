@@ -99,9 +99,7 @@ func (t *TrapListener) Listen(addr string) (err error) {
 		var buf [4096]byte
 		rlen, remote, err := conn.ReadFromUDP(buf[:])
 		if err != nil {
-			if t.Params.loggingEnabled {
-				t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
-			}
+			t.Params.logPrintf("TrapListener: error in read %s\n", err)
 		}
 
 		msg := buf[:rlen]
@@ -120,9 +118,7 @@ func (x *GoSNMP) unmarshalTrap(trap []byte) (result *SnmpPacket) {
 	result = new(SnmpPacket)
 	err := x.unmarshal(trap, result)
 	if err != nil {
-		if x.loggingEnabled {
-			x.Logger.Printf("unmarshalTrap: %s\n", err)
-		}
+			x.logPrintf("unmarshalTrap: %s\n", err)
 	}
 
 	return result

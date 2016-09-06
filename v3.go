@@ -739,10 +739,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 	cursor += count
 	if MsgID, ok := rawMsgID.(int); ok {
 		response.MsgID = uint32(MsgID)
-		if x.loggingEnabled {
-			x.Logger.Printf("Parsed message ID %d", MsgID)
-
-		}
+		x.logPrintf("Parsed message ID %d", MsgID)
 	}
 	// discard msg max size
 	_, count, err = x.parseRawField(packet[cursor:], "maxMsgSize")
@@ -759,9 +756,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 	cursor += count
 	if MsgFlags, ok := rawMsgFlags.(string); ok {
 		response.MsgFlags = SnmpV3MsgFlags(MsgFlags[0])
-		if x.loggingEnabled {
-			x.Logger.Printf("parsed msg flags %s", MsgFlags)
-		}
+		x.logPrintf("parsed msg flags %s", MsgFlags)
 	}
 
 	rawSecModel, count, err := x.parseRawField(packet[cursor:], "msgSecurityModel")
@@ -771,9 +766,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 	cursor += count
 	if SecModel, ok := rawSecModel.(int); ok {
 		response.SecurityModel = SnmpV3SecurityModel(SecModel)
-		if x.loggingEnabled {
-			x.Logger.Printf("Parsed security model %d", SecModel)
-		}
+		x.logPrintf("Parsed security model %d", SecModel)
 	}
 
 	if PDUType(packet[cursor]) != OctetString {
@@ -801,9 +794,8 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		cursor += count
 		if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
 			secParameters.AuthoritativeEngineID = AuthoritativeEngineID
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
-			}
+			x.logPrintf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
+
 		}
 
 		rawMsgAuthoritativeEngineBoots, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
@@ -813,9 +805,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		cursor += count
 		if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
 			secParameters.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots)
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
-			}
+			x.logPrintf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
 		}
 
 		rawMsgAuthoritativeEngineTime, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
@@ -825,9 +815,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		cursor += count
 		if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
 			secParameters.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime)
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
-			}
+			x.logPrintf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
 		}
 
 		rawMsgUserName, count, err := x.parseRawField(packet[cursor:], "msgUserName")
@@ -837,9 +825,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		cursor += count
 		if msgUserName, ok := rawMsgUserName.(string); ok {
 			secParameters.UserName = msgUserName
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed userName %s", msgUserName)
-			}
+			x.logPrintf("Parsed userName %s", msgUserName)
 		}
 
 		rawMsgAuthParameters, count, err := x.parseRawField(packet[cursor:], "msgAuthenticationParameters")
@@ -849,9 +835,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 
 		if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
 			secParameters.AuthenticationParameters = msgAuthenticationParameters
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed authenticationParameters %s", msgAuthenticationParameters)
-			}
+			x.logPrintf("Parsed authenticationParameters %s", msgAuthenticationParameters)
 		}
 		// use the authoritative copy of MsgFlags to determine whether this message should be authenticated
 		var OrigMsgFlags = response.MsgFlags
@@ -879,9 +863,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		cursor += count
 		if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
 			secParameters.PrivacyParameters = []byte(msgPrivacyParameters)
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
-			}
+				x.logPrintf("Parsed privacyParameters %s", msgPrivacyParameters)
 		}
 
 		//response.SecurityParameters = &secParameters
@@ -956,9 +938,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		cursor += count
 		if contextEngineID, ok := rawContextEngineID.(string); ok {
 			response.ContextEngineID = contextEngineID
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed contextEngineID %s", contextEngineID)
-			}
+			x.logPrintf("Parsed contextEngineID %s", contextEngineID)
 		}
 		rawContextName, count, err := x.parseRawField(packet[cursor:], "contextName")
 		if err != nil {
@@ -967,9 +947,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		cursor += count
 		if contextName, ok := rawContextName.(string); ok {
 			response.ContextName = contextName
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed contextName %s", contextName)
-			}
+			x.logPrintf("Parsed contextName %s", contextName)
 		}
 
 	default:

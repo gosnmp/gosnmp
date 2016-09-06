@@ -91,6 +91,18 @@ type Logger interface {
 	Printf(format string, v ...interface{})
 }
 
+func (x *GoSNMP) logPrint(v ...interface{}) {
+	if x.loggingEnabled {
+		x.Logger.Print(v)
+	}
+}
+
+func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
+	if x.loggingEnabled {
+		x.Logger.Printf(format, v)
+	}
+}
+
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 	wait bool) (result *SnmpPacket, err error) {
@@ -100,9 +112,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 	allMsgIDs := make([]uint32, 0, x.Retries+1)
 	for retries := 0; ; retries++ {
 		if retries > 0 {
-			if x.loggingEnabled {
-				x.Logger.Printf("Retry number %d. Last error was: %v", retries, err)
-			}
+			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
 			if time.Now().After(finalDeadline) {
 				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
 				break
@@ -567,10 +577,8 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 	if len(packet) != length {
 		return fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
 	}
-	if x.loggingEnabled {
-		x.Logger.Printf("Packet sanity verified, we got all the bytes (%d)", length)
-	}
-
+	x.logPrintf("Packet sanity verified, we got all the bytes (%d)", length)
+	
 	// Parse SNMP Version
 	rawVersion, count, err := x.parseRawField(packet[cursor:], "version")
 	if err != nil {
@@ -580,9 +588,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 	cursor += count
 	if version, ok := rawVersion.(int); ok {
 		response.Version = SnmpVersion(version)
-		if x.loggingEnabled {
-			x.Logger.Printf("Parsed version %d", version)
-		}
+		x.logPrintf("Parsed version %d", version)
 	}
 
 	if response.Version == Version3 {
@@ -599,9 +605,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 		cursor += count
 		if community, ok := rawCommunity.(string); ok {
 			response.Community = community
-			if x.loggingEnabled {
-				x.Logger.Printf("Parsed community %s", community)
-			}
+			x.logPrintf("Parsed community %s", community)
 		}
 	}
 
@@ -628,10 +632,8 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 	if len(packet) != getResponseLength {
 		return nil, fmt.Errorf("Error verifying Response sanity: Got %d Expected: %d\n", len(packet), getResponseLength)
 	}
-	if x.loggingEnabled {
-		x.Logger.Printf("getResponseLength: %d", getResponseLength)
-	}
-
+	x.logPrintf("getResponseLength: %d", getResponseLength)
+	
 	// Parse Request-ID
 	rawRequestID, count, err := x.parseRawField(packet[cursor:], "request id")
 	if err != nil {
@@ -640,9 +642,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 	cursor += count
 	if requestid, ok := rawRequestID.(int); ok {
 		response.RequestID = uint32(requestid)
-		if x.loggingEnabled {
-			x.Logger.Printf("requestID: %d", response.RequestID)
-		}
+		x.logPrintf("requestID: %d", response.RequestID)
 	}
 
 	if response.PDUType == GetBulkRequest {
@@ -674,9 +674,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		cursor += count
 		if errorStatus, ok := rawError.(int); ok {
 			response.Error = SNMPError(errorStatus)
-			if x.loggingEnabled {
-				x.Logger.Printf("errorStatus: %d", uint8(errorStatus))
-			}
+			x.logPrintf("errorStatus: %d", uint8(errorStatus))
 		}
 
 		// Parse Error-Index
@@ -687,9 +685,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		cursor += count
 		if errorindex, ok := rawErrorIndex.(int); ok {
 			response.ErrorIndex = uint8(errorindex)
-			if x.loggingEnabled {
-				x.Logger.Printf("error-index: %d", uint8(errorindex))
-			}
+			x.logPrintf("error-index: %d", uint8(errorindex))
 		}
 	}
 
@@ -712,9 +708,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 		return nil, fmt.Errorf("Error verifying: packet length %d vbl length %d\n",
 			len(packet), vblLength)
 	}
-	if x.loggingEnabled {
-		x.Logger.Printf("vblLength: %d", vblLength)
-	}
+	x.logPrintf("vblLength: %d", vblLength)
 
 	// check for an empty response
 	if vblLength == 2 && packet[1] == 0x00 {
@@ -743,9 +737,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
 			return nil, fmt.Errorf("unable to type assert rawOid |%v| to []int", rawOid)
 		}
 		oidStr := oidToString(oid)
-		if x.loggingEnabled {
-			x.Logger.Printf("OID: %s", oidStr)
-		}
+		x.logPrintf("OID: %s", oidStr)
 
 		// Parse Value
 		v, err := x.decodeValue(packet[cursor:], "value")
