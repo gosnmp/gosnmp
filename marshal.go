@@ -30,8 +30,6 @@ const (
 	Version3  SnmpVersion = 0x3
 )
 
-
-
 // SnmpPacket struct represents the entire SNMP Message or Sequence at the
 // application layer.
 type SnmpPacket struct {
@@ -169,11 +167,30 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 			}
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
+
 			result.MsgFlags = packetOut.MsgFlags
 			if packetOut.SecurityParameters != nil {
 				result.SecurityParameters = packetOut.SecurityParameters.Copy()
 			}
-			err = x.unmarshal(resp, result)
+
+			var cursor int
+			cursor, err = x.unmarshalHeader(resp, result)
+			if err != nil {
+				err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+				continue
+			}
+
+			if x.Version == Version3 {
+				if x.SecurityModel == UserSecurityModel {
+					err = x.testUsmAuthentication(resp, result)
+					if err != nil {
+						break
+					}
+				}
+				resp, cursor, err = x.decryptPacket(resp, cursor, result)
+			}
+
+			err = x.unmarshalPayload(resp, cursor, result)
 			if err != nil {
 				err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 				continue
@@ -553,16 +570,11 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 
 // -- Unmarshalling Logic ------------------------------------------------------
 
-func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
+func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, error) {
 	if response == nil {
-		return fmt.Errorf("Cannot unmarshal response into nil packet reference")
+		return 0, fmt.Errorf("Cannot unmarshal response into nil packet reference")
 	}
-	var OrigAuthEngineID string
 
-	secParameters, ok := response.SecurityParameters.(*UsmSecurityParameters)
-	if ok && secParameters != nil {
-		OrigAuthEngineID = secParameters.AuthoritativeEngineID
-	}
 	response.Variables = make([]SnmpPDU, 0, 5)
 
 	// Start parsing the packet
@@ -570,19 +582,19 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 
 	// First bytes should be 0x30
 	if PDUType(packet[0]) != Sequence {
-		return fmt.Errorf("Invalid packet header\n")
+		return 0, fmt.Errorf("Invalid packet header\n")
 	}
 
 	length, cursor := parseLength(packet)
 	if len(packet) != length {
-		return fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
+		return 0, fmt.Errorf("Error verifying packet sanity: Got %d Expected: %d\n", len(packet), length)
 	}
 	x.logPrintf("Packet sanity verified, we got all the bytes (%d)", length)
-	
+
 	// Parse SNMP Version
 	rawVersion, count, err := x.parseRawField(packet[cursor:], "version")
 	if err != nil {
-		return fmt.Errorf("Error parsing SNMP packet version: %s", err.Error())
+		return 0, fmt.Errorf("Error parsing SNMP packet version: %s", err.Error())
 	}
 
 	cursor += count
@@ -592,15 +604,15 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 	}
 
 	if response.Version == Version3 {
-		packet, cursor, err = x.extractV3Packet(packet, cursor, response, OrigAuthEngineID)
+		cursor, err = x.unmarshalV3Header(packet, cursor, response)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	} else {
 		// Parse community
 		rawCommunity, count, err := x.parseRawField(packet[cursor:], "community")
 		if err != nil {
-			return fmt.Errorf("Error parsing community string: %s", err.Error())
+			return 0, fmt.Errorf("Error parsing community string: %s", err.Error())
 		}
 		cursor += count
 		if community, ok := rawCommunity.(string); ok {
@@ -608,13 +620,17 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 			x.logPrintf("Parsed community %s", community)
 		}
 	}
+	return cursor, nil
+}
 
+func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacket) error {
+	var err error
 	// Parse SNMP packet type
 	requestType := PDUType(packet[cursor])
 	switch requestType {
 	// known, supported types
 	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPv2Trap:
-		response, err = x.unmarshalResponse(packet[cursor:], response, length, requestType)
+		response, err = x.unmarshalResponse(packet[cursor:], response, requestType)
 		if err != nil {
 			return fmt.Errorf("Error in unmarshalResponse: %s", err.Error())
 		}
@@ -624,7 +640,7 @@ func (x *GoSNMP) unmarshal(packet []byte, response *SnmpPacket) error {
 	return nil
 }
 
-func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length int, requestType PDUType) (*SnmpPacket, error) {
+func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, requestType PDUType) (*SnmpPacket, error) {
 	cursor := 0
 	response.PDUType = requestType
 
@@ -633,7 +649,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		return nil, fmt.Errorf("Error verifying Response sanity: Got %d Expected: %d\n", len(packet), getResponseLength)
 	}
 	x.logPrintf("getResponseLength: %d", getResponseLength)
-	
+
 	// Parse Request-ID
 	rawRequestID, count, err := x.parseRawField(packet[cursor:], "request id")
 	if err != nil {
@@ -689,12 +705,11 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, length i
 		}
 	}
 
-	return x.unmarshalVBL(packet[cursor:], response, length)
+	return x.unmarshalVBL(packet[cursor:], response)
 }
 
 // unmarshal a Varbind list
-func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket,
-	length int) (*SnmpPacket, error) {
+func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) (*SnmpPacket, error) {
 
 	var cursor, cursorInc int
 	var vblLength int

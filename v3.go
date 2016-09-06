@@ -199,6 +199,37 @@ func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byt
 	return msg, nil
 }
 
+func (x *GoSNMP) testUsmAuthentication(packet []byte, result *SnmpPacket) error {
+	if x.Version != Version3 {
+		return fmt.Errorf("testUsmAuthentication called with non Version3 connection")
+	}
+
+	if x.SecurityModel != UserSecurityModel {
+		return fmt.Errorf("testUsmAuthentication called with connection that is not using the User Security Model")
+	}
+
+	secParameters, ok := x.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || secParameters == nil {
+		return fmt.Errorf("testUsmAuthentication: GoSNMP.SecurityParameters is not of type UsmSecurityParameters")
+	}
+
+	resultSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || resultSecParams == nil {
+		return fmt.Errorf("testUsmAuthentication: packet.SecurityParameters is not of type UsmSecurityParameters")
+	}
+
+	if x.MsgFlags&AuthNoPriv > 0 {
+		if !isAuthentic(packet, resultSecParams.AuthenticationParameters,
+			secParameters.AuthenticationProtocol,
+			secParameters.AuthenticationPassphrase,
+			secParameters.AuthoritativeEngineID) {
+			return fmt.Errorf("Incoming packet is not authentic, discarding")
+		}
+	}
+
+	return nil
+}
+
 // determine whether a message is authentic
 func isAuthentic(msg []byte, authParams string, authProtocol SnmpV3AuthProtocol, authPassphrase string, authEngineID string) bool {
 	var secretKey = genlocalkey(authProtocol,
@@ -490,7 +521,6 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	return nil
 }
 
-
 // marshal a snmp version 3 packet header
 func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
 	buf := new(bytes.Buffer)
@@ -720,13 +750,12 @@ func (packet *SnmpPacket) prepV3pPDU(
 	return buf, authParamStart, nil
 }
 
-func (x *GoSNMP) extractV3Packet(packet []byte,
+func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	cursor int,
-	response *SnmpPacket,
-	OrigAuthEngineID string) ([]byte, int, error) {
+	response *SnmpPacket) (int, error) {
 
 	if PDUType(packet[cursor]) != Sequence {
-		return nil, 0, fmt.Errorf("Invalid SNMPV3 Header\n")
+		return 0, fmt.Errorf("Invalid SNMPV3 Header\n")
 	}
 
 	_, cursorTmp := parseLength(packet[cursor:])
@@ -734,7 +763,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 
 	rawMsgID, count, err := x.parseRawField(packet[cursor:], "msgID")
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error parsing SNMPV3 message ID: %s", err.Error())
+		return 0, fmt.Errorf("Error parsing SNMPV3 message ID: %s", err.Error())
 	}
 	cursor += count
 	if MsgID, ok := rawMsgID.(int); ok {
@@ -744,14 +773,14 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 	// discard msg max size
 	_, count, err = x.parseRawField(packet[cursor:], "maxMsgSize")
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error parsing SNMPV3 maxMsgSize: %s", err.Error())
+		return 0, fmt.Errorf("Error parsing SNMPV3 maxMsgSize: %s", err.Error())
 	}
 	cursor += count
 	// discard msg max size
 
 	rawMsgFlags, count, err := x.parseRawField(packet[cursor:], "msgFlags")
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error parsing SNMPV3 msgFlags: %s", err.Error())
+		return 0, fmt.Errorf("Error parsing SNMPV3 msgFlags: %s", err.Error())
 	}
 	cursor += count
 	if MsgFlags, ok := rawMsgFlags.(string); ok {
@@ -761,7 +790,7 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 
 	rawSecModel, count, err := x.parseRawField(packet[cursor:], "msgSecurityModel")
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error parsing SNMPV3 msgSecModel: %s", err.Error())
+		return 0, fmt.Errorf("Error parsing SNMPV3 msgSecModel: %s", err.Error())
 	}
 	cursor += count
 	if SecModel, ok := rawSecModel.(int); ok {
@@ -770,104 +799,20 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 	}
 
 	if PDUType(packet[cursor]) != OctetString {
-		return nil, 0, fmt.Errorf("Invalid SNMPV3 Security Parameters\n")
+		return 0, fmt.Errorf("Invalid SNMPV3 Security Parameters\n")
 	}
 	_, cursorTmp = parseLength(packet[cursor:])
 	cursor += cursorTmp
-
 	if response.SecurityModel == UserSecurityModel {
-		secParameters, ok := response.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || secParameters == nil {
-			return nil, 0, fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
-		}
-
-		if PDUType(packet[cursor]) != Sequence {
-			return nil, 0, fmt.Errorf("Error parsing SNMPV3 User Security Model parameters\n")
-		}
-		_, cursorTmp = parseLength(packet[cursor:])
-		cursor += cursorTmp
-
-		rawMsgAuthoritativeEngineID, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineID")
+		cursor, err = x.unmarshalUsmSecurityParameters(packet, cursor, response)
 		if err != nil {
-			return nil, 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineID: %s", err.Error())
+			return 0, err
 		}
-		cursor += count
-		if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
-			secParameters.AuthoritativeEngineID = AuthoritativeEngineID
-			x.logPrintf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
-
-		}
-
-		rawMsgAuthoritativeEngineBoots, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
-		if err != nil {
-			return nil, 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineBoots: %s", err.Error())
-		}
-		cursor += count
-		if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
-			secParameters.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots)
-			x.logPrintf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
-		}
-
-		rawMsgAuthoritativeEngineTime, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
-		if err != nil {
-			return nil, 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineTime: %s", err.Error())
-		}
-		cursor += count
-		if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
-			secParameters.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime)
-			x.logPrintf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
-		}
-
-		rawMsgUserName, count, err := x.parseRawField(packet[cursor:], "msgUserName")
-		if err != nil {
-			return nil, 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgUserName: %s", err.Error())
-		}
-		cursor += count
-		if msgUserName, ok := rawMsgUserName.(string); ok {
-			secParameters.UserName = msgUserName
-			x.logPrintf("Parsed userName %s", msgUserName)
-		}
-
-		rawMsgAuthParameters, count, err := x.parseRawField(packet[cursor:], "msgAuthenticationParameters")
-		if err != nil {
-			return nil, 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
-		}
-
-		if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
-			secParameters.AuthenticationParameters = msgAuthenticationParameters
-			x.logPrintf("Parsed authenticationParameters %s", msgAuthenticationParameters)
-		}
-		// use the authoritative copy of MsgFlags to determine whether this message should be authenticated
-		var OrigMsgFlags = response.MsgFlags
-		if OrigMsgFlags&AuthNoPriv > 0 {
-			if count != 14 {
-				return nil, 0, fmt.Errorf("Error authenticating incoming packet: msgAuthenticationParameters is not the correct size")
-			}
-			blank := make([]byte, 12)
-			copy(packet[cursor+2:cursor+14], blank)
-			// secParameters.AuthenticationProtocol and secParameters.AuthenticationPassphrase are not written to in this function,
-			// so no need to save an 'original' to authenticate against
-			if !isAuthentic(packet, secParameters.AuthenticationParameters,
-				secParameters.AuthenticationProtocol,
-				secParameters.AuthenticationPassphrase,
-				OrigAuthEngineID) {
-				return nil, 0, fmt.Errorf("Incoming packet is not authentic, discarding")
-			}
-		}
-		cursor += count
-
-		rawMsgPrivacyParameters, count, err := x.parseRawField(packet[cursor:], "msgPrivacyParameters")
-		if err != nil {
-			return nil, 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgPrivacyParameters: %s", err.Error())
-		}
-		cursor += count
-		if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
-			secParameters.PrivacyParameters = []byte(msgPrivacyParameters)
-				x.logPrintf("Parsed privacyParameters %s", msgPrivacyParameters)
-		}
-
-		//response.SecurityParameters = &secParameters
 	}
+	return cursor, nil
+}
+
+func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) ([]byte, int, error) {
 	switch PDUType(packet[cursor]) {
 	case OctetString:
 		// pdu is encrypted
@@ -954,4 +899,87 @@ func (x *GoSNMP) extractV3Packet(packet []byte,
 		return nil, 0, fmt.Errorf("Error parsing SNMPV3 scoped PDU\n")
 	}
 	return packet, cursor, nil
+}
+
+func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
+	cursor int,
+	response *SnmpPacket) (int, error) {
+
+	secParameters, ok := response.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || secParameters == nil {
+		return 0, fmt.Errorf("GoSNMP.SecurityModel indicates the User Security Model, but GoSNMP.SecurityParameters is not of type UsmSecurityParameters")
+	}
+
+	if PDUType(packet[cursor]) != Sequence {
+		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model parameters\n")
+	}
+	_, cursorTmp := parseLength(packet[cursor:])
+	cursor += cursorTmp
+
+	rawMsgAuthoritativeEngineID, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineID")
+	if err != nil {
+		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineID: %s", err.Error())
+	}
+	cursor += count
+	if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
+		secParameters.AuthoritativeEngineID = AuthoritativeEngineID
+		x.logPrintf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
+	}
+
+	rawMsgAuthoritativeEngineBoots, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
+	if err != nil {
+		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineBoots: %s", err.Error())
+	}
+	cursor += count
+	if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
+		secParameters.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots)
+		x.logPrintf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
+	}
+
+	rawMsgAuthoritativeEngineTime, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
+	if err != nil {
+		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineTime: %s", err.Error())
+	}
+	cursor += count
+	if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
+		secParameters.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime)
+		x.logPrintf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
+	}
+
+	rawMsgUserName, count, err := x.parseRawField(packet[cursor:], "msgUserName")
+	if err != nil {
+		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgUserName: %s", err.Error())
+	}
+	cursor += count
+	if msgUserName, ok := rawMsgUserName.(string); ok {
+		secParameters.UserName = msgUserName
+		x.logPrintf("Parsed userName %s", msgUserName)
+	}
+
+	rawMsgAuthParameters, count, err := x.parseRawField(packet[cursor:], "msgAuthenticationParameters")
+	if err != nil {
+		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
+	}
+	if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
+		secParameters.AuthenticationParameters = msgAuthenticationParameters
+		x.logPrintf("Parsed authenticationParameters %s", msgAuthenticationParameters)
+	}
+	// blank msgAuthenticationParameters to prepare for authentication check later
+	if response.MsgFlags&AuthNoPriv > 0 {
+		blank := make([]byte, 12)
+		copy(packet[cursor+2:cursor+14], blank)
+	}
+	cursor += count
+
+	rawMsgPrivacyParameters, count, err := x.parseRawField(packet[cursor:], "msgPrivacyParameters")
+	if err != nil {
+		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgPrivacyParameters: %s", err.Error())
+	}
+	cursor += count
+	if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
+		secParameters.PrivacyParameters = []byte(msgPrivacyParameters)
+		x.logPrintf("Parsed privacyParameters %s", msgPrivacyParameters)
+	}
+
+	return cursor, nil
 }

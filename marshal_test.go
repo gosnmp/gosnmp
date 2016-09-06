@@ -633,11 +633,25 @@ SANITY:
 	for i, test := range testsUnmarshal {
 		var err error
 		var res = new(SnmpPacket)
+		var cursor int
 
-		if err = Default.unmarshal(test.in(), res); err != nil {
-			t.Errorf("#%d, Unmarshal returned err: %v", i, err)
+		var buf = test.in()
+		cursor, err = Default.unmarshalHeader(buf, res)
+		if err != nil {
+			t.Errorf("#%d, UnmarshalHeader returned err: %v", i, err)
 			continue SANITY
-		} else if res == nil {
+		}
+		if res.Version == Version3 {
+			buf, cursor, err = Default.decryptPacket(buf, cursor, res)
+			if err != nil {
+				t.Errorf("#%d, decryptPacket returned err: %v", i, err)
+			}
+		}
+		err = Default.unmarshalPayload(test.in(), cursor, res)
+		if err != nil {
+			t.Errorf("#%d, UnmarshalPayload returned err: %v", i, err)
+		}
+		if res == nil {
 			t.Errorf("#%d, Unmarshal returned nil", i)
 			continue SANITY
 		}
@@ -1221,10 +1235,22 @@ func TestSendOneRequest_dups(t *testing.T) {
 			buf := buf[:n]
 
 			var reqPkt SnmpPacket
-			err = x.unmarshal(buf, &reqPkt)
+			var cursor int
+			cursor, err = x.unmarshalHeader(buf, &reqPkt)
 			if err != nil {
 				t.Errorf("Error: %s", err)
 			}
+			// if x.Version == Version3 {
+			//	buf, cursor, err = x.decryptPacket(buf, cursor, &reqPkt)
+			//	if err != nil {
+			//		t.Errorf("Error: %s", err)
+			//	}
+			//}
+			err = x.unmarshalPayload(buf, cursor, &reqPkt)
+			if err != nil {
+				t.Errorf("Error: %s", err)
+			}
+
 			rspPkt := x.mkSnmpPacket(GetResponse, 0, 0)
 			rspPkt.RequestID = reqPkt.RequestID
 			rspPkt.Variables = []SnmpPDU{
