@@ -129,9 +129,10 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 		reqID := atomic.AddUint32(&(x.requestID), 1) // TODO: fix overflows
 		allReqIDs = append(allReqIDs, reqID)
 
-		var msgID uint32
+		packetOut.RequestID = reqID
+
 		if x.Version == Version3 {
-			msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
+			msgID := atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
 			allMsgIDs = append(allMsgIDs, msgID)
 
 			packetOut.MsgID = msgID
@@ -143,7 +144,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 		}
 
 		var outBuf []byte
-		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType, reqID)
+		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType)
 		if err != nil {
 			// Don't retry - not going to get any better!
 			err = fmt.Errorf("marshal: %v", err)
@@ -283,7 +284,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
-	pdutype PDUType, requestid uint32) ([]byte, error) {
+	pdutype PDUType) ([]byte, error) {
 	var err error
 	var authParamStart uint32
 	buf := new(bytes.Buffer)
@@ -292,7 +293,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	buf.Write([]byte{2, 1, byte(packet.Version)})
 
 	if packet.Version == Version3 {
-		buf, authParamStart, err = packet.marshalV3(buf, pdus, requestid)
+		buf, authParamStart, err = packet.marshalV3(buf, pdus)
 		if err != nil {
 			return nil, err
 		}
@@ -301,7 +302,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 		buf.Write([]byte{4, uint8(len(packet.Community))})
 		buf.WriteString(packet.Community)
 		// pdu
-		pdu, err := packet.marshalPDU(pdus, requestid)
+		pdu, err := packet.marshalPDU(pdus)
 		if err != nil {
 			return nil, err
 		}
@@ -329,12 +330,12 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 }
 
 // marshal a PDU
-func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// requestid
 	buf.Write([]byte{2, 4})
-	err := binary.Write(buf, binary.BigEndian, requestid)
+	err := binary.Write(buf, binary.BigEndian, packet.RequestID)
 	if err != nil {
 		return nil, err
 	}

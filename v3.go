@@ -559,8 +559,7 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	return nil
 }
 
-func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer, pdus []SnmpPDU,
-	requestid uint32) (*bytes.Buffer, uint32, error) {
+func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer, pdus []SnmpPDU) (*bytes.Buffer, uint32, error) {
 
 	emptyBuffer := new(bytes.Buffer) // used when returning errors
 	var authParamStart uint32
@@ -589,7 +588,7 @@ func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer, pdus []SnmpPDU,
 	authParamStart += uint32(buf.Len())
 	buf.Write(securityParameters)
 
-	scopedPdu, err := packet.marshalV3ScopedPDU(pdus, requestid)
+	scopedPdu, err := packet.marshalV3ScopedPDU(pdus)
 	if err != nil {
 		return emptyBuffer, 0, err
 	}
@@ -688,10 +687,10 @@ func (packet *SnmpPacket) marshalV3UsmSecurityParameters() ([]byte, uint32, erro
 }
 
 // marshal and encrypt (if necessary) a snmp version 3 Scoped PDU
-func (packet *SnmpPacket) marshalV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+func (packet *SnmpPacket) marshalV3ScopedPDU(pdus []SnmpPDU) ([]byte, error) {
 	var b []byte
 
-	scopedPdu, err := packet.prepareV3ScopedPDU(pdus, requestid)
+	scopedPdu, err := packet.prepareV3ScopedPDU(pdus)
 	if err != nil {
 		return nil, err
 	}
@@ -762,7 +761,7 @@ func (packet *SnmpPacket) marshalV3ScopedPDU(pdus []SnmpPDU, requestid uint32) (
 }
 
 // prepare the plain text of a snmp version 3 Scoped PDU
-func (packet *SnmpPacket) prepareV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+func (packet *SnmpPacket) prepareV3ScopedPDU(pdus []SnmpPDU) ([]byte, error) {
 	var buf bytes.Buffer
 
 	//ContextEngineID
@@ -781,7 +780,7 @@ func (packet *SnmpPacket) prepareV3ScopedPDU(pdus []SnmpPDU, requestid uint32) (
 	buf.Write(append([]byte{byte(OctetString)}, namelen...))
 	buf.WriteString(packet.ContextName)
 
-	data, err := packet.marshalPDU(pdus, requestid)
+	data, err := packet.marshalPDU(pdus)
 	if err != nil {
 		return nil, err
 	}
