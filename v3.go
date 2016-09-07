@@ -761,7 +761,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursor += cursorTmp
 
-	rawMsgID, count, err := x.parseRawField(packet[cursor:], "msgID")
+	rawMsgID, count, err := parseRawField(packet[cursor:], "msgID")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 message ID: %s", err.Error())
 	}
@@ -771,14 +771,14 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		x.logPrintf("Parsed message ID %d", MsgID)
 	}
 	// discard msg max size
-	_, count, err = x.parseRawField(packet[cursor:], "maxMsgSize")
+	_, count, err = parseRawField(packet[cursor:], "maxMsgSize")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 maxMsgSize: %s", err.Error())
 	}
 	cursor += count
 	// discard msg max size
 
-	rawMsgFlags, count, err := x.parseRawField(packet[cursor:], "msgFlags")
+	rawMsgFlags, count, err := parseRawField(packet[cursor:], "msgFlags")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 msgFlags: %s", err.Error())
 	}
@@ -788,7 +788,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		x.logPrintf("parsed msg flags %s", MsgFlags)
 	}
 
-	rawSecModel, count, err := x.parseRawField(packet[cursor:], "msgSecurityModel")
+	rawSecModel, count, err := parseRawField(packet[cursor:], "msgSecurityModel")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 msgSecModel: %s", err.Error())
 	}
@@ -876,7 +876,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		// the encrypted PDU
 		packet = packet[:cursor+tlength]
 		cursor += cursorTmp
-		rawContextEngineID, count, err := x.parseRawField(packet[cursor:], "contextEngineID")
+		rawContextEngineID, count, err := parseRawField(packet[cursor:], "contextEngineID")
 		if err != nil {
 			return nil, 0, fmt.Errorf("Error parsing SNMPV3 contextEngineID: %s", err.Error())
 		}
@@ -885,7 +885,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 			response.ContextEngineID = contextEngineID
 			x.logPrintf("Parsed contextEngineID %s", contextEngineID)
 		}
-		rawContextName, count, err := x.parseRawField(packet[cursor:], "contextName")
+		rawContextName, count, err := parseRawField(packet[cursor:], "contextName")
 		if err != nil {
 			return nil, 0, fmt.Errorf("Error parsing SNMPV3 contextName: %s", err.Error())
 		}
@@ -916,7 +916,7 @@ func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursor += cursorTmp
 
-	rawMsgAuthoritativeEngineID, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineID")
+	rawMsgAuthoritativeEngineID, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineID")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineID: %s", err.Error())
 	}
@@ -926,7 +926,7 @@ func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
 		x.logPrintf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
 	}
 
-	rawMsgAuthoritativeEngineBoots, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
+	rawMsgAuthoritativeEngineBoots, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineBoots: %s", err.Error())
 	}
@@ -936,7 +936,7 @@ func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
 		x.logPrintf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
 	}
 
-	rawMsgAuthoritativeEngineTime, count, err := x.parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
+	rawMsgAuthoritativeEngineTime, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineTime: %s", err.Error())
 	}
@@ -946,7 +946,7 @@ func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
 		x.logPrintf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
 	}
 
-	rawMsgUserName, count, err := x.parseRawField(packet[cursor:], "msgUserName")
+	rawMsgUserName, count, err := parseRawField(packet[cursor:], "msgUserName")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgUserName: %s", err.Error())
 	}
@@ -956,7 +956,7 @@ func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
 		x.logPrintf("Parsed userName %s", msgUserName)
 	}
 
-	rawMsgAuthParameters, count, err := x.parseRawField(packet[cursor:], "msgAuthenticationParameters")
+	rawMsgAuthParameters, count, err := parseRawField(packet[cursor:], "msgAuthenticationParameters")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
 	}
@@ -971,7 +971,7 @@ func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
 	}
 	cursor += count
 
-	rawMsgPrivacyParameters, count, err := x.parseRawField(packet[cursor:], "msgPrivacyParameters")
+	rawMsgPrivacyParameters, count, err := parseRawField(packet[cursor:], "msgPrivacyParameters")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgPrivacyParameters: %s", err.Error())
 	}
