@@ -131,7 +131,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 
 		var msgID uint32
 		if x.Version == Version3 {
-			packetOut, err = x.buildPacket3(msgID, allMsgIDs, packetOut)
+			err = x.buildPacket3(msgID, allMsgIDs, packetOut)
 			if err != nil {
 				break
 			}

@@ -85,6 +85,23 @@ type UsmSecurityParameters struct {
 	localAESSalt uint64
 }
 
+// Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
+func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
+	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,
+		AuthoritativeEngineBoots: sp.AuthoritativeEngineBoots,
+		AuthoritativeEngineTime:  sp.AuthoritativeEngineTime,
+		UserName:                 sp.UserName,
+		AuthenticationParameters: sp.AuthenticationParameters,
+		PrivacyParameters:        sp.PrivacyParameters,
+		AuthenticationProtocol:   sp.AuthenticationProtocol,
+		PrivacyProtocol:          sp.PrivacyProtocol,
+		AuthenticationPassphrase: sp.AuthenticationPassphrase,
+		PrivacyPassphrase:        sp.PrivacyPassphrase,
+		localDESSalt:             sp.localDESSalt,
+		localAESSalt:             sp.localAESSalt,
+	}
+}
+
 func (x *GoSNMP) validateParametersV3() error {
 	if x.SecurityModel != UserSecurityModel {
 		return fmt.Errorf("The SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
@@ -125,21 +142,31 @@ func (x *GoSNMP) validateParametersV3() error {
 	return nil
 }
 
-// Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
-func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
-	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,
-		AuthoritativeEngineBoots: sp.AuthoritativeEngineBoots,
-		AuthoritativeEngineTime:  sp.AuthoritativeEngineTime,
-		UserName:                 sp.UserName,
-		AuthenticationParameters: sp.AuthenticationParameters,
-		PrivacyParameters:        sp.PrivacyParameters,
-		AuthenticationProtocol:   sp.AuthenticationProtocol,
-		PrivacyProtocol:          sp.PrivacyProtocol,
-		AuthenticationPassphrase: sp.AuthenticationPassphrase,
-		PrivacyPassphrase:        sp.PrivacyPassphrase,
-		localDESSalt:             sp.localDESSalt,
-		localAESSalt:             sp.localAESSalt,
+func (x *GoSNMP) setSalt() error {
+	var err error
+	if x.SecurityModel == UserSecurityModel {
+		secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
+		if !ok || secParams == nil {
+			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+		}
+		switch secParams.PrivacyProtocol {
+		case AES:
+			salt := make([]byte, 8)
+			_, err = crand.Read(salt)
+			if err != nil {
+				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+			}
+			secParams.localAESSalt = binary.BigEndian.Uint64(salt)
+		case DES:
+			salt := make([]byte, 4)
+			_, err = crand.Read(salt)
+			if err != nil {
+				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+			}
+			secParams.localDESSalt = binary.BigEndian.Uint32(salt)
+		}
 	}
+	return nil
 }
 
 // authenticate the marshalled result of a snmp version 3 packet
@@ -326,80 +353,80 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 	return secretKey
 }
 
-/*
-Here onwards is a refactoring of Whit's snmpv3 code - the large chunks of code
-were affecting the legibility of the main code. Some of the function names may
-not reflect their true purpose. Sonia.
-*/
+func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameters, error) {
+	s, ok := secParams.(*UsmSecurityParameters)
+	if !ok || s == nil {
+		return nil, fmt.Errorf("SecurityParameters is not of type *UsmSecurityParameters")
+	}
+	return s, nil
+}
+
+func (x *GoSNMP) usmAllocateNewSalt() (interface{}, error) {
+	var s *UsmSecurityParameters
+	var err error
+
+	if s, err = castUsmSecParams(x.SecurityParameters); err != nil {
+		return nil, err
+	}
+	var newSalt interface{}
+	switch s.PrivacyProtocol {
+	case AES:
+		newSalt = atomic.AddUint64(&(s.localAESSalt), 1)
+	default:
+		newSalt = atomic.AddUint32(&(s.localDESSalt), 1)
+	}
+	return newSalt, nil
+}
+
+func (packet *SnmpPacket) setUsmSalt(newSalt interface{}) error {
+	var s *UsmSecurityParameters
+	var err error
+
+	if s, err = castUsmSecParams(packet.SecurityParameters); err != nil {
+		return err
+	}
+
+	switch s.PrivacyProtocol {
+	case AES:
+		aesSalt, ok := newSalt.(uint64)
+		if !ok {
+			return fmt.Errorf("salt provided to setUsmSalt is not the correct type for the AES privacy protocol")
+		}
+		var salt = make([]byte, 8)
+		binary.BigEndian.PutUint64(salt, aesSalt)
+		s.PrivacyParameters = salt
+	default:
+		desSalt, ok := newSalt.(uint32)
+		if !ok {
+			return fmt.Errorf("salt provided to setUsmSalt is not the correct type for the DES privacy protocol")
+		}
+		var salt = make([]byte, 8)
+		binary.BigEndian.PutUint32(salt, s.AuthoritativeEngineBoots)
+		binary.BigEndian.PutUint32(salt[4:], desSalt)
+		s.PrivacyParameters = salt
+	}
+	return nil
+}
 
 func (x *GoSNMP) buildPacket3(msgID uint32, allMsgIDs []uint32,
-	packetOut *SnmpPacket) (*SnmpPacket, error) {
+	packetOut *SnmpPacket) error {
 	msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
 	allMsgIDs = append(allMsgIDs, msgID)
 
 	// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 	// localDESSalt needs to be incremented on every packet.
 	if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
-		baseSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || baseSecParams == nil {
-			err := fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
-			return nil, err
-		}
-		var newPktLocalAESSalt uint64
-		var newPktLocalDESSalt uint32
-		switch baseSecParams.PrivacyProtocol {
-		case AES:
-			newPktLocalAESSalt = atomic.AddUint64(&(baseSecParams.localAESSalt), 1)
-		case DES:
-			newPktLocalDESSalt = atomic.AddUint32(&(baseSecParams.localDESSalt), 1)
-		}
 
+		newSalt, err := x.usmAllocateNewSalt()
+		if err != nil {
+			return err
+		}
 		if packetOut.Version == Version3 && packetOut.SecurityModel == UserSecurityModel && packetOut.MsgFlags&AuthPriv > AuthNoPriv {
 
-			pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
-			if !ok || baseSecParams == nil {
-				err := fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
-				return nil, err
-			}
-
-			switch pktSecParams.PrivacyProtocol {
-			case AES:
-				var salt = make([]byte, 8)
-				binary.BigEndian.PutUint64(salt, newPktLocalAESSalt)
-				pktSecParams.PrivacyParameters = salt
-			default:
-				var salt = make([]byte, 8)
-				binary.BigEndian.PutUint32(salt, pktSecParams.AuthoritativeEngineBoots)
-				binary.BigEndian.PutUint32(salt[4:], newPktLocalDESSalt)
-				pktSecParams.PrivacyParameters = salt
-			}
-		}
-	}
-	return packetOut, nil
-}
-
-func (x *GoSNMP) setSalt() error {
-	var err error
-	if x.SecurityModel == UserSecurityModel {
-		secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || secParams == nil {
-			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
-		}
-		switch secParams.PrivacyProtocol {
-		case AES:
-			salt := make([]byte, 8)
-			_, err = crand.Read(salt)
+			err = packetOut.setUsmSalt(newSalt)
 			if err != nil {
-				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+				return err
 			}
-			secParams.localAESSalt = binary.BigEndian.Uint64(salt)
-		case DES:
-			salt := make([]byte, 4)
-			_, err = crand.Read(salt)
-			if err != nil {
-				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
-			}
-			secParams.localDESSalt = binary.BigEndian.Uint32(salt)
 		}
 	}
 	return nil
