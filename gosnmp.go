@@ -238,7 +238,7 @@ func (x *GoSNMP) validateParameters() error {
 		if err != nil {
 			return err
 		}
-		err = x.setSalt()
+		err = x.initSalt()
 		if err != nil {
 			return err
 		}

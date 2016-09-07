@@ -144,7 +144,7 @@ func (x *GoSNMP) validateParametersV3() error {
 	return nil
 }
 
-func (x *GoSNMP) setSalt() error {
+func (x *GoSNMP) initSalt() error {
 	var err error
 	if x.SecurityModel == UserSecurityModel {
 		var secParams *UsmSecurityParameters
