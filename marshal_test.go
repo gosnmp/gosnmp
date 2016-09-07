@@ -331,7 +331,7 @@ func TestEnmarshalMsg(t *testing.T) {
 		pdus := vbPosPdus(test)
 
 		testBytes, err := x.marshalMsg(pdus,
-			test.requestType, test.msgid, test.requestid)
+			test.requestType, test.requestid)
 		if err != nil {
 			t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
 		}
@@ -1260,7 +1260,7 @@ func TestSendOneRequest_dups(t *testing.T) {
 					Value: 123,
 				},
 			}
-			outBuf, err := rspPkt.marshalMsg(rspPkt.Variables, rspPkt.PDUType, rspPkt.MsgID, rspPkt.RequestID)
+			outBuf, err := rspPkt.marshalMsg(rspPkt.Variables, rspPkt.PDUType, rspPkt.RequestID)
 			if err != nil {
 				t.Errorf("ERR: %s", err)
 			}

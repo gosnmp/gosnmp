@@ -559,13 +559,51 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	return nil
 }
 
+func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer, pdus []SnmpPDU,
+	requestid uint32) (*bytes.Buffer, uint32, error) {
+
+	emptyBuffer := new(bytes.Buffer) // used when returning errors
+	var authParamStart uint32
+
+	header, err := packet.marshalV3Header()
+	if err != nil {
+		return emptyBuffer, 0, err
+	}
+	buf.Write([]byte{byte(Sequence), byte(len(header))})
+	buf.Write(header)
+
+	var securityParameters []byte
+	if packet.SecurityModel == UserSecurityModel {
+		securityParameters, authParamStart, err = packet.marshalV3UsmSecurityParameters()
+		if err != nil {
+			return emptyBuffer, 0, err
+		}
+	}
+
+	buf.Write([]byte{byte(OctetString)})
+	secParamLen, err := marshalLength(len(securityParameters))
+	if err != nil {
+		return emptyBuffer, 0, err
+	}
+	buf.Write(secParamLen)
+	authParamStart += uint32(buf.Len())
+	buf.Write(securityParameters)
+
+	scopedPdu, err := packet.marshalV3ScopedPDU(pdus, requestid)
+	if err != nil {
+		return emptyBuffer, 0, err
+	}
+	buf.Write(scopedPdu)
+	return buf, authParamStart, nil
+}
+
 // marshal a snmp version 3 packet header
-func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
+func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// msg id
 	buf.Write([]byte{byte(Integer), 4})
-	err := binary.Write(buf, binary.BigEndian, msgid)
+	err := binary.Write(buf, binary.BigEndian, packet.MsgID)
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +623,7 @@ func (packet *SnmpPacket) marshalSnmpV3Header(msgid uint32) ([]byte, error) {
 }
 
 // marshal a snmp version 3 security parameters field for the User Security Model
-func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, error) {
+func (packet *SnmpPacket) marshalV3UsmSecurityParameters() ([]byte, uint32, error) {
 	var buf bytes.Buffer
 	var authParamStart uint32
 
@@ -650,10 +688,10 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 }
 
 // marshal and encrypt (if necessary) a snmp version 3 Scoped PDU
-func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+func (packet *SnmpPacket) marshalV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
 	var b []byte
 
-	scopedPdu, err := packet.prepareSnmpV3ScopedPDU(pdus, requestid)
+	scopedPdu, err := packet.prepareV3ScopedPDU(pdus, requestid)
 	if err != nil {
 		return nil, err
 	}
@@ -724,7 +762,7 @@ func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint3
 }
 
 // prepare the plain text of a snmp version 3 Scoped PDU
-func (packet *SnmpPacket) prepareSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
+func (packet *SnmpPacket) prepareV3ScopedPDU(pdus []SnmpPDU, requestid uint32) ([]byte, error) {
 	var buf bytes.Buffer
 
 	//ContextEngineID
@@ -749,47 +787,6 @@ func (packet *SnmpPacket) prepareSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint3
 	}
 	buf.Write(data)
 	return buf.Bytes(), nil
-}
-
-func (packet *SnmpPacket) prepV3pPDU(
-	msgid uint32,
-	buf *bytes.Buffer,
-	pdus []SnmpPDU,
-	requestid uint32) (*bytes.Buffer, uint32, error) {
-
-	emptyBuffer := new(bytes.Buffer) // used when returning errors
-	var authParamStart uint32
-
-	header, err := packet.marshalSnmpV3Header(msgid)
-	if err != nil {
-		return emptyBuffer, 0, err
-	}
-	buf.Write([]byte{byte(Sequence), byte(len(header))})
-	buf.Write(header)
-
-	var securityParameters []byte
-	if packet.SecurityModel == UserSecurityModel {
-		securityParameters, authParamStart, err = packet.marshalSnmpV3UsmSecurityParameters()
-		if err != nil {
-			return emptyBuffer, 0, err
-		}
-	}
-
-	buf.Write([]byte{byte(OctetString)})
-	secParamLen, err := marshalLength(len(securityParameters))
-	if err != nil {
-		return emptyBuffer, 0, err
-	}
-	buf.Write(secParamLen)
-	authParamStart += uint32(buf.Len())
-	buf.Write(securityParameters)
-
-	scopedPdu, err := packet.marshalSnmpV3ScopedPDU(pdus, requestid)
-	if err != nil {
-		return emptyBuffer, 0, err
-	}
-	buf.Write(scopedPdu)
-	return buf, authParamStart, nil
 }
 
 func (x *GoSNMP) unmarshalV3Header(packet []byte,

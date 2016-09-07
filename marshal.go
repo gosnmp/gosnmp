@@ -134,6 +134,8 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 			msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
 			allMsgIDs = append(allMsgIDs, msgID)
 
+			packetOut.MsgID = msgID
+
 			err = x.saltNewPacket(packetOut)
 			if err != nil {
 				break
@@ -141,7 +143,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 		}
 
 		var outBuf []byte
-		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType, msgID, reqID)
+		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType, reqID)
 		if err != nil {
 			// Don't retry - not going to get any better!
 			err = fmt.Errorf("marshal: %v", err)
@@ -281,7 +283,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
-	pdutype PDUType, msgid uint32, requestid uint32) ([]byte, error) {
+	pdutype PDUType, requestid uint32) ([]byte, error) {
 	var err error
 	var authParamStart uint32
 	buf := new(bytes.Buffer)
@@ -290,7 +292,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	buf.Write([]byte{2, 1, byte(packet.Version)})
 
 	if packet.Version == Version3 {
-		buf, authParamStart, err = packet.prepV3pPDU(msgid, buf, pdus, requestid)
+		buf, authParamStart, err = packet.marshalV3(buf, pdus, requestid)
 		if err != nil {
 			return nil, err
 		}
