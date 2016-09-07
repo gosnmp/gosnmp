@@ -107,8 +107,10 @@ func (x *GoSNMP) validateParametersV3() error {
 		return fmt.Errorf("The SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
 	}
 
-	usm, ok := x.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || usm == nil {
+	// fix if you need to implement a new security model
+	var usm *UsmSecurityParameters
+	var err error
+	if usm, err = castUsmSecParams(x.SecurityParameters); err != nil {
 		return fmt.Errorf("The SecurityParameters field does not contain a populated instance of UsmSecurityParameters")
 	}
 
@@ -145,10 +147,12 @@ func (x *GoSNMP) validateParametersV3() error {
 func (x *GoSNMP) setSalt() error {
 	var err error
 	if x.SecurityModel == UserSecurityModel {
-		secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || secParams == nil {
-			return fmt.Errorf("&GoSNMP.SecurityModel indicates the User Security Model, but &GoSNMP.SecurityParameters is not of type &UsmSecurityParameters")
+		var secParams *UsmSecurityParameters
+
+		if secParams, err = castUsmSecParams(x.SecurityParameters); err != nil {
+			return err
 		}
+
 		switch secParams.PrivacyProtocol {
 		case AES:
 			salt := make([]byte, 8)
@@ -187,9 +191,10 @@ func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byt
 	}
 
 	var secParams *UsmSecurityParameters
-	secParams, ok := packet.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || secParams == nil {
-		return nil, fmt.Errorf("Error authenticating message: Unable to extract UsmSecurityParameters")
+	var err error
+
+	if secParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
+		return nil, err
 	}
 	var secretKey = genlocalkey(secParams.AuthenticationProtocol,
 		secParams.AuthenticationPassphrase,
@@ -235,14 +240,17 @@ func (x *GoSNMP) testUsmAuthentication(packet []byte, result *SnmpPacket) error 
 		return fmt.Errorf("testUsmAuthentication called with connection that is not using the User Security Model")
 	}
 
-	secParameters, ok := x.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || secParameters == nil {
-		return fmt.Errorf("testUsmAuthentication: GoSNMP.SecurityParameters is not of type UsmSecurityParameters")
+	var secParameters *UsmSecurityParameters
+	var err error
+
+	if secParameters, err = castUsmSecParams(x.SecurityParameters); err != nil {
+		return err
 	}
 
-	resultSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || resultSecParams == nil {
-		return fmt.Errorf("testUsmAuthentication: packet.SecurityParameters is not of type UsmSecurityParameters")
+	var resultSecParams *UsmSecurityParameters
+
+	if resultSecParams, err = castUsmSecParams(result.SecurityParameters); err != nil {
+		return err
 	}
 
 	if x.MsgFlags&AuthNoPriv > 0 {
@@ -445,10 +453,13 @@ func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket, wait 
 	}
 
 	if packetOut.SecurityModel == UserSecurityModel {
-		secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || secParams == nil {
-			return fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+		var secParams *UsmSecurityParameters
+		var err error
+
+		if secParams, err = castUsmSecParams(packetOut.SecurityParameters); err != nil {
+			return err
 		}
+
 		if secParams.AuthoritativeEngineID == "" {
 			// send blank packet to discover authoriative engine ID/boots/time
 			blankPacket := &SnmpPacket{
@@ -492,10 +503,11 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 	}
 
 	if result.SecurityModel == UserSecurityModel {
+		var newSecParams *UsmSecurityParameters
+		var err error
 
-		newSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || newSecParams == nil {
-			return fmt.Errorf("result.SecurityModel indicates the User Security Model, but result.SecurityParameters is not of type &UsmSecurityParameters")
+		if newSecParams, err = castUsmSecParams(result.SecurityParameters); err != nil {
+			return err
 		}
 		connSecParams, _ := x.SecurityParameters.(*UsmSecurityParameters)
 		if connSecParams != nil {
@@ -523,18 +535,20 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	}
 
 	if x.SecurityModel == UserSecurityModel {
-		connectionSecParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || connectionSecParams == nil {
-			return fmt.Errorf("connection indicates UserSecurityModel but connection SecurityParameters are not of type *UsmSecurityParameters")
+		var c *UsmSecurityParameters
+		var err error
+		if c, err = castUsmSecParams(x.SecurityParameters); err != nil {
+			return err
 		}
 
-		pktSecParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || pktSecParams == nil {
-			return fmt.Errorf("packetOut.SecurityModel indicates the UserSecurityModel, but packetOut.SecurityParameters is not of type *UsmSecurityParameters")
+		var s *UsmSecurityParameters
+		if s, err = castUsmSecParams(packetOut.SecurityParameters); err != nil {
+			return err
 		}
-		pktSecParams.AuthoritativeEngineID = connectionSecParams.AuthoritativeEngineID
-		pktSecParams.AuthoritativeEngineBoots = connectionSecParams.AuthoritativeEngineBoots
-		pktSecParams.AuthoritativeEngineTime = connectionSecParams.AuthoritativeEngineTime
+
+		s.AuthoritativeEngineID = c.AuthoritativeEngineID
+		s.AuthoritativeEngineBoots = c.AuthoritativeEngineBoots
+		s.AuthoritativeEngineTime = c.AuthoritativeEngineTime
 
 	}
 
@@ -575,9 +589,11 @@ func (packet *SnmpPacket) marshalSnmpV3UsmSecurityParameters() ([]byte, uint32, 
 	var buf bytes.Buffer
 	var authParamStart uint32
 
-	secParams, ok := packet.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || secParams == nil {
-		return nil, 0, fmt.Errorf("packet.SecurityParameters is not of type &UsmSecurityParameters")
+	var secParams *UsmSecurityParameters
+	var err error
+
+	if secParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
+		return nil, 0, err
 	}
 
 	// msgAuthoritativeEngineID
@@ -648,10 +664,12 @@ func (packet *SnmpPacket) marshalSnmpV3ScopedPDU(pdus []SnmpPDU, requestid uint3
 	b = append([]byte{byte(Sequence)}, pduLen...)
 	scopedPdu = append(b, scopedPdu...)
 	if packet.MsgFlags&AuthPriv > AuthNoPriv && packet.SecurityModel == UserSecurityModel {
-		secParams, ok := packet.SecurityParameters.(*UsmSecurityParameters)
-		if !ok || secParams == nil {
-			return nil, fmt.Errorf("packet.SecurityModel indicates the User Security Model, but packet.SecurityParameters is not of type &UsmSecurityParameters")
+		var secParams *UsmSecurityParameters
+
+		if secParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
+			return nil, err
 		}
+
 		var privkey = genlocalkey(secParams.AuthenticationProtocol,
 			secParams.PrivacyPassphrase,
 			secParams.AuthoritativeEngineID)
@@ -845,10 +863,11 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 
 		if response.SecurityModel == UserSecurityModel {
 			var secParams *UsmSecurityParameters
-			secParams, ok := response.SecurityParameters.(*UsmSecurityParameters)
-			if !ok || secParams == nil {
-				return nil, 0, fmt.Errorf("response.SecurityModel indicates the User Security Model, but response.SecurityParameters is not of type &UsmSecurityParameters")
+			var err error
+			if secParams, err = castUsmSecParams(response.SecurityParameters); err != nil {
+				return nil, 0, err
 			}
+
 			var privkey = genlocalkey(secParams.AuthenticationProtocol,
 				secParams.PrivacyPassphrase,
 				secParams.AuthoritativeEngineID)
@@ -929,9 +948,11 @@ func (x *GoSNMP) unmarshalUsmSecurityParameters(packet []byte,
 	cursor int,
 	response *SnmpPacket) (int, error) {
 
-	secParameters, ok := response.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || secParameters == nil {
-		return 0, fmt.Errorf("GoSNMP.SecurityModel indicates the User Security Model, but GoSNMP.SecurityParameters is not of type UsmSecurityParameters")
+	var secParameters *UsmSecurityParameters
+	var err error
+
+	if secParameters, err = castUsmSecParams(response.SecurityParameters); err != nil {
+		return 0, err
 	}
 
 	if PDUType(packet[cursor]) != Sequence {
