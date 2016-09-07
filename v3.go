@@ -380,7 +380,6 @@ func (x *GoSNMP) buildPacket3(msgID uint32, allMsgIDs []uint32,
 
 func (x *GoSNMP) setSalt() error {
 	var err error
-	x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
 	if x.SecurityModel == UserSecurityModel {
 		secParams, ok := x.SecurityParameters.(*UsmSecurityParameters)
 		if !ok || secParams == nil {

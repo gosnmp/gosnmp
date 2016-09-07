@@ -215,12 +215,6 @@ func (x *GoSNMP) Connect() error {
 
 	x.rxBuf = new([rxBufSize]byte)
 
-	if x.Version == Version3 {
-		if err = x.setSalt(); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -238,7 +232,16 @@ func (x *GoSNMP) validateParameters() error {
 	}
 
 	if x.Version == Version3 {
-		return x.validateParametersV3()
+		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
+
+		err := x.validateParametersV3()
+		if err != nil {
+			return err
+		}
+		err = x.setSalt()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
