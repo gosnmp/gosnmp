@@ -41,107 +41,19 @@ const (
 	UserSecurityModel SnmpV3SecurityModel = 3
 )
 
-// SnmpV3AuthProtocol describes the authentication protocol in use by an authenticated SnmpV3 connection.
-type SnmpV3AuthProtocol uint8
-
-// NoAuth, MD5, and SHA are implemented
-const (
-	NoAuth SnmpV3AuthProtocol = 1
-	MD5    SnmpV3AuthProtocol = 2
-	SHA    SnmpV3AuthProtocol = 3
-)
-
-// SnmpV3PrivProtocol is the privacy protocol in use by an private SnmpV3 connection.
-type SnmpV3PrivProtocol uint8
-
-// NoPriv, DES implemented, AES planned
-const (
-	NoPriv SnmpV3PrivProtocol = 1
-	DES    SnmpV3PrivProtocol = 2
-	AES    SnmpV3PrivProtocol = 3
-)
-
 // SnmpV3SecurityParameters is a generic interface type to contain various implementations of SnmpV3SecurityParameters
 type SnmpV3SecurityParameters interface {
 	Copy() SnmpV3SecurityParameters
-}
-
-// UsmSecurityParameters is an implementation of SnmpV3SecurityParameters for the UserSecurityModel
-type UsmSecurityParameters struct {
-	AuthoritativeEngineID    string
-	AuthoritativeEngineBoots uint32
-	AuthoritativeEngineTime  uint32
-	UserName                 string
-	AuthenticationParameters string
-	PrivacyParameters        []byte
-
-	AuthenticationProtocol SnmpV3AuthProtocol
-	PrivacyProtocol        SnmpV3PrivProtocol
-
-	AuthenticationPassphrase string
-	PrivacyPassphrase        string
-
-	localDESSalt uint32
-	localAESSalt uint64
-}
-
-// Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
-func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
-	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,
-		AuthoritativeEngineBoots: sp.AuthoritativeEngineBoots,
-		AuthoritativeEngineTime:  sp.AuthoritativeEngineTime,
-		UserName:                 sp.UserName,
-		AuthenticationParameters: sp.AuthenticationParameters,
-		PrivacyParameters:        sp.PrivacyParameters,
-		AuthenticationProtocol:   sp.AuthenticationProtocol,
-		PrivacyProtocol:          sp.PrivacyProtocol,
-		AuthenticationPassphrase: sp.AuthenticationPassphrase,
-		PrivacyPassphrase:        sp.PrivacyPassphrase,
-		localDESSalt:             sp.localDESSalt,
-		localAESSalt:             sp.localAESSalt,
-	}
+	Validate(flags SnmpV3MsgFlags) error
 }
 
 func (x *GoSNMP) validateParametersV3() error {
+	// update following code if you implement a new security model
 	if x.SecurityModel != UserSecurityModel {
 		return fmt.Errorf("The SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
 	}
 
-	// fix if you need to implement a new security model
-	var usm *UsmSecurityParameters
-	var err error
-	if usm, err = castUsmSecParams(x.SecurityParameters); err != nil {
-		return fmt.Errorf("The SecurityParameters field does not contain a populated instance of UsmSecurityParameters")
-	}
-
-	securityLevel := x.MsgFlags & AuthPriv
-
-	switch securityLevel {
-	case AuthPriv:
-		if usm.PrivacyProtocol <= NoPriv {
-			return fmt.Errorf("SecurityParameters.PrivacyProtocol is required")
-		}
-		if usm.PrivacyPassphrase == "" {
-			return fmt.Errorf("SecurityParameters.PrivacyPassphrase is required")
-		}
-		fallthrough
-	case AuthNoPriv:
-		if usm.AuthenticationProtocol <= NoAuth {
-			return fmt.Errorf("SecurityParameters.AuthenticationProtocol is required")
-		}
-		if usm.AuthenticationPassphrase == "" {
-			return fmt.Errorf("SecurityParameters.AuthenticationPassphrase is required")
-		}
-		fallthrough
-	case NoAuthNoPriv:
-		if usm.UserName == "" {
-			return fmt.Errorf("SecurityParameters.UserName is required")
-		}
-	default:
-		return fmt.Errorf("MsgFlags must be populated with an appropriate security level")
-	}
-
-	return nil
+	return x.SecurityParameters.Validate(x.MsgFlags)
 }
 
 func (x *GoSNMP) initSalt() error {
