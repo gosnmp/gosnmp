@@ -144,7 +144,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		}
 
 		var outBuf []byte
-		outBuf, err = packetOut.marshalMsg(packetOut.PDUType)
+		outBuf, err = packetOut.marshalMsg()
 		if err != nil {
 			// Don't retry - not going to get any better!
 			err = fmt.Errorf("marshal: %v", err)
@@ -282,7 +282,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 // -- Marshalling Logic --------------------------------------------------------
 
 // marshal an SNMP message
-func (packet *SnmpPacket) marshalMsg(pdutype PDUType) ([]byte, error) {
+func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 	var err error
 	var authParamStart uint32
 	buf := new(bytes.Buffer)
