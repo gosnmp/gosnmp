@@ -131,7 +131,10 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 
 		var msgID uint32
 		if x.Version == Version3 {
-			err = x.buildPacket3(msgID, allMsgIDs, packetOut)
+			msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
+			allMsgIDs = append(allMsgIDs, msgID)
+
+			err = x.buildPacket3(packetOut)
 			if err != nil {
 				break
 			}

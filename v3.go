@@ -361,6 +361,8 @@ func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameter
 	return s, nil
 }
 
+// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
+// localDESSalt needs to be incremented on every packet.
 func (x *GoSNMP) usmAllocateNewSalt() (interface{}, error) {
 	var s *UsmSecurityParameters
 	var err error
@@ -408,15 +410,11 @@ func (packet *SnmpPacket) setUsmSalt(newSalt interface{}) error {
 	return nil
 }
 
-func (x *GoSNMP) buildPacket3(msgID uint32, allMsgIDs []uint32,
-	packetOut *SnmpPacket) error {
-	msgID = atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
-	allMsgIDs = append(allMsgIDs, msgID)
+func (x *GoSNMP) buildPacket3(packetOut *SnmpPacket) error {
 
-	// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
-	// localDESSalt needs to be incremented on every packet.
 	if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
-
+		// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
+		// localDESSalt needs to be incremented on every packet.
 		newSalt, err := x.usmAllocateNewSalt()
 		if err != nil {
 			return err
