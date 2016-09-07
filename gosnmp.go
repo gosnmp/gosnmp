@@ -247,7 +247,7 @@ func (x *GoSNMP) validateParameters() error {
 	return nil
 }
 
-func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
+func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
 	var newSecParams SnmpV3SecurityParameters
 	if x.SecurityParameters != nil {
 		newSecParams = x.SecurityParameters.Copy()
@@ -265,6 +265,7 @@ func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, nonRepeaters uint8, maxRepetition
 		PDUType:            pdutype,
 		NonRepeaters:       nonRepeaters,
 		MaxRepetitions:     maxRepetitions,
+		Variables:          pdus,
 	}
 }
 
@@ -281,8 +282,8 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil, x.Logger})
 	}
 	// build up SnmpPacket
-	packetOut := x.mkSnmpPacket(GetRequest, 0, 0)
-	return x.send(pdus, packetOut, true)
+	packetOut := x.mkSnmpPacket(GetRequest, pdus, 0, 0)
+	return x.send(packetOut, true)
 }
 
 // Set sends an SNMP SET request
@@ -290,11 +291,11 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	var packetOut *SnmpPacket
 	switch pdus[0].Type {
 	case Integer, OctetString:
-		packetOut = x.mkSnmpPacket(SetRequest, 0, 0)
+		packetOut = x.mkSnmpPacket(SetRequest, pdus, 0, 0)
 	default:
 		return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers and OctetStrings")
 	}
-	return x.send(pdus, packetOut, true)
+	return x.send(packetOut, true)
 }
 
 // GetNext sends an SNMP GETNEXT request
@@ -312,9 +313,9 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	}
 
 	// Marshal and send the packet
-	packetOut := x.mkSnmpPacket(GetNextRequest, 0, 0)
+	packetOut := x.mkSnmpPacket(GetNextRequest, pdus, 0, 0)
 
-	return x.send(pdus, packetOut, true)
+	return x.send(packetOut, true)
 }
 
 // GetBulk sends an SNMP GETBULK request
@@ -334,8 +335,8 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 	}
 
 	// Marshal and send the packet
-	packetOut := x.mkSnmpPacket(GetBulkRequest, nonRepeaters, maxRepetitions)
-	return x.send(pdus, packetOut, true)
+	packetOut := x.mkSnmpPacket(GetBulkRequest, pdus, nonRepeaters, maxRepetitions)
+	return x.send(packetOut, true)
 }
 
 //

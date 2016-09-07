@@ -52,11 +52,11 @@ func (x *GoSNMP) SendTrap(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	copy(pdus[1:], pdus)
 	pdus[0] = timetickPDU
 
-	packetOut := x.mkSnmpPacket(SNMPv2Trap, 0, 0)
+	packetOut := x.mkSnmpPacket(SNMPv2Trap, pdus, 0, 0)
 
 	// all sends wait for the return packet, except for SNMPv2Trap
 	// -> wait is false
-	return x.send(pdus, packetOut, false)
+	return x.send(packetOut, false)
 }
 
 //

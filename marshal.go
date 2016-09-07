@@ -102,7 +102,7 @@ func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 }
 
 // send/receive one snmp request
-func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
+func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	wait bool) (result *SnmpPacket, err error) {
 	finalDeadline := time.Now().Add(x.Timeout)
 
@@ -144,7 +144,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 		}
 
 		var outBuf []byte
-		outBuf, err = packetOut.marshalMsg(pdus, packetOut.PDUType)
+		outBuf, err = packetOut.marshalMsg(packetOut.PDUType)
 		if err != nil {
 			// Don't retry - not going to get any better!
 			err = fmt.Errorf("marshal: %v", err)
@@ -237,8 +237,7 @@ func (x *GoSNMP) sendOneRequest(pdus []SnmpPDU, packetOut *SnmpPacket,
 // generic "sender" that negotiate any version of snmp request
 //
 // all sends wait for the return packet, except for SNMPv2Trap
-func (x *GoSNMP) send(pdus []SnmpPDU,
-	packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
+func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("recover: %v", e)
@@ -260,7 +259,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 	}
 
 	// perform request
-	result, err = x.sendOneRequest(pdus, packetOut, wait)
+	result, err = x.sendOneRequest(packetOut, wait)
 	if err != nil {
 		return result, err
 	}
@@ -274,7 +273,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 			if err != nil {
 				return nil, err
 			}
-			result, err = x.sendOneRequest(pdus, packetOut, wait)
+			result, err = x.sendOneRequest(packetOut, wait)
 		}
 	}
 	return result, err
@@ -283,8 +282,7 @@ func (x *GoSNMP) send(pdus []SnmpPDU,
 // -- Marshalling Logic --------------------------------------------------------
 
 // marshal an SNMP message
-func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
-	pdutype PDUType) ([]byte, error) {
+func (packet *SnmpPacket) marshalMsg(pdutype PDUType) ([]byte, error) {
 	var err error
 	var authParamStart uint32
 	buf := new(bytes.Buffer)
@@ -293,7 +291,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 	buf.Write([]byte{2, 1, byte(packet.Version)})
 
 	if packet.Version == Version3 {
-		buf, authParamStart, err = packet.marshalV3(buf, pdus)
+		buf, authParamStart, err = packet.marshalV3(buf)
 		if err != nil {
 			return nil, err
 		}
@@ -302,7 +300,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 		buf.Write([]byte{4, uint8(len(packet.Community))})
 		buf.WriteString(packet.Community)
 		// pdu
-		pdu, err := packet.marshalPDU(pdus)
+		pdu, err := packet.marshalPDU()
 		if err != nil {
 			return nil, err
 		}
@@ -330,7 +328,7 @@ func (packet *SnmpPacket) marshalMsg(pdus []SnmpPDU,
 }
 
 // marshal a PDU
-func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU) ([]byte, error) {
+func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// requestid
@@ -356,7 +354,7 @@ func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU) ([]byte, error) {
 	}
 
 	// varbind list
-	vbl, err := packet.marshalVBL(pdus)
+	vbl, err := packet.marshalVBL()
 	if err != nil {
 		return nil, err
 	}
@@ -377,10 +375,10 @@ func (packet *SnmpPacket) marshalPDU(pdus []SnmpPDU) ([]byte, error) {
 }
 
 // marshal a varbind list
-func (packet *SnmpPacket) marshalVBL(pdus []SnmpPDU) ([]byte, error) {
+func (packet *SnmpPacket) marshalVBL() ([]byte, error) {
 
 	vblBuf := new(bytes.Buffer)
-	for _, pdu := range pdus {
+	for _, pdu := range packet.Variables {
 		vb, err := marshalVarbind(&pdu)
 		if err != nil {
 			return nil, err

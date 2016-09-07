@@ -283,11 +283,10 @@ func TestEnmarshalVBL(t *testing.T) {
 			Community: test.community,
 			Version:   test.version,
 			RequestID: test.requestid,
+			Variables: vbPosPdus(test),
 		}
 
-		pdus := vbPosPdus(test)
-
-		testBytes, err := x.marshalVBL(pdus)
+		testBytes, err := x.marshalVBL()
 		if err != nil {
 			t.Errorf("#%s: marshalVBL() err returned: %v", test.funcName, err)
 		}
@@ -305,10 +304,10 @@ func TestEnmarshalPDU(t *testing.T) {
 			Version:   test.version,
 			PDUType:   test.requestType,
 			RequestID: test.requestid,
+			Variables: vbPosPdus(test),
 		}
-		pdus := vbPosPdus(test)
 
-		testBytes, err := x.marshalPDU(pdus)
+		testBytes, err := x.marshalPDU()
 		if err != nil {
 			t.Errorf("#%s: marshalPDU() err returned: %v", test.funcName, err)
 		}
@@ -327,11 +326,10 @@ func TestEnmarshalMsg(t *testing.T) {
 			PDUType:   test.requestType,
 			RequestID: test.requestid,
 			MsgID:     test.msgid,
+			Variables: vbPosPdus(test),
 		}
-		pdus := vbPosPdus(test)
 
-		testBytes, err := x.marshalMsg(pdus,
-			test.requestType)
+		testBytes, err := x.marshalMsg(test.requestType)
 		if err != nil {
 			t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
 		}
@@ -1251,16 +1249,15 @@ func TestSendOneRequest_dups(t *testing.T) {
 				t.Errorf("Error: %s", err)
 			}
 
-			rspPkt := x.mkSnmpPacket(GetResponse, 0, 0)
-			rspPkt.RequestID = reqPkt.RequestID
-			rspPkt.Variables = []SnmpPDU{
+			rspPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{
 				{
 					Name:  ".1.2",
 					Type:  Integer,
 					Value: 123,
 				},
-			}
-			outBuf, err := rspPkt.marshalMsg(rspPkt.Variables, rspPkt.PDUType)
+			}, 0, 0)
+			rspPkt.RequestID = reqPkt.RequestID
+			outBuf, err := rspPkt.marshalMsg(rspPkt.PDUType)
 			if err != nil {
 				t.Errorf("ERR: %s", err)
 			}
@@ -1271,16 +1268,16 @@ func TestSendOneRequest_dups(t *testing.T) {
 		}
 	}()
 
-	reqPkt := x.mkSnmpPacket(GetResponse, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
-	reqPDU := SnmpPDU{Name: ".1.2", Type: Null}
+	pdus := []SnmpPDU{SnmpPDU{Name: ".1.2", Type: Null}}
+	reqPkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
 
-	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
+	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 		return
 	}
 
-	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
+	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 		return
@@ -1318,11 +1315,11 @@ func BenchmarkSendOneRequest(b *testing.B) {
 		}
 	}()
 
-	reqPkt := x.mkSnmpPacket(GetRequest, 0, 0)
-	reqPDU := SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}
+	pdus := []SnmpPDU{SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}}
+	reqPkt := x.mkSnmpPacket(GetRequest, pdus, 0, 0)
 
 	// make sure everything works before starting the test
-	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
+	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
 		b.Fatalf("Precheck failed: %s", err)
 	}
@@ -1330,7 +1327,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 	b.StartTimer()
 
 	for n := 0; n < b.N; n++ {
-		_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt, true)
+		_, err = x.sendOneRequest(reqPkt, true)
 		if err != nil {
 			b.Fatalf("Error: %s", err)
 			return
