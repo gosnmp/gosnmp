@@ -410,7 +410,7 @@ func (packet *SnmpPacket) setUsmSalt(newSalt interface{}) error {
 	return nil
 }
 
-func (x *GoSNMP) buildPacket3(packetOut *SnmpPacket) error {
+func (x *GoSNMP) saltNewPacket(packetOut *SnmpPacket) error {
 
 	if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
 		// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
@@ -435,19 +435,19 @@ func (x *GoSNMP) buildPacket3(packetOut *SnmpPacket) error {
 // snmpds that this code was tested on emit an 'out of time window'
 // error with the new time and this code will retransmit when that is
 // received.
-func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket, wait bool) (*SnmpPacket, error) {
+func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket, wait bool) error {
 	if x.Version != Version3 || packetOut.Version != Version3 {
-		return nil, fmt.Errorf("negotiateInitialSecurityParameters called with non Version3 connection or packet")
+		return fmt.Errorf("negotiateInitialSecurityParameters called with non Version3 connection or packet")
 	}
 
 	if x.SecurityModel != packetOut.SecurityModel {
-		return nil, fmt.Errorf("connection security model does not match security model defined in packet")
+		return fmt.Errorf("connection security model does not match security model defined in packet")
 	}
 
 	if packetOut.SecurityModel == UserSecurityModel {
 		secParams, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
 		if !ok || secParams == nil {
-			return nil, fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
+			return fmt.Errorf("packetOut.SecurityModel indicates the User Security Model, but packetOut.SecurityParameters is not of type &UsmSecurityParameters")
 		}
 		if secParams.AuthoritativeEngineID == "" {
 			// send blank packet to discover authoriative engine ID/boots/time
@@ -463,21 +463,21 @@ func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket, wait 
 			result, err := x.sendOneRequest(emptyPdus, blankPacket, wait)
 
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			err = x.storeSecurityParameters(result)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			err = x.updatePktSecurityParameters(packetOut)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
-	return packetOut, nil
+	return nil
 }
 
 // save the connection security parameters after a request/response
