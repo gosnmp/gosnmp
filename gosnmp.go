@@ -238,7 +238,7 @@ func (x *GoSNMP) validateParameters() error {
 		if err != nil {
 			return err
 		}
-		err = x.initSalt()
+		err = x.SecurityParameters.Init()
 		if err != nil {
 			return err
 		}

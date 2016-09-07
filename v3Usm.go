@@ -9,17 +9,17 @@ package gosnmp
 // license that can be found in the LICENSE file.
 
 import (
-	/*"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/des"
-	"crypto/md5"
+	//"bytes"
+	//"crypto/aes"
+	//"crypto/cipher"
+	//"crypto/des"
+	//"crypto/md5"
 	crand "crypto/rand"
-	"crypto/sha1"
+	//"crypto/sha1"
 	"encoding/binary"
-	"fmt"
-	"hash"
-	"sync/atomic"*/
+	//"fmt"
+	//"hash"
+	//"sync/atomic"*/
 	"fmt"
 )
 
@@ -106,6 +106,29 @@ func (sp *UsmSecurityParameters) Validate(flags SnmpV3MsgFlags) error {
 		}
 	default:
 		return fmt.Errorf("MsgFlags must be populated with an appropriate security level")
+	}
+
+	return nil
+}
+
+func (sp *UsmSecurityParameters) Init() error {
+	var err error
+
+	switch sp.PrivacyProtocol {
+	case AES:
+		salt := make([]byte, 8)
+		_, err = crand.Read(salt)
+		if err != nil {
+			return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+		}
+		sp.localAESSalt = binary.BigEndian.Uint64(salt)
+	case DES:
+		salt := make([]byte, 4)
+		_, err = crand.Read(salt)
+		if err != nil {
+			return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+		}
+		sp.localDESSalt = binary.BigEndian.Uint32(salt)
 	}
 
 	return nil

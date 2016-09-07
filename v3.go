@@ -14,7 +14,6 @@ import (
 	"crypto/cipher"
 	"crypto/des"
 	"crypto/md5"
-	crand "crypto/rand"
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
@@ -45,6 +44,7 @@ const (
 type SnmpV3SecurityParameters interface {
 	Copy() SnmpV3SecurityParameters
 	Validate(flags SnmpV3MsgFlags) error
+	Init() error
 }
 
 func (x *GoSNMP) validateParametersV3() error {
@@ -54,35 +54,6 @@ func (x *GoSNMP) validateParametersV3() error {
 	}
 
 	return x.SecurityParameters.Validate(x.MsgFlags)
-}
-
-func (x *GoSNMP) initSalt() error {
-	var err error
-	if x.SecurityModel == UserSecurityModel {
-		var secParams *UsmSecurityParameters
-
-		if secParams, err = castUsmSecParams(x.SecurityParameters); err != nil {
-			return err
-		}
-
-		switch secParams.PrivacyProtocol {
-		case AES:
-			salt := make([]byte, 8)
-			_, err = crand.Read(salt)
-			if err != nil {
-				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
-			}
-			secParams.localAESSalt = binary.BigEndian.Uint64(salt)
-		case DES:
-			salt := make([]byte, 4)
-			_, err = crand.Read(salt)
-			if err != nil {
-				return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
-			}
-			secParams.localDESSalt = binary.BigEndian.Uint32(salt)
-		}
-	}
-	return nil
 }
 
 // authenticate the marshalled result of a snmp version 3 packet
