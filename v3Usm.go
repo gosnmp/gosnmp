@@ -9,7 +9,7 @@ package gosnmp
 // license that can be found in the LICENSE file.
 
 import (
-	//"bytes"
+	"bytes"
 	//"crypto/aes"
 	//"crypto/cipher"
 	//"crypto/des"
@@ -79,7 +79,7 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 	}
 }
 
-func (sp *UsmSecurityParameters) Validate(flags SnmpV3MsgFlags) error {
+func (sp *UsmSecurityParameters) validate(flags SnmpV3MsgFlags) error {
 
 	securityLevel := flags & AuthPriv // isolate flags that determine security level
 
@@ -111,7 +111,7 @@ func (sp *UsmSecurityParameters) Validate(flags SnmpV3MsgFlags) error {
 	return nil
 }
 
-func (sp *UsmSecurityParameters) Init() error {
+func (sp *UsmSecurityParameters) init() error {
 	var err error
 
 	switch sp.PrivacyProtocol {
@@ -132,4 +132,63 @@ func (sp *UsmSecurityParameters) Init() error {
 	}
 
 	return nil
+}
+
+// marshal a snmp version 3 security parameters field for the User Security Model
+func (sp *UsmSecurityParameters) marshalSecurityParameters(flags SnmpV3MsgFlags) ([]byte, uint32, error) {
+	var buf bytes.Buffer
+	var authParamStart uint32
+	var err error
+
+	// msgAuthoritativeEngineID
+	buf.Write([]byte{byte(OctetString), byte(len(sp.AuthoritativeEngineID))})
+	buf.WriteString(sp.AuthoritativeEngineID)
+
+	// msgAuthoritativeEngineBoots
+	msgAuthoritativeEngineBoots := marshalUvarInt(sp.AuthoritativeEngineBoots)
+	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineBoots))})
+	buf.Write(msgAuthoritativeEngineBoots)
+
+	// msgAuthoritativeEngineTime
+	msgAuthoritativeEngineTime := marshalUvarInt(sp.AuthoritativeEngineTime)
+	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineTime))})
+	buf.Write(msgAuthoritativeEngineTime)
+
+	// msgUserName
+	buf.Write([]byte{byte(OctetString), byte(len(sp.UserName))})
+	buf.WriteString(sp.UserName)
+
+	authParamStart = uint32(buf.Len() + 2) // +2 indicates PDUType + Length
+	// msgAuthenticationParameters
+	if flags&AuthNoPriv > 0 {
+		buf.Write([]byte{byte(OctetString), 12,
+			0, 0, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 0})
+	} else {
+		buf.Write([]byte{byte(OctetString), 0})
+	}
+	// msgPrivacyParameters
+	if flags&AuthPriv > AuthNoPriv {
+		privlen, err := marshalLength(len(sp.PrivacyParameters))
+		if err != nil {
+			return nil, 0, err
+		}
+		buf.Write([]byte{byte(OctetString)})
+		buf.Write(privlen)
+		buf.Write(sp.PrivacyParameters)
+	} else {
+		buf.Write([]byte{byte(OctetString), 0})
+	}
+
+	// wrap security parameters in a sequence
+	paramLen, err := marshalLength(buf.Len())
+	if err != nil {
+		return nil, 0, err
+	}
+	tmpseq := append([]byte{byte(Sequence)}, paramLen...)
+	authParamStart += uint32(len(tmpseq))
+	tmpseq = append(tmpseq, buf.Bytes()...)
+
+	return tmpseq, authParamStart, nil
 }

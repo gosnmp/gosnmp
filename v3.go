@@ -43,8 +43,9 @@ const (
 // SnmpV3SecurityParameters is a generic interface type to contain various implementations of SnmpV3SecurityParameters
 type SnmpV3SecurityParameters interface {
 	Copy() SnmpV3SecurityParameters
-	Validate(flags SnmpV3MsgFlags) error
-	Init() error
+	validate(flags SnmpV3MsgFlags) error
+	init() error
+	marshalSecurityParameters(flags SnmpV3MsgFlags) ([]byte, uint32, error)
 }
 
 func (x *GoSNMP) validateParametersV3() error {
@@ -53,7 +54,7 @@ func (x *GoSNMP) validateParametersV3() error {
 		return fmt.Errorf("The SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
 	}
 
-	return x.SecurityParameters.Validate(x.MsgFlags)
+	return x.SecurityParameters.validate(x.MsgFlags)
 }
 
 // authenticate the marshalled result of a snmp version 3 packet
@@ -457,11 +458,9 @@ func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, uint32, e
 	buf.Write(header)
 
 	var securityParameters []byte
-	if packet.SecurityModel == UserSecurityModel {
-		securityParameters, authParamStart, err = packet.marshalV3UsmSecurityParameters()
-		if err != nil {
-			return emptyBuffer, 0, err
-		}
+	securityParameters, authParamStart, err = packet.SecurityParameters.marshalSecurityParameters(packet.MsgFlags)
+	if err != nil {
+		return emptyBuffer, 0, err
 	}
 
 	buf.Write([]byte{byte(OctetString)})
@@ -504,71 +503,6 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	buf.Write([]byte{byte(Integer), 1, byte(packet.SecurityModel)})
 
 	return buf.Bytes(), nil
-}
-
-// marshal a snmp version 3 security parameters field for the User Security Model
-func (packet *SnmpPacket) marshalV3UsmSecurityParameters() ([]byte, uint32, error) {
-	var buf bytes.Buffer
-	var authParamStart uint32
-
-	var secParams *UsmSecurityParameters
-	var err error
-
-	if secParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
-		return nil, 0, err
-	}
-
-	// msgAuthoritativeEngineID
-	buf.Write([]byte{byte(OctetString), byte(len(secParams.AuthoritativeEngineID))})
-	buf.WriteString(secParams.AuthoritativeEngineID)
-
-	// msgAuthoritativeEngineBoots
-	msgAuthoritativeEngineBoots := marshalUvarInt(secParams.AuthoritativeEngineBoots)
-	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineBoots))})
-	buf.Write(msgAuthoritativeEngineBoots)
-
-	// msgAuthoritativeEngineTime
-	msgAuthoritativeEngineTime := marshalUvarInt(secParams.AuthoritativeEngineTime)
-	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineTime))})
-	buf.Write(msgAuthoritativeEngineTime)
-
-	// msgUserName
-	buf.Write([]byte{byte(OctetString), byte(len(secParams.UserName))})
-	buf.WriteString(secParams.UserName)
-
-	authParamStart = uint32(buf.Len() + 2) // +2 indicates PDUType + Length
-	// msgAuthenticationParameters
-	if packet.MsgFlags&AuthNoPriv > 0 {
-		buf.Write([]byte{byte(OctetString), 12,
-			0, 0, 0, 0,
-			0, 0, 0, 0,
-			0, 0, 0, 0})
-	} else {
-		buf.Write([]byte{byte(OctetString), 0})
-	}
-	// msgPrivacyParameters
-	if packet.MsgFlags&AuthPriv > AuthNoPriv {
-		privlen, err := marshalLength(len(secParams.PrivacyParameters))
-		if err != nil {
-			return nil, 0, err
-		}
-		buf.Write([]byte{byte(OctetString)})
-		buf.Write(privlen)
-		buf.Write(secParams.PrivacyParameters)
-	} else {
-		buf.Write([]byte{byte(OctetString), 0})
-	}
-
-	// wrap security parameters in a sequence
-	paramLen, err := marshalLength(buf.Len())
-	if err != nil {
-		return nil, 0, err
-	}
-	tmpseq := append([]byte{byte(Sequence)}, paramLen...)
-	authParamStart += uint32(len(tmpseq))
-	tmpseq = append(tmpseq, buf.Bytes()...)
-
-	return tmpseq, authParamStart, nil
 }
 
 // marshal and encrypt (if necessary) a snmp version 3 Scoped PDU
