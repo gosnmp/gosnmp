@@ -19,8 +19,8 @@ import (
 	"encoding/binary"
 	//"fmt"
 	//"hash"
-	//"sync/atomic"*/
 	"fmt"
+	"sync/atomic"
 )
 
 // SnmpV3AuthProtocol describes the authentication protocol in use by an authenticated SnmpV3 connection.
@@ -134,6 +134,62 @@ func (sp *UsmSecurityParameters) init(log Logger) error {
 			return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
 		}
 		sp.localDESSalt = binary.BigEndian.Uint32(salt)
+	}
+
+	return nil
+}
+
+// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
+// localDESSalt needs to be incremented on every packet.
+func (sp *UsmSecurityParameters) usmAllocateNewSalt() (interface{}, error) {
+	var newSalt interface{}
+
+	switch sp.PrivacyProtocol {
+	case AES:
+		newSalt = atomic.AddUint64(&(sp.localAESSalt), 1)
+	default:
+		newSalt = atomic.AddUint32(&(sp.localDESSalt), 1)
+	}
+	return newSalt, nil
+}
+
+func (sp *UsmSecurityParameters) usmSetSalt(newSalt interface{}) error {
+
+	switch sp.PrivacyProtocol {
+	case AES:
+		aesSalt, ok := newSalt.(uint64)
+		if !ok {
+			return fmt.Errorf("salt provided to usmSetSalt is not the correct type for the AES privacy protocol")
+		}
+		var salt = make([]byte, 8)
+		binary.BigEndian.PutUint64(salt, aesSalt)
+		sp.PrivacyParameters = salt
+	default:
+		desSalt, ok := newSalt.(uint32)
+		if !ok {
+			return fmt.Errorf("salt provided to usmSetSalt is not the correct type for the DES privacy protocol")
+		}
+		var salt = make([]byte, 8)
+		binary.BigEndian.PutUint32(salt, sp.AuthoritativeEngineBoots)
+		binary.BigEndian.PutUint32(salt[4:], desSalt)
+		sp.PrivacyParameters = salt
+	}
+	return nil
+}
+
+func (sp *UsmSecurityParameters) initPacket(packet *SnmpPacket) error {
+	// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
+	// localDESSalt needs to be incremented on every packet.
+	newSalt, err := sp.usmAllocateNewSalt()
+	if err != nil {
+		return err
+	}
+	if packet.MsgFlags&AuthPriv > AuthNoPriv {
+		var s *UsmSecurityParameters
+		if s, err = castUsmSecParams(packet.SecurityParameters); err != nil {
+			return err
+		}
+		return s.usmSetSalt(newSalt)
 	}
 
 	return nil

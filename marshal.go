@@ -137,7 +137,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 
 			packetOut.MsgID = msgID
 
-			err = x.saltNewPacket(packetOut)
+			err = x.initPacket(packetOut)
 			if err != nil {
 				break
 			}

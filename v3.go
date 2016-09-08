@@ -18,7 +18,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
-	"sync/atomic"
 )
 
 // SnmpV3MsgFlags contains various message flags to describe Authentication, Privacy, and whether a report PDU must be sent.
@@ -45,6 +44,7 @@ type SnmpV3SecurityParameters interface {
 	Copy() SnmpV3SecurityParameters
 	validate(flags SnmpV3MsgFlags) error
 	init(log Logger) error
+	initPacket(packet *SnmpPacket) error
 	marshal(flags SnmpV3MsgFlags) ([]byte, uint32, error)
 	unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
 }
@@ -246,81 +246,21 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 	return secretKey
 }
 
+func (x *GoSNMP) initPacket(packetOut *SnmpPacket) error {
+
+	if x.MsgFlags&AuthPriv > AuthNoPriv {
+		return x.SecurityParameters.initPacket(packetOut)
+	}
+
+	return nil
+}
+
 func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameters, error) {
 	s, ok := secParams.(*UsmSecurityParameters)
 	if !ok || s == nil {
 		return nil, fmt.Errorf("SecurityParameters is not of type *UsmSecurityParameters")
 	}
 	return s, nil
-}
-
-// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
-// localDESSalt needs to be incremented on every packet.
-func (x *GoSNMP) usmAllocateNewSalt() (interface{}, error) {
-	var s *UsmSecurityParameters
-	var err error
-
-	if s, err = castUsmSecParams(x.SecurityParameters); err != nil {
-		return nil, err
-	}
-	var newSalt interface{}
-	switch s.PrivacyProtocol {
-	case AES:
-		newSalt = atomic.AddUint64(&(s.localAESSalt), 1)
-	default:
-		newSalt = atomic.AddUint32(&(s.localDESSalt), 1)
-	}
-	return newSalt, nil
-}
-
-func (packet *SnmpPacket) setUsmSalt(newSalt interface{}) error {
-	var s *UsmSecurityParameters
-	var err error
-
-	if s, err = castUsmSecParams(packet.SecurityParameters); err != nil {
-		return err
-	}
-
-	switch s.PrivacyProtocol {
-	case AES:
-		aesSalt, ok := newSalt.(uint64)
-		if !ok {
-			return fmt.Errorf("salt provided to setUsmSalt is not the correct type for the AES privacy protocol")
-		}
-		var salt = make([]byte, 8)
-		binary.BigEndian.PutUint64(salt, aesSalt)
-		s.PrivacyParameters = salt
-	default:
-		desSalt, ok := newSalt.(uint32)
-		if !ok {
-			return fmt.Errorf("salt provided to setUsmSalt is not the correct type for the DES privacy protocol")
-		}
-		var salt = make([]byte, 8)
-		binary.BigEndian.PutUint32(salt, s.AuthoritativeEngineBoots)
-		binary.BigEndian.PutUint32(salt[4:], desSalt)
-		s.PrivacyParameters = salt
-	}
-	return nil
-}
-
-func (x *GoSNMP) saltNewPacket(packetOut *SnmpPacket) error {
-
-	if x.MsgFlags&AuthPriv > AuthNoPriv && x.SecurityModel == UserSecurityModel {
-		// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
-		// localDESSalt needs to be incremented on every packet.
-		newSalt, err := x.usmAllocateNewSalt()
-		if err != nil {
-			return err
-		}
-		if packetOut.Version == Version3 && packetOut.SecurityModel == UserSecurityModel && packetOut.MsgFlags&AuthPriv > AuthNoPriv {
-
-			err = packetOut.setUsmSalt(newSalt)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // http://tools.ietf.org/html/rfc2574#section-2.2.3 This code does not
@@ -661,6 +601,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	_, cursorTmp = parseLength(packet[cursor:])
 	cursor += cursorTmp
+
 	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
 	if err != nil {
 		return 0, err
