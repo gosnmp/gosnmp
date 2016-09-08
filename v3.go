@@ -10,11 +10,8 @@ package gosnmp
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
-	"hash"
 )
 
 // SnmpV3MsgFlags contains various message flags to describe Authentication, Privacy, and whether a report PDU must be sent.
@@ -44,6 +41,8 @@ type SnmpV3SecurityParameters interface {
 	initPacket(packet *SnmpPacket) error
 	marshal(flags SnmpV3MsgFlags) ([]byte, uint32, error)
 	unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
+	authenticate(packet []byte, authParamStart uint32) error
+	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
 	decryptPacket(packet []byte, cursor int) ([]byte, error)
 }
@@ -67,129 +66,32 @@ func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byt
 	if packet.Version != Version3 {
 		return msg, nil
 	}
-	if packet.MsgFlags&AuthNoPriv == 0 {
-		return msg, nil
-	}
-	if packet.SecurityModel != UserSecurityModel {
-		return nil, fmt.Errorf("Error authenticating message: Unknown security model.")
-	}
-
-	var secParams *UsmSecurityParameters
-	var err error
-
-	if secParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
-		return nil, err
-	}
-	var secretKey = genlocalkey(secParams.AuthenticationProtocol,
-		secParams.AuthenticationPassphrase,
-		secParams.AuthoritativeEngineID)
-
-	var extkey [64]byte
-
-	copy(extkey[:], secretKey)
-
-	var k1, k2 [64]byte
-
-	for i := 0; i < 64; i++ {
-		k1[i] = extkey[i] ^ 0x36
-		k2[i] = extkey[i] ^ 0x5c
+	if packet.MsgFlags&AuthNoPriv > 0 {
+		err := packet.SecurityParameters.authenticate(msg, authParamStart)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	var h, h2 hash.Hash
-
-	switch secParams.AuthenticationProtocol {
-	default:
-		h = md5.New()
-		h2 = md5.New()
-	case SHA:
-		h = sha1.New()
-		h2 = sha1.New()
-	}
-
-	h.Write(k1[:])
-	h.Write(msg)
-	d1 := h.Sum(nil)
-	h2.Write(k2[:])
-	h2.Write(d1)
-	copy(msg[authParamStart:authParamStart+12], h2.Sum(nil)[:12])
 	return msg, nil
 }
 
-func (x *GoSNMP) testUsmAuthentication(packet []byte, result *SnmpPacket) error {
+func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket) error {
 	if x.Version != Version3 {
 		return fmt.Errorf("testUsmAuthentication called with non Version3 connection")
 	}
 
-	if x.SecurityModel != UserSecurityModel {
-		return fmt.Errorf("testUsmAuthentication called with connection that is not using the User Security Model")
-	}
-
-	var secParameters *UsmSecurityParameters
-	var err error
-
-	if secParameters, err = castUsmSecParams(x.SecurityParameters); err != nil {
-		return err
-	}
-
-	var resultSecParams *UsmSecurityParameters
-
-	if resultSecParams, err = castUsmSecParams(result.SecurityParameters); err != nil {
-		return err
-	}
-
 	if x.MsgFlags&AuthNoPriv > 0 {
-		if !isAuthentic(packet, resultSecParams.AuthenticationParameters,
-			secParameters.AuthenticationProtocol,
-			secParameters.AuthenticationPassphrase,
-			secParameters.AuthoritativeEngineID) {
+		authentic, err := x.SecurityParameters.isAuthentic(packet, result)
+		if err != nil {
+			return err
+		}
+		if !authentic {
 			return fmt.Errorf("Incoming packet is not authentic, discarding")
 		}
 	}
 
 	return nil
-}
-
-// determine whether a message is authentic
-func isAuthentic(msg []byte, authParams string, authProtocol SnmpV3AuthProtocol, authPassphrase string, authEngineID string) bool {
-	var secretKey = genlocalkey(authProtocol,
-		authPassphrase,
-		authEngineID)
-
-	var extkey [64]byte
-
-	copy(extkey[:], secretKey)
-
-	var k1, k2 [64]byte
-
-	for i := 0; i < 64; i++ {
-		k1[i] = extkey[i] ^ 0x36
-		k2[i] = extkey[i] ^ 0x5c
-	}
-
-	var h, h2 hash.Hash
-
-	switch authProtocol {
-	default:
-		h = md5.New()
-		h2 = md5.New()
-	case SHA:
-		h = sha1.New()
-		h2 = sha1.New()
-	}
-
-	h.Write(k1[:])
-	h.Write(msg)
-	d1 := h.Sum(nil)
-	h2.Write(k2[:])
-	h2.Write(d1)
-
-	result := h2.Sum(nil)[:12]
-	for k, v := range []byte(authParams) {
-		if result[k] != v {
-			return false
-		}
-	}
-	return true
 }
 
 func (x *GoSNMP) initPacket(packetOut *SnmpPacket) error {

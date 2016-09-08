@@ -187,11 +187,9 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 
 			if x.Version == Version3 {
-				if x.SecurityModel == UserSecurityModel {
-					err = x.testUsmAuthentication(resp, result)
-					if err != nil {
-						break
-					}
+				err = x.testAuthentication(resp, result)
+				if err != nil {
+					break
 				}
 				resp, cursor, err = x.decryptPacket(resp, cursor, result)
 			}

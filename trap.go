@@ -122,7 +122,7 @@ func (x *GoSNMP) unmarshalTrap(trap []byte) (result *SnmpPacket) {
 	}
 	if result.Version == Version3 {
 		if result.SecurityModel == UserSecurityModel {
-			err = x.testUsmAuthentication(trap, result)
+			err = x.testAuthentication(trap, result)
 			if err != nil {
 				x.logPrintf("unmarshalTrap: %s\n", err)
 			}

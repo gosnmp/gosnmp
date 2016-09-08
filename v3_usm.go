@@ -17,9 +17,8 @@ import (
 	crand "crypto/rand"
 	"crypto/sha1"
 	"encoding/binary"
-	//"fmt"
-	//"hash"
 	"fmt"
+	"hash"
 	"sync/atomic"
 )
 
@@ -254,6 +253,95 @@ func (sp *UsmSecurityParameters) initPacket(packet *SnmpPacket) error {
 	}
 
 	return nil
+}
+
+func (sp *UsmSecurityParameters) authenticate(packet []byte, authParamStart uint32) error {
+
+	var secretKey = genlocalkey(sp.AuthenticationProtocol,
+		sp.AuthenticationPassphrase,
+		sp.AuthoritativeEngineID)
+
+	var extkey [64]byte
+
+	copy(extkey[:], secretKey)
+
+	var k1, k2 [64]byte
+
+	for i := 0; i < 64; i++ {
+		k1[i] = extkey[i] ^ 0x36
+		k2[i] = extkey[i] ^ 0x5c
+	}
+
+	var h, h2 hash.Hash
+
+	switch sp.AuthenticationProtocol {
+	default:
+		h = md5.New()
+		h2 = md5.New()
+	case SHA:
+		h = sha1.New()
+		h2 = sha1.New()
+	}
+
+	h.Write(k1[:])
+	h.Write(packet)
+	d1 := h.Sum(nil)
+	h2.Write(k2[:])
+	h2.Write(d1)
+	copy(packet[authParamStart:authParamStart+12], h2.Sum(nil)[:12])
+
+	return nil
+}
+
+// determine whether a message is authentic
+func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error) {
+
+	var packetSecParams *UsmSecurityParameters
+	var err error
+
+	if packetSecParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
+		return false, err
+	}
+
+	var secretKey = genlocalkey(sp.AuthenticationProtocol,
+		sp.AuthenticationPassphrase,
+		sp.AuthoritativeEngineID)
+
+	var extkey [64]byte
+
+	copy(extkey[:], secretKey)
+
+	var k1, k2 [64]byte
+
+	for i := 0; i < 64; i++ {
+		k1[i] = extkey[i] ^ 0x36
+		k2[i] = extkey[i] ^ 0x5c
+	}
+
+	var h, h2 hash.Hash
+
+	switch sp.AuthenticationProtocol {
+	default:
+		h = md5.New()
+		h2 = md5.New()
+	case SHA:
+		h = sha1.New()
+		h2 = sha1.New()
+	}
+
+	h.Write(k1[:])
+	h.Write(packetBytes)
+	d1 := h.Sum(nil)
+	h2.Write(k2[:])
+	h2.Write(d1)
+
+	result := h2.Sum(nil)[:12]
+	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
+		if result[k] != v {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error) {
