@@ -81,6 +81,25 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 	}
 }
 
+func (sp *UsmSecurityParameters) getDefaultContextEngineID() string {
+	return sp.AuthoritativeEngineID
+}
+
+func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParameters) error {
+	var insp *UsmSecurityParameters
+	var err error
+
+	if insp, err = castUsmSecParams(in); err != nil {
+		return err
+	}
+
+	sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
+	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
+	sp.AuthoritativeEngineTime = insp.AuthoritativeEngineTime
+
+	return nil
+}
+
 func (sp *UsmSecurityParameters) validate(flags SnmpV3MsgFlags) error {
 
 	securityLevel := flags & AuthPriv // isolate flags that determine security level
@@ -252,6 +271,27 @@ func (sp *UsmSecurityParameters) initPacket(packet *SnmpPacket) error {
 		return s.usmSetSalt(newSalt)
 	}
 
+	return nil
+}
+
+func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
+
+	if sp.AuthoritativeEngineID == "" {
+		var emptyPdus []SnmpPDU
+
+		// send blank packet to discover authoriative engine ID/boots/time
+		blankPacket := &SnmpPacket{
+			Version:            Version3,
+			MsgFlags:           Reportable | NoAuthNoPriv,
+			SecurityModel:      UserSecurityModel,
+			SecurityParameters: &UsmSecurityParameters{Logger: sp.Logger},
+			PDUType:            GetRequest,
+			Logger:             sp.Logger,
+			Variables:          emptyPdus,
+		}
+
+		return blankPacket
+	}
 	return nil
 }
 

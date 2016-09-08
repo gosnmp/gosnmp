@@ -39,6 +39,9 @@ type SnmpV3SecurityParameters interface {
 	validate(flags SnmpV3MsgFlags) error
 	init(log Logger) error
 	initPacket(packet *SnmpPacket) error
+	discoveryRequired() *SnmpPacket
+	getDefaultContextEngineID() string
+	setSecurityParameters(in SnmpV3SecurityParameters) error
 	marshal(flags SnmpV3MsgFlags) ([]byte, uint32, error)
 	unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
 	authenticate(packet []byte, authParamStart uint32) error
@@ -78,7 +81,7 @@ func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byt
 
 func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket) error {
 	if x.Version != Version3 {
-		return fmt.Errorf("testUsmAuthentication called with non Version3 connection")
+		return fmt.Errorf("testAuthentication called with non Version3 connection")
 	}
 
 	if x.MsgFlags&AuthNoPriv > 0 {
@@ -117,44 +120,24 @@ func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket, wait 
 		return fmt.Errorf("connection security model does not match security model defined in packet")
 	}
 
-	if packetOut.SecurityModel == UserSecurityModel {
-		var secParams *UsmSecurityParameters
-		var err error
+	if discoveryPacket := packetOut.SecurityParameters.discoveryRequired(); discoveryPacket != nil {
+		result, err := x.sendOneRequest(discoveryPacket, wait)
 
-		if secParams, err = castUsmSecParams(packetOut.SecurityParameters); err != nil {
+		if err != nil {
 			return err
 		}
 
-		if secParams.AuthoritativeEngineID == "" {
-			var emptyPdus []SnmpPDU
+		err = x.storeSecurityParameters(result)
+		if err != nil {
+			return err
+		}
 
-			// send blank packet to discover authoriative engine ID/boots/time
-			blankPacket := &SnmpPacket{
-				Version:            Version3,
-				MsgFlags:           Reportable | NoAuthNoPriv,
-				SecurityModel:      UserSecurityModel,
-				SecurityParameters: &UsmSecurityParameters{Logger: x.Logger},
-				PDUType:            GetRequest,
-				Logger:             x.Logger,
-				Variables:          emptyPdus,
-			}
-			result, err := x.sendOneRequest(blankPacket, wait)
-
-			if err != nil {
-				return err
-			}
-
-			err = x.storeSecurityParameters(result)
-			if err != nil {
-				return err
-			}
-
-			err = x.updatePktSecurityParameters(packetOut)
-			if err != nil {
-				return err
-			}
+		err = x.updatePktSecurityParameters(packetOut)
+		if err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
@@ -169,26 +152,11 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 		return fmt.Errorf("connection security model does not match security model extracted from packet")
 	}
 
-	if result.SecurityModel == UserSecurityModel {
-		var newSecParams *UsmSecurityParameters
-		var err error
-
-		if newSecParams, err = castUsmSecParams(result.SecurityParameters); err != nil {
-			return err
-		}
-		connSecParams, _ := x.SecurityParameters.(*UsmSecurityParameters)
-		if connSecParams != nil {
-			connSecParams.AuthoritativeEngineID = newSecParams.AuthoritativeEngineID
-			connSecParams.AuthoritativeEngineBoots = newSecParams.AuthoritativeEngineBoots
-			connSecParams.AuthoritativeEngineTime = newSecParams.AuthoritativeEngineTime
-		}
-		if x.ContextEngineID == "" {
-			x.ContextEngineID = newSecParams.AuthoritativeEngineID
-		}
+	if x.ContextEngineID == "" {
+		x.ContextEngineID = result.SecurityParameters.getDefaultContextEngineID()
 	}
 
-	return nil
-
+	return x.SecurityParameters.setSecurityParameters(result.SecurityParameters)
 }
 
 // update packet security parameters to match connection security parameters
@@ -201,23 +169,7 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 		return fmt.Errorf("connection security model does not match security model extracted from packet")
 	}
 
-	if x.SecurityModel == UserSecurityModel {
-		var c *UsmSecurityParameters
-		var err error
-		if c, err = castUsmSecParams(x.SecurityParameters); err != nil {
-			return err
-		}
-
-		var s *UsmSecurityParameters
-		if s, err = castUsmSecParams(packetOut.SecurityParameters); err != nil {
-			return err
-		}
-
-		s.AuthoritativeEngineID = c.AuthoritativeEngineID
-		s.AuthoritativeEngineBoots = c.AuthoritativeEngineBoots
-		s.AuthoritativeEngineTime = c.AuthoritativeEngineTime
-
-	}
+	packetOut.SecurityParameters.setSecurityParameters(x.SecurityParameters)
 
 	if packetOut.ContextEngineID == "" {
 		packetOut.ContextEngineID = x.ContextEngineID
