@@ -10,12 +10,12 @@ package gosnmp
 
 import (
 	"bytes"
-	//"crypto/aes"
-	//"crypto/cipher"
-	//"crypto/des"
-	//"crypto/md5"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/des"
+	"crypto/md5"
 	crand "crypto/rand"
-	//"crypto/sha1"
+	"crypto/sha1"
 	"encoding/binary"
 	//"fmt"
 	//"hash"
@@ -139,6 +139,67 @@ func (sp *UsmSecurityParameters) init(log Logger) error {
 	return nil
 }
 
+func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameters, error) {
+	s, ok := secParams.(*UsmSecurityParameters)
+	if !ok || s == nil {
+		return nil, fmt.Errorf("SecurityParameters is not of type *UsmSecurityParameters")
+	}
+	return s, nil
+}
+
+// MD5 HMAC key calculation algorithm
+func md5HMAC(password string, engineID string) []byte {
+	comp := md5.New()
+	var pi int // password index
+	for i := 0; i < 1048576; i += 64 {
+		var chunk []byte
+		for e := 0; e < 64; e++ {
+			chunk = append(chunk, password[pi%len(password)])
+			pi++
+		}
+		comp.Write(chunk)
+	}
+	compressed := comp.Sum(nil)
+	local := md5.New()
+	local.Write(compressed)
+	local.Write([]byte(engineID))
+	local.Write(compressed)
+	final := local.Sum(nil)
+	return final
+}
+
+// SHA HMAC key calculation algorithm
+func shaHMAC(password string, engineID string) []byte {
+	hash := sha1.New()
+	var pi int // password index
+	for i := 0; i < 1048576; i += 64 {
+		var chunk []byte
+		for e := 0; e < 64; e++ {
+			chunk = append(chunk, password[pi%len(password)])
+			pi++
+		}
+		hash.Write(chunk)
+	}
+	hashed := hash.Sum(nil)
+	local := sha1.New()
+	local.Write(hashed)
+	local.Write([]byte(engineID))
+	local.Write(hashed)
+	final := local.Sum(nil)
+	return final
+}
+
+func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) []byte {
+	var secretKey []byte
+	switch authProtocol {
+	default:
+		secretKey = md5HMAC(passphrase, engineID)
+	case SHA:
+		secretKey = shaHMAC(passphrase, engineID)
+	}
+	return secretKey
+}
+
 // http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 // localDESSalt needs to be incremented on every packet.
 func (sp *UsmSecurityParameters) usmAllocateNewSalt() (interface{}, error) {
@@ -193,6 +254,110 @@ func (sp *UsmSecurityParameters) initPacket(packet *SnmpPacket) error {
 	}
 
 	return nil
+}
+
+func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error) {
+	var b []byte
+
+	var privkey = genlocalkey(sp.AuthenticationProtocol,
+		sp.PrivacyPassphrase,
+		sp.AuthoritativeEngineID)
+
+	switch sp.PrivacyProtocol {
+	case AES:
+		var iv [16]byte
+		binary.BigEndian.PutUint32(iv[:], sp.AuthoritativeEngineBoots)
+		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
+		copy(iv[8:], sp.PrivacyParameters)
+
+		block, err := aes.NewCipher(privkey[:16])
+		if err != nil {
+			return nil, err
+		}
+		stream := cipher.NewCFBEncrypter(block, iv[:])
+		ciphertext := make([]byte, len(scopedPdu))
+		stream.XORKeyStream(ciphertext, scopedPdu)
+		pduLen, err := marshalLength(len(ciphertext))
+		if err != nil {
+			return nil, err
+		}
+		b = append([]byte{byte(OctetString)}, pduLen...)
+		scopedPdu = append(b, ciphertext...)
+	default:
+		preiv := privkey[8:]
+		var iv [8]byte
+		for i := 0; i < len(iv); i++ {
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
+		}
+		block, err := des.NewCipher(privkey[:8])
+		if err != nil {
+			return nil, err
+		}
+		mode := cipher.NewCBCEncrypter(block, iv[:])
+
+		pad := make([]byte, des.BlockSize-len(scopedPdu)%des.BlockSize)
+		scopedPdu = append(scopedPdu, pad...)
+
+		ciphertext := make([]byte, len(scopedPdu))
+		mode.CryptBlocks(ciphertext, scopedPdu)
+		pduLen, err := marshalLength(len(ciphertext))
+		if err != nil {
+			return nil, err
+		}
+		b = append([]byte{byte(OctetString)}, pduLen...)
+		scopedPdu = append(b, ciphertext...)
+	}
+
+	return scopedPdu, nil
+}
+
+func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byte, error) {
+	_, cursorTmp := parseLength(packet[cursor:])
+	cursorTmp += cursor
+
+	var privkey = genlocalkey(sp.AuthenticationProtocol,
+		sp.PrivacyPassphrase,
+		sp.AuthoritativeEngineID)
+
+	switch sp.PrivacyProtocol {
+	case AES:
+		var iv [16]byte
+		binary.BigEndian.PutUint32(iv[:], sp.AuthoritativeEngineBoots)
+		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
+		copy(iv[8:], sp.PrivacyParameters)
+
+		block, err := aes.NewCipher(privkey[:16])
+		if err != nil {
+			return nil, err
+		}
+		stream := cipher.NewCFBDecrypter(block, iv[:])
+		plaintext := make([]byte, len(packet[cursorTmp:]))
+		stream.XORKeyStream(plaintext, packet[cursorTmp:])
+		copy(packet[cursor:], plaintext)
+		packet = packet[:cursor+len(plaintext)]
+	default:
+		if len(packet[cursorTmp:])%des.BlockSize != 0 {
+			return nil, fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
+		}
+		preiv := privkey[8:]
+		var iv [8]byte
+		for i := 0; i < len(iv); i++ {
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
+		}
+		block, err := des.NewCipher(privkey[:8])
+		if err != nil {
+			return nil, err
+		}
+		mode := cipher.NewCBCDecrypter(block, iv[:])
+
+		plaintext := make([]byte, len(packet[cursorTmp:]))
+		mode.CryptBlocks(plaintext, packet[cursorTmp:])
+		copy(packet[cursor:], plaintext)
+		// truncate packet to remove extra space caused by the
+		// octetstring/length header that was just replaced
+		packet = packet[:cursor+len(plaintext)]
+	}
+	return packet, nil
 }
 
 // marshal a snmp version 3 security parameters field for the User Security Model
