@@ -42,9 +42,9 @@ type SnmpV3SecurityParameters interface {
 	discoveryRequired() *SnmpPacket
 	getDefaultContextEngineID() string
 	setSecurityParameters(in SnmpV3SecurityParameters) error
-	marshal(flags SnmpV3MsgFlags) ([]byte, uint32, error)
+	marshal(flags SnmpV3MsgFlags) ([]byte, error)
 	unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
-	authenticate(packet []byte, authParamStart uint32) error
+	authenticate(packet []byte) error
 	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
 	decryptPacket(packet []byte, cursor int) ([]byte, error)
@@ -60,7 +60,7 @@ func (x *GoSNMP) validateParametersV3() error {
 }
 
 // authenticate the marshalled result of a snmp version 3 packet
-func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byte, error) {
+func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 	defer func() {
 		if e := recover(); e != nil {
 			fmt.Printf("recover: %v\n", e)
@@ -70,7 +70,7 @@ func (packet *SnmpPacket) authenticate(msg []byte, authParamStart uint32) ([]byt
 		return msg, nil
 	}
 	if packet.MsgFlags&AuthNoPriv > 0 {
-		err := packet.SecurityParameters.authenticate(msg, authParamStart)
+		err := packet.SecurityParameters.authenticate(msg)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +169,10 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 		return fmt.Errorf("connection security model does not match security model extracted from packet")
 	}
 
-	packetOut.SecurityParameters.setSecurityParameters(x.SecurityParameters)
+	err := packetOut.SecurityParameters.setSecurityParameters(x.SecurityParameters)
+	if err != nil {
+		return err
+	}
 
 	if packetOut.ContextEngineID == "" {
 		packetOut.ContextEngineID = x.ContextEngineID
@@ -178,39 +181,37 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	return nil
 }
 
-func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, uint32, error) {
+func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	emptyBuffer := new(bytes.Buffer) // used when returning errors
-	var authParamStart uint32
 
 	header, err := packet.marshalV3Header()
 	if err != nil {
-		return emptyBuffer, 0, err
+		return emptyBuffer, err
 	}
 	buf.Write([]byte{byte(Sequence), byte(len(header))})
 	buf.Write(header)
 
 	var securityParameters []byte
-	securityParameters, authParamStart, err = packet.SecurityParameters.marshal(packet.MsgFlags)
+	securityParameters, err = packet.SecurityParameters.marshal(packet.MsgFlags)
 	if err != nil {
-		return emptyBuffer, 0, err
+		return emptyBuffer, err
 	}
 
 	buf.Write([]byte{byte(OctetString)})
 	secParamLen, err := marshalLength(len(securityParameters))
 	if err != nil {
-		return emptyBuffer, 0, err
+		return emptyBuffer, err
 	}
 	buf.Write(secParamLen)
-	authParamStart += uint32(buf.Len())
 	buf.Write(securityParameters)
 
 	scopedPdu, err := packet.marshalV3ScopedPDU()
 	if err != nil {
-		return emptyBuffer, 0, err
+		return emptyBuffer, err
 	}
 	buf.Write(scopedPdu)
-	return buf, authParamStart, nil
+	return buf, nil
 }
 
 // marshal a snmp version 3 packet header

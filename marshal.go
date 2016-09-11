@@ -282,14 +282,13 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 	var err error
-	var authParamStart uint32
 	buf := new(bytes.Buffer)
 
 	// version
 	buf.Write([]byte{2, 1, byte(packet.Version)})
 
 	if packet.Version == Version3 {
-		buf, authParamStart, err = packet.marshalV3(buf)
+		buf, err = packet.marshalV3(buf)
 		if err != nil {
 			return nil, err
 		}
@@ -314,10 +313,9 @@ func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 		return nil, err2
 	}
 	msg.Write(bufLengthBytes)
-	authParamStart += uint32(msg.Len())
 	buf.WriteTo(msg) // reverse logic - want to do msg.Write(buf)
 
-	authenticatedMessage, err := packet.authenticate(msg.Bytes(), authParamStart)
+	authenticatedMessage, err := packet.authenticate(msg.Bytes())
 	if err != nil {
 		return nil, err
 	}

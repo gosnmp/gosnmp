@@ -295,7 +295,20 @@ func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
 	return nil
 }
 
-func (sp *UsmSecurityParameters) authenticate(packet []byte, authParamStart uint32) error {
+func usmFindAuthParamStart(packet []byte) (uint32, error) {
+	idx := bytes.Index(packet, []byte{byte(OctetString), 12,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0})
+
+	if idx < 0 {
+		return 0, fmt.Errorf("Unable to locate the position in packet to write authentication key")
+	}
+
+	return uint32(idx + 2), nil
+}
+
+func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 
 	var secretKey = genlocalkey(sp.AuthenticationProtocol,
 		sp.AuthenticationPassphrase,
@@ -328,6 +341,11 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte, authParamStart uint
 	d1 := h.Sum(nil)
 	h2.Write(k2[:])
 	h2.Write(d1)
+	authParamStart, err := usmFindAuthParamStart(packet)
+	if err != nil {
+		return err
+	}
+
 	copy(packet[authParamStart:authParamStart+12], h2.Sum(nil)[:12])
 
 	return nil
@@ -489,9 +507,8 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 }
 
 // marshal a snmp version 3 security parameters field for the User Security Model
-func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, uint32, error) {
+func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	var buf bytes.Buffer
-	var authParamStart uint32
 	var err error
 
 	// msgAuthoritativeEngineID
@@ -512,7 +529,6 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, uint32, 
 	buf.Write([]byte{byte(OctetString), byte(len(sp.UserName))})
 	buf.WriteString(sp.UserName)
 
-	authParamStart = uint32(buf.Len() + 2) // +2 indicates PDUType + Length
 	// msgAuthenticationParameters
 	if flags&AuthNoPriv > 0 {
 		buf.Write([]byte{byte(OctetString), 12,
@@ -526,7 +542,7 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, uint32, 
 	if flags&AuthPriv > AuthNoPriv {
 		privlen, err := marshalLength(len(sp.PrivacyParameters))
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		buf.Write([]byte{byte(OctetString)})
 		buf.Write(privlen)
@@ -538,13 +554,12 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, uint32, 
 	// wrap security parameters in a sequence
 	paramLen, err := marshalLength(buf.Len())
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	tmpseq := append([]byte{byte(Sequence)}, paramLen...)
-	authParamStart += uint32(len(tmpseq))
 	tmpseq = append(tmpseq, buf.Bytes()...)
 
-	return tmpseq, authParamStart, nil
+	return tmpseq, nil
 }
 
 func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error) {
