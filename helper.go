@@ -235,6 +235,7 @@ func dumpBytes1(data []byte, msg string, maxlength int) {
 		}
 	}
 	buffer.WriteString("\n")
+
 }
 
 // dump bytes in one row, up to about screen width. Returns a string

@@ -1233,6 +1233,7 @@ func TestSendOneRequest_dups(t *testing.T) {
 			buf := buf[:n]
 
 			var reqPkt SnmpPacket
+<<<<<<< HEAD
 			var cursor int
 			cursor, err = x.unmarshalHeader(buf, &reqPkt)
 			if err != nil {
@@ -1250,14 +1251,28 @@ func TestSendOneRequest_dups(t *testing.T) {
 			}
 
 			rspPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{
+=======
+			err = x.unmarshal(buf, &reqPkt)
+			if err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			rspPkt := x.mkSnmpPacket(GetResponse, 0, 0)
+			rspPkt.RequestID = reqPkt.RequestID
+			rspPkt.Variables = []SnmpPDU{
+>>>>>>> 508838518a9ea586e9b46259acfe05462b8fde1b
 				{
 					Name:  ".1.2",
 					Type:  Integer,
 					Value: 123,
 				},
+<<<<<<< HEAD
 			}, 0, 0)
 			rspPkt.RequestID = reqPkt.RequestID
 			outBuf, err := rspPkt.marshalMsg()
+=======
+			}
+			outBuf, err := rspPkt.marshalMsg(rspPkt.Variables, rspPkt.PDUType, rspPkt.MsgID, rspPkt.RequestID)
+>>>>>>> 508838518a9ea586e9b46259acfe05462b8fde1b
 			if err != nil {
 				t.Errorf("ERR: %s", err)
 			}
@@ -1268,16 +1283,27 @@ func TestSendOneRequest_dups(t *testing.T) {
 		}
 	}()
 
+<<<<<<< HEAD
 	pdus := []SnmpPDU{SnmpPDU{Name: ".1.2", Type: Null}}
 	reqPkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
 
 	_, err = x.sendOneRequest(reqPkt, true)
+=======
+	reqPkt := x.mkSnmpPacket(GetResponse, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
+	reqPDU := SnmpPDU{Name: ".1.2", Type: Null}
+
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+>>>>>>> 508838518a9ea586e9b46259acfe05462b8fde1b
 	if err != nil {
 		t.Errorf("Error: %s", err)
 		return
 	}
 
+<<<<<<< HEAD
 	_, err = x.sendOneRequest(reqPkt, true)
+=======
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+>>>>>>> 508838518a9ea586e9b46259acfe05462b8fde1b
 	if err != nil {
 		t.Errorf("Error: %s", err)
 		return
@@ -1315,11 +1341,19 @@ func BenchmarkSendOneRequest(b *testing.B) {
 		}
 	}()
 
+<<<<<<< HEAD
 	pdus := []SnmpPDU{SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}}
 	reqPkt := x.mkSnmpPacket(GetRequest, pdus, 0, 0)
 
 	// make sure everything works before starting the test
 	_, err = x.sendOneRequest(reqPkt, true)
+=======
+	reqPkt := x.mkSnmpPacket(GetRequest, 0, 0)
+	reqPDU := SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}
+
+	// make sure everything works before starting the test
+	_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+>>>>>>> 508838518a9ea586e9b46259acfe05462b8fde1b
 	if err != nil {
 		b.Fatalf("Precheck failed: %s", err)
 	}
@@ -1327,13 +1361,18 @@ func BenchmarkSendOneRequest(b *testing.B) {
 	b.StartTimer()
 
 	for n := 0; n < b.N; n++ {
+<<<<<<< HEAD
 		_, err = x.sendOneRequest(reqPkt, true)
+=======
+		_, err = x.sendOneRequest([]SnmpPDU{reqPDU}, reqPkt)
+>>>>>>> 508838518a9ea586e9b46259acfe05462b8fde1b
 		if err != nil {
 			b.Fatalf("Error: %s", err)
 			return
 		}
 	}
 }
+<<<<<<< HEAD
 
 /*
 $ snmptrap -v 2c -c public 192.168.1.10 '' SNMPv2-MIB::system SNMPv2-MIB::sysDescr.0 s "red laptop" SNMPv2-MIB::sysServices.0 i "5"
@@ -1390,3 +1429,5 @@ func trap1() []byte {
 		0x08, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6c, 0x00, 0x00, 0x00}
 }
+=======
+>>>>>>> 508838518a9ea586e9b46259acfe05462b8fde1b
