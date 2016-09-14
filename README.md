@@ -11,6 +11,10 @@ IPv6, using __SNMPv2c__ or __SNMPv3__.
 
 About
 -----
+This is my fork of Sonia Hamilton ([@soniah](https://github.com/soniah/)) great library, that is tuned to my unique purposes.
+Some of my work in pulled back to original repo.
+
+My task usually requires talking to Telco operators network devices.
 
 **soniah/gosnmp** is based on **alouca/gosnmp** - many thanks to Andreas
 Louca for starting the project, other contributors (AUTHORS.md) and
@@ -21,6 +25,7 @@ these project collaborators:
 * Whitham Reeve ([@wdreeveii](https://github.com/wdreeveii/))
 
 Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
+
 
 Overview
 --------
@@ -33,7 +38,6 @@ GoSNMP has the following SNMP functions:
 * **Walk** - retrieves a subtree of values using GETNEXT.
 * **BulkWalk** - retrieves a subtree of values using GETBULK.
 * **Set** - supports Integers and OctetStrings
-<<<<<<< HEAD
 * **SendTrap** - send TRAPs
 * **Listen** - act as an NMS for receiving TRAPs
 
