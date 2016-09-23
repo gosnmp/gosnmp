@@ -58,3 +58,21 @@ func TestMarshalUint32(t *testing.T) {
 		}
 	}
 }
+
+func TestParseUint64(t *testing.T) {
+	tests := []struct {
+		data []byte
+		n    uint64
+	}{
+		{[]byte{}, 0},
+		{[]byte{0x00}, 0},
+		{[]byte{0x01}, 1},
+		{[]byte{0x01, 0x01}, 257},
+		{[]byte{0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1e, 0xb3, 0xbf}, 18446744073694786495},
+	}
+	for _, test := range tests {
+		if ret, err := parseUint64(test.data); err != nil || ret != test.n {
+			t.Errorf("parseUint64(%v) = %d, %v want %d, <nil>", test.data, ret, err, test.n)
+		}
+	}
+}

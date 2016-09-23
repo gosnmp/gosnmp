@@ -163,13 +163,13 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		// 0x46
 		x.logPrint("decodeValue: type is Counter64")
 		length, cursor := parseLength(data)
-		ret, err := parseInt64(data[cursor:length])
+		ret, err := parseUint64(data[cursor:length])
 		if err != nil {
 			x.logPrintf("decodeValue: err is %v", err)
 			break
 		}
 		retVal.Type = Counter64
-		retVal.Value = ret
+		retVal.Value = int64(ret)
 	case NoSuchObject:
 		// 0x80
 		x.logPrint("decodeValue: type is NoSuchObject")
@@ -609,7 +609,7 @@ func parseRawField(data []byte, msg string) (interface{}, int, error) {
 // parseUint64 treats the given bytes as a big-endian, unsigned integer and returns
 // the result.
 func parseUint64(bytes []byte) (ret uint64, err error) {
-	if len(bytes) > 8 {
+	if len(bytes) > 9 || (len(bytes) > 8 && bytes[0] != 0x0) {
 		// We'll overflow a uint64 in this case.
 		err = errors.New("integer too large")
 		return
