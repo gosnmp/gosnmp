@@ -169,7 +169,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 			break
 		}
 		retVal.Type = Counter64
-		retVal.Value = int64(ret)
+		retVal.Value = ret
 	case NoSuchObject:
 		// 0x80
 		x.logPrint("decodeValue: type is NoSuchObject")
