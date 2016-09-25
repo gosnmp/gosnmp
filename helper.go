@@ -538,8 +538,8 @@ func parseInt(bytes []byte) (int, error) {
 func parseLength(bytes []byte) (length int, cursor int) {
 	if len(bytes) <= 2 {
 		// handle null octet strings ie "0x04 0x00"
-		cursor = 1
-		length = 2
+		cursor = len(bytes)
+		length = len(bytes)
 	} else if int(bytes[1]) <= 127 {
 		length = int(bytes[1])
 		length += 2
