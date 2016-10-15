@@ -1208,6 +1208,16 @@ func counter64Response() []byte {
 	}
 }
 
+func TestUnmarshalEmptyPanic(t *testing.T) {
+	var in = []byte{}
+	var res = new(SnmpPacket)
+
+	_, err := Default.unmarshalHeader(in, res)
+	if err == nil {
+		t.Errorf("unmarshalHeader did not gracefully detect empty packet")
+	}
+}
+
 func TestSendOneRequest_dups(t *testing.T) {
 	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
 	defer srvr.Close()
