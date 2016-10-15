@@ -118,16 +118,22 @@ func debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 // Unmarshal SNMP Trap
 func (x *GoSNMP) unmarshalTrap(trap []byte) (result *SnmpPacket) {
 	result = new(SnmpPacket)
+
+	if x.SecurityParameters != nil {
+		result.SecurityParameters = x.SecurityParameters.Copy()
+	}
+
 	cursor, err := x.unmarshalHeader(trap, result)
 	if err != nil {
 		x.logPrintf("unmarshalTrap: %s\n", err)
 		return nil
 	}
+
 	if result.Version == Version3 {
 		if result.SecurityModel == UserSecurityModel {
 			err = x.testAuthentication(trap, result)
 			if err != nil {
-				x.logPrintf("unmarshalTrap: %s\n", err)
+				x.logPrintf("unmarshalTrap v3 auth: %s\n", err)
 				return nil
 			}
 		}
