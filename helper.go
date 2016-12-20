@@ -111,6 +111,9 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is IPAddress")
 		retVal.Type = IPAddress
 		switch data[1] {
+		case 0: // real life, buggy devices returning bad data
+			retVal.Value = nil
+			return retVal, nil
 		case 4: // IPv4
 			if len(data) < 6 {
 				return nil, fmt.Errorf("not enough data for ipv4 address: %x", data)
