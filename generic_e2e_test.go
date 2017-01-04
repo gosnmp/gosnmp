@@ -25,12 +25,12 @@ func setupConnection(t *testing.T) {
 	envPort := os.Getenv("GOSNMP_PORT")
 
 	if len(envTarget) <= 0 {
-		t.Fatalf("environment variable not set: GOSNMP_TARGET")
+		t.Skip("skipping: environment variable not set: GOSNMP_TARGET")
 	}
 	Default.Target = envTarget
 
 	if len(envPort) <= 0 {
-		t.Fatalf("environment variable not set: GOSNMP_PORT")
+		t.Skip("skipping: environment variable not set: GOSNMP_PORT")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
 	Default.Port = uint16(port)
