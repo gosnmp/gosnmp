@@ -100,12 +100,16 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 
 	if sp.AuthoritativeEngineID != insp.AuthoritativeEngineID {
 		sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
-		sp.secretKey = genlocalkey(sp.AuthenticationProtocol,
-			sp.AuthenticationPassphrase,
-			sp.AuthoritativeEngineID)
-		sp.privacyKey = genlocalkey(sp.AuthenticationProtocol,
-			sp.PrivacyPassphrase,
-			sp.AuthoritativeEngineID)
+		if sp.AuthenticationProtocol > NoAuth {
+			sp.secretKey = genlocalkey(sp.AuthenticationProtocol,
+				sp.AuthenticationPassphrase,
+				sp.AuthoritativeEngineID)
+		}
+		if sp.PrivacyProtocol > NoPriv {
+			sp.privacyKey = genlocalkey(sp.AuthenticationProtocol,
+				sp.PrivacyPassphrase,
+				sp.AuthoritativeEngineID)
+		}
 	}
 	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
 	sp.AuthoritativeEngineTime = insp.AuthoritativeEngineTime
