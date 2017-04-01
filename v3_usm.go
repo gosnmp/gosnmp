@@ -57,6 +57,9 @@ type UsmSecurityParameters struct {
 	AuthenticationPassphrase string
 	PrivacyPassphrase        string
 
+	secretKey []byte
+	privacyKey []byte
+
 	localDESSalt uint32
 	localAESSalt uint64
 
@@ -75,6 +78,8 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 		PrivacyProtocol:          sp.PrivacyProtocol,
 		AuthenticationPassphrase: sp.AuthenticationPassphrase,
 		PrivacyPassphrase:        sp.PrivacyPassphrase,
+		secretKey:		  sp.secretKey,
+		privacyKey:		  sp.privacyKey,
 		localDESSalt:             sp.localDESSalt,
 		localAESSalt:             sp.localAESSalt,
 		Logger:                   sp.Logger,
@@ -93,7 +98,15 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 		return err
 	}
 
-	sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
+	if sp.AuthoritativeEngineID != insp.AuthoritativeEngineID {
+		sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
+		sp.secretKey = genlocalkey(sp.AuthenticationProtocol,
+			sp.AuthenticationPassphrase,
+			sp.AuthoritativeEngineID)
+		sp.privacyKey = genlocalkey(sp.AuthenticationProtocol,
+			sp.PrivacyPassphrase,
+			sp.AuthoritativeEngineID)
+	}
 	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
 	sp.AuthoritativeEngineTime = insp.AuthoritativeEngineTime
 
@@ -310,13 +323,9 @@ func usmFindAuthParamStart(packet []byte) (uint32, error) {
 
 func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 
-	var secretKey = genlocalkey(sp.AuthenticationProtocol,
-		sp.AuthenticationPassphrase,
-		sp.AuthoritativeEngineID)
-
 	var extkey [64]byte
 
-	copy(extkey[:], secretKey)
+	copy(extkey[:], sp.secretKey)
 
 	var k1, k2 [64]byte
 
@@ -360,7 +369,7 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 	if packetSecParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
 		return false, err
 	}
-
+	// TODO: investigate call chain to determine if this is really the best spot for this
 	var secretKey = genlocalkey(sp.AuthenticationProtocol,
 		sp.AuthenticationPassphrase,
 		sp.AuthoritativeEngineID)
@@ -405,10 +414,6 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error) {
 	var b []byte
 
-	var privkey = genlocalkey(sp.AuthenticationProtocol,
-		sp.PrivacyPassphrase,
-		sp.AuthoritativeEngineID)
-
 	switch sp.PrivacyProtocol {
 	case AES:
 		var iv [16]byte
@@ -416,7 +421,7 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
 		copy(iv[8:], sp.PrivacyParameters)
 
-		block, err := aes.NewCipher(privkey[:16])
+		block, err := aes.NewCipher(sp.privacyKey[:16])
 		if err != nil {
 			return nil, err
 		}
@@ -430,12 +435,12 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		b = append([]byte{byte(OctetString)}, pduLen...)
 		scopedPdu = append(b, ciphertext...)
 	default:
-		preiv := privkey[8:]
+		preiv := sp.privacyKey[8:]
 		var iv [8]byte
 		for i := 0; i < len(iv); i++ {
 			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
-		block, err := des.NewCipher(privkey[:8])
+		block, err := des.NewCipher(sp.privacyKey[:8])
 		if err != nil {
 			return nil, err
 		}
@@ -461,10 +466,6 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursorTmp += cursor
 
-	var privkey = genlocalkey(sp.AuthenticationProtocol,
-		sp.PrivacyPassphrase,
-		sp.AuthoritativeEngineID)
-
 	switch sp.PrivacyProtocol {
 	case AES:
 		var iv [16]byte
@@ -472,7 +473,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
 		copy(iv[8:], sp.PrivacyParameters)
 
-		block, err := aes.NewCipher(privkey[:16])
+		block, err := aes.NewCipher(sp.privacyKey[:16])
 		if err != nil {
 			return nil, err
 		}
@@ -485,12 +486,12 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
 			return nil, fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
 		}
-		preiv := privkey[8:]
+		preiv := sp.privacyKey[8:]
 		var iv [8]byte
 		for i := 0; i < len(iv); i++ {
 			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
-		block, err := des.NewCipher(privkey[:8])
+		block, err := des.NewCipher(sp.privacyKey[:8])
 		if err != nil {
 			return nil, err
 		}
