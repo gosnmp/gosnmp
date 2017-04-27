@@ -6,8 +6,22 @@ package gosnmp
 
 import (
 	"log"
+	"net"
 	"os" //"io/ioutil"
-	//"testing"
+	"testing"
+	"time"
+)
+
+const (
+	trapTestAddress = "127.0.0.1"
+
+	// this is bad. Listen and Connect expect different address formats
+	// so we need an int verson and a string version - they should be the same.
+	trapTestPort       = 9162
+	trapTestPortString = "9162"
+
+	trapTestOid     = "1.2.3.4.5"
+	trapTestPayload = "TRAPTEST1234"
 )
 
 var testsUnmarshalTrap = []struct {
@@ -77,4 +91,76 @@ func genericV3Trap() []byte {
 		0x00, 0x02, 0x01, 0x05, 0x30, 0x14, 0x06, 0x07, 0x2b, 0x06, 0x01, 0x02,
 		0x01, 0x01, 0x02, 0x06, 0x09, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x02, 0x03,
 		0x04, 0x05}
+}
+
+func makeTestTrapHandler(t *testing.T, done chan int) func(*SnmpPacket, *net.UDPAddr) {
+	return func(packet *SnmpPacket, addr *net.UDPAddr) {
+		// log.Printf("got trapdata from %s\n", addr.IP)
+
+		for _, v := range packet.Variables {
+			switch v.Type {
+			case OctetString:
+				b := v.Value.([]byte)
+				// log.Printf("OID: %s, string: %x\n", v.Name, b)
+
+				// Only one OctetString in the payload, so it must be the expected one
+				if v.Name != trapTestOid {
+					t.Fatalf("incorrect trap OID received, expected %s got %s", trapTestOid, v.Name)
+				}
+				if string(b) != trapTestPayload {
+					t.Fatalf("incorrect trap payload received, expected %s got %x", trapTestPayload, b)
+				}
+			default:
+				// log.Printf("trap: %+v\n", v)
+			}
+		}
+		done <- 0
+	}
+}
+
+// test sending a basic SNMP trap, using our own listener to receive
+func TestSendTrap(t *testing.T) {
+	done := make(chan int)
+
+	tl := TrapListener{
+		OnNewTrap: makeTestTrapHandler(t, done),
+		Params:    Default,
+	}
+
+	// listener goroutine
+	go func() {
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		if err != nil {
+			t.Fatalf("error in listen: %s", err)
+		}
+	}()
+
+	Default.Target = trapTestAddress
+	Default.Port = trapTestPort
+
+	err := Default.Connect()
+	if err != nil {
+		t.Fatalf("Connect() err: %v", err)
+	}
+	defer Default.Conn.Close()
+
+	pdu := SnmpPDU{
+		Name:  trapTestOid,
+		Type:  OctetString,
+		Value: trapTestPayload,
+	}
+	pdus := []SnmpPDU{pdu}
+
+	_, err = Default.SendTrap(pdus)
+	if err != nil {
+		t.Fatalf("SendTrap() err: %v", err)
+	}
+
+	// wait for response from handler
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
+	}
+
 }
