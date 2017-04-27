@@ -134,15 +134,21 @@ func TestSendTrap(t *testing.T) {
 			t.Fatalf("error in listen: %s", err)
 		}
 	}()
+	ts := &GoSNMP{
+		Target:    trapTestAddress,
+		Port:      trapTestPort,
+		Community: "public",
+		Version:   Version2c,
+		Timeout:   time.Duration(2) * time.Second,
+		Retries:   3,
+		MaxOids:   MaxOids,
+	}
 
-	Default.Target = trapTestAddress
-	Default.Port = trapTestPort
-
-	err := Default.Connect()
+	err := ts.Connect()
 	if err != nil {
 		t.Fatalf("Connect() err: %v", err)
 	}
-	defer Default.Conn.Close()
+	defer ts.Conn.Close()
 
 	pdu := SnmpPDU{
 		Name:  trapTestOid,
@@ -151,7 +157,7 @@ func TestSendTrap(t *testing.T) {
 	}
 	pdus := []SnmpPDU{pdu}
 
-	_, err = Default.SendTrap(pdus)
+	_, err = ts.SendTrap(pdus)
 	if err != nil {
 		t.Fatalf("SendTrap() err: %v", err)
 	}
@@ -159,7 +165,7 @@ func TestSendTrap(t *testing.T) {
 	// wait for response from handler
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for trap to be received")
 	}
 
