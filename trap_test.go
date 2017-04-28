@@ -20,7 +20,7 @@ const (
 	trapTestPort       = 9162
 	trapTestPortString = "9162"
 
-	trapTestOid     = "1.2.3.4.5"
+	trapTestOid     = ".1.2.3.4.5"
 	trapTestPayload = "TRAPTEST1234"
 )
 
@@ -106,9 +106,11 @@ func makeTestTrapHandler(t *testing.T, done chan int) func(*SnmpPacket, *net.UDP
 				// Only one OctetString in the payload, so it must be the expected one
 				if v.Name != trapTestOid {
 					t.Fatalf("incorrect trap OID received, expected %s got %s", trapTestOid, v.Name)
+					done <- 0
 				}
 				if string(b) != trapTestPayload {
 					t.Fatalf("incorrect trap payload received, expected %s got %x", trapTestPayload, b)
+					done <- 0
 				}
 			default:
 				// log.Printf("trap: %+v\n", v)
@@ -122,10 +124,9 @@ func makeTestTrapHandler(t *testing.T, done chan int) func(*SnmpPacket, *net.UDP
 func TestSendTrap(t *testing.T) {
 	done := make(chan int)
 
-	tl := TrapListener{
-		OnNewTrap: makeTestTrapHandler(t, done),
-		Params:    Default,
-	}
+	tl := NewTrapListener()
+	tl.OnNewTrap = makeTestTrapHandler(t, done)
+	tl.Params = Default
 
 	// listener goroutine
 	go func() {
@@ -134,6 +135,14 @@ func TestSendTrap(t *testing.T) {
 			t.Fatalf("error in listen: %s", err)
 		}
 	}()
+
+	// wait until listener is ready
+	tl.c.L.Lock()
+	for !tl.ready() {
+		tl.c.Wait()
+	}
+	tl.c.L.Unlock()
+
 	ts := &GoSNMP{
 		Target:    trapTestAddress,
 		Port:      trapTestPort,
