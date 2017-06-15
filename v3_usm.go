@@ -66,6 +66,10 @@ type UsmSecurityParameters struct {
 	Logger Logger
 }
 
+func (sp *UsmSecurityParameters) Log() {
+	sp.Logger.Printf("SECURITY PARAMETERS:%+v", sp)
+}
+
 // Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
 func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,
