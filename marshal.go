@@ -214,6 +214,13 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				validID = true
 			}
 			if !validID {
+				if result.Version == Version3 {
+					// detect out-of-time-window error and go out of this function with all data
+					// (outside it will be handled and retransmitted )
+					if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
+						break
+					}
+				}
 				err = fmt.Errorf("Out of order response")
 				continue
 			}
