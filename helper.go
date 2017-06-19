@@ -238,6 +238,7 @@ func dumpBytes1(data []byte, msg string, maxlength int) {
 		}
 	}
 	buffer.WriteString("\n")
+
 }
 
 // dump bytes in one row, up to about screen width. Returns a string
@@ -726,4 +727,23 @@ func (s SnmpVersion) String() string {
 		return "2c"
 	}
 	return "3"
+}
+
+// 16bits int to byte BigEndian representation
+func Int16ToBytes(value int) (rs []byte) {
+	if value <= 0xff {
+		rs = []byte{byte(value)}
+		return
+	}
+	if value > 0xff && value < 0xffff {
+		rs = []byte{byte(((value >> 8) & 0xff)), byte((value & 0xff))}
+		return
+	}
+
+	return
+}
+
+// convert golang net.IP into []bytes IPv4 address
+func IPv4toBytes(ip net.IP) []byte {
+	return []byte(ip)[12:]
 }

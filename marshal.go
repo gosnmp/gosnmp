@@ -552,7 +552,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(length)
 		pduBuf.Write(tmpBytes)
 
-	// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
+// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
 	case IPAddress:
 		//Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
@@ -564,7 +564,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 			ipAddressBytes = value
 		case string:
 			ip := net.ParseIP(value)
-			ipAddressBytes = ipv4toBytes(ip)
+			ipAddressBytes = IPv4toBytes(ip)
 		default:
 			return nil, fmt.Errorf("Unable to marshal PDU IPAddress; not []byte or String.")
 		}
@@ -574,7 +574,6 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.WriteByte(byte(Sequence))
 		pduBuf.WriteByte(byte(len(oid) + len(ipAddressBytes) + 4))
 		pduBuf.Write(tmpBuf.Bytes())
-
 	default:
 		return nil, fmt.Errorf("Unable to marshal PDU: unknown BER type %q", pdu.Type)
 	}

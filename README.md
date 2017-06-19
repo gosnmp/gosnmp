@@ -8,8 +8,13 @@ GoSNMP is an SNMP client library fully written in Go. It provides Get,
 GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
 IPv6, using __SNMPv2c__ or __SNMPv3__.
 
+
 About
 -----
+This is my fork of Sonia Hamilton ([@soniah](https://github.com/soniah/)) great library, that is tuned to my unique purposes.
+Some of my work in pulled back to original repo.
+
+My task usually requires talking to Telco operators network devices.
 
 **soniah/gosnmp** is based on **alouca/gosnmp** - many thanks to Andreas
 Louca for starting the project, other contributors (AUTHORS.md) and
@@ -20,6 +25,7 @@ these project collaborators:
 * Whitham Reeve ([@wdreeveii](https://github.com/wdreeveii/))
 
 Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
+
 
 Overview
 --------
@@ -34,6 +40,12 @@ GoSNMP has the following SNMP functions:
 * **Set** - supports Integers and OctetStrings
 * **SendTrap** - send TRAPs
 * **Listen** - act as an NMS for receiving TRAPs
+
+=======
+* **SendTrap** - currently being integrated
+
+GoSNMP also has support for **receiving** traps; see the file
+**examples/trapserver.go** for usage.
 
 GoSNMP has the following **helper** functions:
 
