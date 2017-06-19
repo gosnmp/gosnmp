@@ -15,11 +15,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	g "github.com/soniah/gosnmp"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+
+	g "github.com/soniah/gosnmp"
 )
 
 func main() {
@@ -29,13 +30,11 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	params := g.Default
-	params.Logger = log.New(os.Stdout, "", 0)
+	tl := g.NewTrapListener()
+	tl.OnNewTrap = myTrapHandler
+	tl.Params = g.Default
+	tl.Params.Logger = log.New(os.Stdout, "", 0)
 
-	tl := g.TrapListener{
-		OnNewTrap: myTrapHandler,
-		Params:    params,
-	}
 	err := tl.Listen("0.0.0.0:9162")
 	if err != nil {
 		log.Panicf("error in listen: %s", err)
