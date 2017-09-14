@@ -98,13 +98,13 @@ type Logger interface {
 
 func (x *GoSNMP) logPrint(v ...interface{}) {
 	if x.loggingEnabled {
-		x.Logger.Print(v)
+		x.Logger.Print(v...)
 	}
 }
 
 func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 	if x.loggingEnabled {
-		x.Logger.Printf(format, v)
+		x.Logger.Printf(format, v...)
 	}
 }
 
