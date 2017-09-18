@@ -151,7 +151,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 
 		}
 		x.logPrintf("PACKET SENT: %#+v", *packetOut)
-		if x.loggingEnabled {
+		if x.loggingEnabled && x.Version == Version3 {
 			packetOut.SecurityParameters.Log()
 		}
 
