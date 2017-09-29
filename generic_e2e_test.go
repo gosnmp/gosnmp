@@ -396,46 +396,34 @@ func TestSnmpV3AuthSHAPrivAESGet(t *testing.T) {
 }
 
 func TestSnmpV3PrivEmptyPrivatePassword(t *testing.T) {
-        Default.Version = Version3
-        Default.MsgFlags = AuthPriv
-        Default.SecurityModel = UserSecurityModel
-        Default.SecurityParameters = &UsmSecurityParameters{UserName: "authSHAPrivAESUser",
-                AuthenticationProtocol:   SHA,
-                AuthenticationPassphrase: "AEStestingpassabc6543210",
-                PrivacyProtocol:          AES,
-                PrivacyPassphrase:        ""}
+	Default.Version = Version3
+	Default.MsgFlags = AuthPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authSHAPrivAESUser",
+		AuthenticationProtocol:   SHA,
+		AuthenticationPassphrase: "AEStestingpassabc6543210",
+		PrivacyProtocol:          AES,
+		PrivacyPassphrase:        ""}
 
 	err := Default.Connect()
-        if err == nil {
-                t.Fatalf("Expected validation error for empty PrivacyPassphrase")
-        }
+	if err == nil {
+		t.Fatalf("Expected validation error for empty PrivacyPassphrase")
+	}
 }
 
 func TestSnmpV3AuthNoPrivEmptyPrivatePassword(t *testing.T) {
-        Default.Version = Version3
-        Default.MsgFlags = AuthNoPriv
-        Default.SecurityModel = UserSecurityModel
-        Default.SecurityParameters = &UsmSecurityParameters{UserName: "authSHAOnlyUser",
+	Default.Version = Version3
+	Default.MsgFlags = AuthNoPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: "authSHAOnlyUser",
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: "testingpass9876543210",
 		PrivacyProtocol:          AES,
 		PrivacyPassphrase:        ""}
-        setupConnection(t)
-        defer Default.Conn.Close()
 
-        result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
-        if err != nil {
-                t.Fatalf("Get() failed with error => %v", err)
-        }
-        if len(result.Variables) != 1 {
-                t.Fatalf("Expected result of size 1")
-        }
-        if result.Variables[0].Type != OctetString {
-                t.Fatalf("Expected sysDescr to be OctetString")
-        }
-        sysDescr := result.Variables[0].Value.([]byte)
-        if len(sysDescr) == 0 {
-                t.Fatalf("Got a zero length sysDescr")
-        }
+	err := Default.Connect()
+	if err == nil {
+		t.Fatalf("Expected validation error for empty PrivacyPassphrase")
+	}
 
 }
