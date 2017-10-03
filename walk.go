@@ -25,22 +25,25 @@ func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) e
 		maxReps = defaultMaxRepetitions
 	}
 
-	getFn := func(oid string) (result *SnmpPacket, err error) {
-		switch getRequestType {
-		case GetBulkRequest:
-			return x.GetBulk([]string{oid}, uint8(x.NonRepeaters), uint8(maxReps))
-		case GetNextRequest:
-			return x.GetNext([]string{oid})
-		default:
-			return nil, fmt.Errorf("Unsupported request type: %d", getRequestType)
-		}
-	}
-
 RequestLoop:
 	for {
 
 		requests++
-		response, err := getFn(oid)
+
+		var response *SnmpPacket
+		var err error
+
+		switch getRequestType {
+		case GetBulkRequest:
+			response, err = x.GetBulk([]string{oid}, uint8(x.NonRepeaters), uint8(maxReps))
+		case GetNextRequest:
+			response, err = x.GetNext([]string{oid})
+		case GetRequest:
+			response, err = x.Get([]string{oid})
+		default:
+			response, err = nil, fmt.Errorf("Unsupported request type: %d", getRequestType)
+		}
+
 		if err != nil {
 			return err
 		}
@@ -58,18 +61,16 @@ RequestLoop:
 				x.Logger.Printf("BulkWalk terminated with type 0x%x", v.Type)
 				break RequestLoop
 			}
-			if !strings.HasPrefix(v.Name, rootOid) {
+			if !strings.HasPrefix(v.Name, rootOid+".") {
 				// Not in the requested root range.
 				// if this is the first request, and the first variable in that request
 				// and this condition is triggered - the first result is out of range
 				// need to perform a regular get request
 				// this request has been too narrowly defined to be found with a getNext
-				// Issue #78
+				// Issue #78 #93
 				if requests == 1 && k == 0 {
-					err = x.getToWalk(rootOid, walkFn)
-					if err != nil {
-						return err
-					}
+					getRequestType = GetRequest
+					continue
 				}
 				break RequestLoop
 			}
@@ -94,19 +95,4 @@ func (x *GoSNMP) walkAll(getRequestType PDUType, rootOid string) (results []Snmp
 		return nil
 	})
 	return results, err
-}
-
-func (x *GoSNMP) getToWalk(rootOid string, walkFn WalkFunc) error {
-	response, err := x.Get([]string{rootOid})
-	if err != nil {
-		return err
-	}
-
-	for _, v := range response.Variables {
-		err = walkFn(v)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
