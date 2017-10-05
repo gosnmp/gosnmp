@@ -70,7 +70,7 @@ RequestLoop:
 				// Issue #78 #93
 				if requests == 1 && k == 0 {
 					getRequestType = GetRequest
-					continue
+					continue RequestLoop
 				}
 				break RequestLoop
 			}
