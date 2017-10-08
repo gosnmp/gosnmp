@@ -192,30 +192,16 @@ func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameter
 	return s, nil
 }
 
-// MD5 HMAC key calculation algorithm
-func md5HMAC(password string, engineID string) []byte {
-	comp := md5.New()
-	var pi int // password index
-	for i := 0; i < 1048576; i += 64 {
-		var chunk []byte
-		for e := 0; e < 64; e++ {
-			chunk = append(chunk, password[pi%len(password)])
-			pi++
-		}
-		comp.Write(chunk)
-	}
-	compressed := comp.Sum(nil)
-	local := md5.New()
-	local.Write(compressed)
-	local.Write([]byte(engineID))
-	local.Write(compressed)
-	final := local.Sum(nil)
-	return final
-}
+var passwordKeyHashCache = make(map[string][]byte)
 
-// SHA HMAC key calculation algorithm
-func shaHMAC(password string, engineID string) []byte {
-	hash := sha1.New()
+// Common passwordToKey algorithm, "caches" the result to avoid extra computation each reuse
+func cachedPasswordToKey(hash hash.Hash, hashType string, password string) []byte {
+	cacheKey := hashType + ":" + password
+
+	value := passwordKeyHashCache[cacheKey]
+	if value != nil	{
+		return value
+	}
 	var pi int // password index
 	for i := 0; i < 1048576; i += 64 {
 		var chunk []byte
@@ -226,6 +212,32 @@ func shaHMAC(password string, engineID string) []byte {
 		hash.Write(chunk)
 	}
 	hashed := hash.Sum(nil)
+
+	passwordKeyHashCache[cacheKey] = hashed
+
+	return hashed
+}
+
+// MD5 HMAC key calculation algorithm
+func md5HMAC(password string, engineID string) []byte {
+	var compressed []byte
+
+	compressed = cachedPasswordToKey(md5.New(), "MD5", password)
+
+	local := md5.New()
+	local.Write(compressed)
+	local.Write([]byte(engineID))
+	local.Write(compressed)
+	final := local.Sum(nil)
+	return final
+}
+
+// SHA HMAC key calculation algorithm
+func shaHMAC(password string, engineID string) []byte {
+	var hashed []byte
+
+	hashed = cachedPasswordToKey(sha1.New(), "SHA1", password)
+
 	local := sha1.New()
 	local.Write(hashed)
 	local.Write([]byte(engineID))
@@ -234,14 +246,17 @@ func shaHMAC(password string, engineID string) []byte {
 	return final
 }
 
+
 func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) []byte {
 	var secretKey []byte
+
 	switch authProtocol {
 	default:
 		secretKey = md5HMAC(passphrase, engineID)
 	case SHA:
 		secretKey = shaHMAC(passphrase, engineID)
 	}
+
 	return secretKey
 }
 
