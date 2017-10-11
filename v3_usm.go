@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"hash"
 	"sync/atomic"
+	"sync"
 )
 
 // SnmpV3AuthProtocol describes the authentication protocol in use by an authenticated SnmpV3 connection.
@@ -192,13 +193,19 @@ func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameter
 	return s, nil
 }
 
-var passwordKeyHashCache = make(map[string][]byte)
+var (
+	passwordKeyHashCache = make(map[string][]byte)
+ 	passwordKeyHashMutex sync.RWMutex
+)
 
 // Common passwordToKey algorithm, "caches" the result to avoid extra computation each reuse
 func cachedPasswordToKey(hash hash.Hash, hashType string, password string) []byte {
 	cacheKey := hashType + ":" + password
 
+	passwordKeyHashMutex.RLock()
 	value := passwordKeyHashCache[cacheKey]
+	passwordKeyHashMutex.RUnlock()
+
 	if value != nil	{
 		return value
 	}
@@ -213,7 +220,9 @@ func cachedPasswordToKey(hash hash.Hash, hashType string, password string) []byt
 	}
 	hashed := hash.Sum(nil)
 
+	passwordKeyHashMutex.Lock()
 	passwordKeyHashCache[cacheKey] = hashed
+	passwordKeyHashMutex.Unlock()
 
 	return hashed
 }
