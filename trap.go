@@ -46,6 +46,7 @@ func (x *GoSNMP) SendTrap(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 		}
 	}
 
+	// TODO this always prepends a timetickPDU, even if one was supplied (lines 21-23)
 	// add a timetick to start, set to now
 	now := uint32(time.Now().Unix())
 	timetickPDU := SnmpPDU{"1.3.6.1.2.1.1.3.0", TimeTicks, now, x.Logger}
