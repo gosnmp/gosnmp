@@ -178,4 +178,5 @@ func TestSendTrap(t *testing.T) {
 		t.Fatal("timed out waiting for trap to be received")
 	}
 
+	tl.Close()
 }

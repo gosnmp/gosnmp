@@ -77,6 +77,7 @@ type TrapListener struct {
 	listening bool
 	c         *sync.Cond
 	m         sync.Mutex
+	conn      *net.UDPConn
 }
 
 // optional constructor for TrapListener
@@ -91,6 +92,16 @@ func (t *TrapListener) ready() bool {
 	t.m.Lock()
 	defer t.m.Unlock()
 	return t.listening
+}
+
+// Close terminates the listening on TrapListener socket
+func (t *TrapListener) Close() {
+	t.m.Lock()
+	defer t.m.Unlock()
+	t.listening = false
+	t.c.Broadcast()
+	t.conn.Close()
+	t.conn = nil
 }
 
 // Listen listens on the UDP address addr and calls the OnNewTrap
@@ -114,6 +125,7 @@ func (t *TrapListener) Listen(addr string) (err error) {
 	if err != nil {
 		return err
 	}
+	t.conn = conn
 	defer conn.Close()
 
 	// mark that we are listening now
