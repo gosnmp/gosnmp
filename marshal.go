@@ -440,11 +440,22 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 	switch pdu.Type {
 
 	case Null:
-		pduBuf.Write([]byte{byte(Sequence), byte(len(oid) + 4)})
-		pduBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
-		pduBuf.Write(oid)
-		pduBuf.Write([]byte{Null, 0x00})
+		ltmp, err := marshalLength(len(oid))
+		if err != nil {
+			return nil, err
+		}
+		tmpBuf.Write([]byte{byte(ObjectIdentifier)})
+		tmpBuf.Write(ltmp)
+		tmpBuf.Write(oid)
+		tmpBuf.Write([]byte{Null, 0x00})
 
+		ltmp, err = marshalLength(tmpBuf.Len())
+		if err != nil {
+			return nil, err
+		}
+		pduBuf.Write([]byte{byte(Sequence)})
+		pduBuf.Write(ltmp)
+		tmpBuf.WriteTo(pduBuf)
 	/*
 		NUMBERS:
 
