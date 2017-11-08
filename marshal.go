@@ -505,6 +505,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		snmp Counter32, Gauge32, TimeTicks, Unsigned32:
 		non-negative integer, maximum value of 2^32-1 (4294967295 decimal)
 	*/
+
 	case Integer:
 		// TODO tests currently only cover positive integers
 

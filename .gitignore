@@ -73,3 +73,5 @@ gosnmp.html
 cpu.out
 mem.out
 gosnmp.test
+
+.idea/

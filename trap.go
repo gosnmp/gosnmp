@@ -87,10 +87,17 @@ func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, enterprise []int, agentAddress strin
 		return nil, fmt.Errorf("SendV1Trap requires at least 1 pdu")
 	}
 
-	// TODO this function shouldn't exist, just build a struct here.
-	// mkSnmpPacket() has some logic in it (SecurityParameters.Copy(),
-	// hence need for a separate method
-	packetOut := x.mkSnmpPacketV1Trap(Trap, enterprise, agentAddress, genericTrap, specificTrap, timestamp, pdus)
+	packetOut := &SnmpPacket{
+		Version:      x.Version,
+		Community:    x.Community,
+		PDUType:      Trap,
+		Enterprise:   enterprise,
+		AgentAddr:    agentAddress,
+		GenericTrap:  genericTrap,
+		SpecificTrap: specificTrap,
+		Timestamp:    timestamp,
+		Variables:    pdus,
+	}
 
 	return x.send(packetOut, false)
 }
