@@ -410,9 +410,11 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		// requestid
 		buf.Write([]byte{2, 4})
 		err := binary.Write(buf, binary.BigEndian, packet.RequestID)
+
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
 		}
+
 		// error
 		buf.Write([]byte{2, 1, 0})
 
