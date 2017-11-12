@@ -359,26 +359,35 @@ func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
-	// requestid
-	buf.Write([]byte{2, 4})
-	err := binary.Write(buf, binary.BigEndian, packet.RequestID)
-	if err != nil {
-		return nil, err
-	}
+	switch packet.PDUType {
 
-	if packet.PDUType == GetBulkRequest {
+	case GetBulkRequest:
+		// requestid
+		buf.Write([]byte{2, 4})
+		err := binary.Write(buf, binary.BigEndian, packet.RequestID)
+		if err != nil {
+			return nil, err
+		}
+
 		// non repeaters
 		buf.Write([]byte{2, 1, packet.NonRepeaters})
 
 		// max repetitions
 		buf.Write([]byte{2, 1, packet.MaxRepetitions})
-	} else { // get and getnext have same packet format
 
+	default:
+		// requestid
+		buf.Write([]byte{2, 4})
+		err := binary.Write(buf, binary.BigEndian, packet.RequestID)
+		if err != nil {
+			return nil, err
+		}
 		// error
 		buf.Write([]byte{2, 1, 0})
 
 		// error index
 		buf.Write([]byte{2, 1, 0})
+
 	}
 
 	// varbind list
