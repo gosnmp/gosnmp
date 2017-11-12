@@ -60,6 +60,41 @@ func (x *GoSNMP) SendTrap(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	return x.send(packetOut, false)
 }
 
+/*
+Good practice is to send a struct rather than many parameters (Golang and other languages too). Please change :-)
+
+- it's easier to understand
+- if new parameters need to be added, you can do it without changing the (public) method signature
+
+I would suggest something like:
+func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, niceVariableName NiceStructName) (result *SnmpPacket, err error) {
+  ....
+}
+
+See Connect() in gosnmp.go for an example (though there *GoSNMP
+provides a method on a struct type)
+*/
+func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, enterprise []int, agentAddress string, genericTrap int, specificTrap int, timestamp int) (result *SnmpPacket, err error) {
+	switch x.Version {
+	case Version2c, Version3:
+		err = fmt.Errorf("SendV1Trap doesn't support %s", x.Version)
+		return nil, err
+	default:
+		// do nothing
+	}
+
+	if len(pdus) == 0 {
+		return nil, fmt.Errorf("SendV1Trap requires at least 1 pdu")
+	}
+
+	// TODO this function shouldn't exist, just build a struct here.
+	// mkSnmpPacket() has some logic in it (SecurityParameters.Copy(),
+	// hence need for a separate method
+	packetOut := x.mkSnmpPacketV1Trap(Trap, enterprise, agentAddress, genericTrap, specificTrap, timestamp, pdus)
+
+	return x.send(packetOut, false)
+}
+
 //
 // Receiving Traps ie GoSNMP acting as an NMS (Network Management
 // Station).
