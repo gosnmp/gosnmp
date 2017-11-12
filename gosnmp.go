@@ -115,7 +115,6 @@ var Default = &GoSNMP{
 
 // SnmpPDU will be used when doing SNMP Set's
 type SnmpPDU struct {
-
 	// Name is an oid in string format eg ".1.3.6.1.4.9.27"
 	Name string
 

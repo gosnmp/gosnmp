@@ -58,6 +58,14 @@ type SnmpPacket struct {
 	Timestamp    int
 }
 
+type SNMPV1TrapHeader struct{
+	enterprise []int
+	agentAddress string
+	genericTrap int
+	specificTrap int
+	timestamp int
+}
+
 // VarBind struct represents an SNMP Varbind.
 type VarBind struct {
 	Name  asn1.ObjectIdentifier
@@ -355,6 +363,40 @@ func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 	return authenticatedMessage, nil
 }
 
+func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	mOid, err := marshalObjectIdentifier(packet.Enterprise)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
+	}
+
+	buf.Write([]byte{ObjectIdentifier, byte(len(mOid))})
+	buf.Write(mOid)
+
+	// write IPAddress type, length and ipAddress value
+	ip := net.ParseIP(packet.AgentAddr)
+	ipAddressBytes := ipv4toBytes(ip)
+	buf.Write([]byte{IPAddress, byte(len(ipAddressBytes))})
+	buf.Write(ipAddressBytes)
+
+	buf.Write([]byte{Integer, 1})
+	buf.WriteByte(byte(packet.GenericTrap))
+
+	buf.Write([]byte{Integer, 1})
+	buf.WriteByte(byte(packet.SpecificTrap))
+
+	timeTicks, e := marshalUint32(uint32(packet.Timestamp))
+	if e != nil {
+		return nil, fmt.Errorf("Unable to Timestamp: %s\n", e.Error())
+	}
+
+	buf.Write([]byte{TimeTicks, byte(len(timeTicks))})
+	buf.Write(timeTicks)
+
+	return buf.Bytes(), nil
+}
+
 // marshal a PDU
 func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 	buf := new(bytes.Buffer)
@@ -375,13 +417,23 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		// max repetitions
 		buf.Write([]byte{2, 1, packet.MaxRepetitions})
 
+	case Trap:
+		// write SNMP V1 Trap Header fields
+		snmpV1TrapHeader, err := packet.marshalSNMPV1TrapHeader()
+		if err != nil {
+			return nil, err
+		}
+
+		buf.Write(snmpV1TrapHeader)
 	default:
 		// requestid
 		buf.Write([]byte{2, 4})
 		err := binary.Write(buf, binary.BigEndian, packet.RequestID)
+
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
 		}
+
 		// error
 		buf.Write([]byte{2, 1, 0})
 
@@ -474,6 +526,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		snmp Counter32, Gauge32, TimeTicks, Unsigned32:
 		non-negative integer, maximum value of 2^32-1 (4294967295 decimal)
 	*/
+
 	case Integer:
 		// TODO tests currently only cover positive integers
 
