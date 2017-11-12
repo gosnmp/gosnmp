@@ -451,7 +451,7 @@ func oidToString(oid []int) (ret string) {
 	return strings.Join(oidAsString, ".")
 }
 
-// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
+// TODO no tests
 func ipv4toBytes(ip net.IP) []byte {
 	return []byte(ip)[12:]
 }

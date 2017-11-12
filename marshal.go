@@ -456,16 +456,15 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write([]byte{byte(Sequence)})
 		pduBuf.Write(ltmp)
 		tmpBuf.WriteTo(pduBuf)
+
 	/*
-		NUMBERS:
-
-		Integer32 and INTEGER:
+		snmp Integer32 and INTEGER:
 		-2^31 and 2^31-1 inclusive (-2147483648 to 2147483647 decimal)
+		(FYI https://groups.google.com/forum/#!topic/comp.protocols.snmp/1xaAMzCe_hE)
 
-		Counter32, Gauge32, TimeTicks, Unsigned32:
+		snmp Counter32, Gauge32, TimeTicks, Unsigned32:
 		non-negative integer, maximum value of 2^32-1 (4294967295 decimal)
 	*/
-
 	case Integer:
 		// TODO tests currently only cover positive integers
 
@@ -581,7 +580,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(length)
 		pduBuf.Write(tmpBytes)
 
-	// MrSpock changes. TODO NO tests for this yet - waiting for .pcap
+	// TODO no tests
 	case IPAddress:
 		//Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
