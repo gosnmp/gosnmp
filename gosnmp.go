@@ -249,20 +249,6 @@ func (x *GoSNMP) validateParameters() error {
 	return nil
 }
 
-func (x *GoSNMP) mkSnmpPacketV1Trap(pdutype PDUType, enterprise []int, agentAddress string, genericTrap int, specificTrap int, timestamp int, pdus []SnmpPDU) *SnmpPacket {
-	return &SnmpPacket{
-		Version:      x.Version,
-		Community:    x.Community,
-		PDUType:      pdutype,
-		Enterprise:   enterprise,
-		AgentAddr:    agentAddress,
-		GenericTrap:  genericTrap,
-		SpecificTrap: specificTrap,
-		Timestamp:    timestamp,
-		Variables:    pdus,
-	}
-}
-
 func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
 	var newSecParams SnmpV3SecurityParameters
 	if x.SecurityParameters != nil {
