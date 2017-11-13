@@ -60,21 +60,7 @@ func (x *GoSNMP) SendTrap(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	return x.send(packetOut, false)
 }
 
-/*
-Good practice is to send a struct rather than many parameters (Golang and other languages too). Please change :-)
-
-- it's easier to understand
-- if new parameters need to be added, you can do it without changing the (public) method signature
-
-I would suggest something like:
-func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, niceVariableName NiceStructName) (result *SnmpPacket, err error) {
-  ....
-}
-
-See Connect() in gosnmp.go for an example (though there *GoSNMP
-provides a method on a struct type)
-*/
-func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, enterprise []int, agentAddress string, genericTrap int, specificTrap int, timestamp int) (result *SnmpPacket, err error) {
+func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, snmpV1TrapHeader SNMPV1TrapHeader) (result *SnmpPacket, err error) {
 	switch x.Version {
 	case Version2c, Version3:
 		err = fmt.Errorf("SendV1Trap doesn't support %s", x.Version)
@@ -91,11 +77,11 @@ func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, enterprise []int, agentAddress strin
 		Version:      x.Version,
 		Community:    x.Community,
 		PDUType:      Trap,
-		Enterprise:   enterprise,
-		AgentAddr:    agentAddress,
-		GenericTrap:  genericTrap,
-		SpecificTrap: specificTrap,
-		Timestamp:    timestamp,
+		Enterprise:   snmpV1TrapHeader.enterprise,
+		AgentAddr:    snmpV1TrapHeader.agentAddress,
+		GenericTrap:  snmpV1TrapHeader.genericTrap,
+		SpecificTrap: snmpV1TrapHeader.specificTrap,
+		Timestamp:    snmpV1TrapHeader.timestamp,
 		Variables:    pdus,
 	}
 

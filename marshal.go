@@ -58,6 +58,14 @@ type SnmpPacket struct {
 	Timestamp    int
 }
 
+type SNMPV1TrapHeader struct{
+	enterprise []int
+	agentAddress string
+	genericTrap int
+	specificTrap int
+	timestamp int
+}
+
 // VarBind struct represents an SNMP Varbind.
 type VarBind struct {
 	Name  asn1.ObjectIdentifier
@@ -355,6 +363,40 @@ func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 	return authenticatedMessage, nil
 }
 
+func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	mOid, err := marshalObjectIdentifier(packet.Enterprise)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
+	}
+
+	buf.Write([]byte{ObjectIdentifier, byte(len(mOid))})
+	buf.Write(mOid)
+
+	// write IPAddress type, length and ipAddress value
+	ip := net.ParseIP(packet.AgentAddr)
+	ipAddressBytes := ipv4toBytes(ip)
+	buf.Write([]byte{IPAddress, byte(len(ipAddressBytes))})
+	buf.Write(ipAddressBytes)
+
+	buf.Write([]byte{Integer, 1})
+	buf.WriteByte(byte(packet.GenericTrap))
+
+	buf.Write([]byte{Integer, 1})
+	buf.WriteByte(byte(packet.SpecificTrap))
+
+	timeTicks, e := marshalUint32(uint32(packet.Timestamp))
+	if e != nil {
+		return nil, fmt.Errorf("Unable to Timestamp: %s\n", e.Error())
+	}
+
+	buf.Write([]byte{TimeTicks, byte(len(timeTicks))})
+	buf.Write(timeTicks)
+
+	return buf.Bytes(), nil
+}
+
 // marshal a PDU
 func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 	buf := new(bytes.Buffer)
@@ -376,36 +418,13 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		buf.Write([]byte{2, 1, packet.MaxRepetitions})
 
 	case Trap:
-		// Please put this in a separate function
-		// write objectIdentifier type, length and objectIdentifier value
-		mOid, err := marshalObjectIdentifier(packet.Enterprise)
+		// write SNMP V1 Trap Header fields
+		snmpV1TrapHeader, err := packet.marshalSNMPV1TrapHeader()
 		if err != nil {
-			return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
+			return nil, err
 		}
 
-		buf.Write([]byte{ObjectIdentifier, byte(len(mOid))})
-		buf.Write(mOid)
-
-		// write IPAddress type, length and ipAddress value
-		ip := net.ParseIP(packet.AgentAddr)
-		ipAddressBytes := ipv4toBytes(ip)
-		buf.Write([]byte{IPAddress, byte(len(ipAddressBytes))})
-		buf.Write(ipAddressBytes)
-
-		buf.Write([]byte{Integer, 1})
-		buf.WriteByte(byte(packet.GenericTrap))
-
-		buf.Write([]byte{Integer, 1})
-		buf.WriteByte(byte(packet.SpecificTrap))
-
-		timeTicks, e := marshalUint32(uint32(packet.Timestamp))
-		if e != nil {
-			return nil, fmt.Errorf("Unable to Timestamp: %s\n", e.Error())
-		}
-
-		buf.Write([]byte{TimeTicks, byte(len(timeTicks))})
-		buf.Write(timeTicks)
-
+		buf.Write(snmpV1TrapHeader)
 	default:
 		// requestid
 		buf.Write([]byte{2, 4})
