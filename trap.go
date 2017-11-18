@@ -60,6 +60,34 @@ func (x *GoSNMP) SendTrap(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	return x.send(packetOut, false)
 }
 
+func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, snmpV1TrapHeader SNMPV1TrapHeader) (result *SnmpPacket, err error) {
+	switch x.Version {
+	case Version2c, Version3:
+		err = fmt.Errorf("SendV1Trap doesn't support %s", x.Version)
+		return nil, err
+	default:
+		// do nothing
+	}
+
+	if len(pdus) == 0 {
+		return nil, fmt.Errorf("SendV1Trap requires at least 1 pdu")
+	}
+
+	packetOut := &SnmpPacket{
+		Version:      x.Version,
+		Community:    x.Community,
+		PDUType:      Trap,
+		Enterprise:   snmpV1TrapHeader.enterprise,
+		AgentAddr:    snmpV1TrapHeader.agentAddress,
+		GenericTrap:  snmpV1TrapHeader.genericTrap,
+		SpecificTrap: snmpV1TrapHeader.specificTrap,
+		Timestamp:    snmpV1TrapHeader.timestamp,
+		Variables:    pdus,
+	}
+
+	return x.send(packetOut, false)
+}
+
 //
 // Receiving Traps ie GoSNMP acting as an NMS (Network Management
 // Station).
