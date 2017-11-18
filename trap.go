@@ -73,17 +73,13 @@ func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, snmpV1TrapHeader SNMPV1TrapHeader) (
 		return nil, fmt.Errorf("SendV1Trap requires at least 1 pdu")
 	}
 
-	packetOut := &SnmpPacket{
-		Version:      x.Version,
-		Community:    x.Community,
-		PDUType:      Trap,
-		Enterprise:   snmpV1TrapHeader.enterprise,
-		AgentAddr:    snmpV1TrapHeader.agentAddress,
-		GenericTrap:  snmpV1TrapHeader.genericTrap,
-		SpecificTrap: snmpV1TrapHeader.specificTrap,
-		Timestamp:    snmpV1TrapHeader.timestamp,
-		Variables:    pdus,
-	}
+	packetOut := x.mkSnmpPacket(Trap, pdus, 0, 0)
+	packetOut.Enterprise = snmpV1TrapHeader.Enterprise
+	packetOut.AgentAddr = snmpV1TrapHeader.AgentAddress
+	packetOut.GenericTrap = snmpV1TrapHeader.GenericTrap
+	packetOut.SpecificTrap = snmpV1TrapHeader.SpecificTrap
+	packetOut.Timestamp = snmpV1TrapHeader.Timestamp
+	packetOut.Variables = pdus
 
 	return x.send(packetOut, false)
 }

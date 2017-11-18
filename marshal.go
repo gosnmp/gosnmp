@@ -50,7 +50,9 @@ type SnmpPacket struct {
 	Variables          []SnmpPDU
 	Logger             Logger
 
-	// Trap V1 header
+	// v1 traps have a very different format from v2c and v3 traps.
+	//
+	// These fields are set via the SNMPV1TrapHeader parameter to SendV1Trap().
 	Enterprise   []int
 	AgentAddr    string
 	GenericTrap  int
@@ -58,12 +60,12 @@ type SnmpPacket struct {
 	Timestamp    int
 }
 
-type SNMPV1TrapHeader struct{
-	enterprise []int
-	agentAddress string
-	genericTrap int
-	specificTrap int
-	timestamp int
+type SNMPV1TrapHeader struct {
+	Enterprise   []int
+	AgentAddress string
+	GenericTrap  int
+	SpecificTrap int
+	Timestamp    int
 }
 
 // VarBind struct represents an SNMP Varbind.

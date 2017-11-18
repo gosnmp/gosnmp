@@ -11,12 +11,10 @@ IPv6, using __SNMPv2c__ or __SNMPv3__.
 About
 -----
 
-**soniah/gosnmp** is based on **alouca/gosnmp** - many thanks to Andreas
-Louca for starting the project, other contributors (AUTHORS.md) and
-these project collaborators:
+**soniah/gosnmp** was originally based on **alouca/gosnmp**, but has been
+completely rewritten. Many thanks to Andreas Louca, other contributors
+(AUTHORS.md) and these project collaborators:
 
-* Chris Dance ([@codedance](https://github.com/codedance/))
-* Nathan Owens ([@virtuallynathan](https://github.com/virtuallynathan/))
 * Whitham Reeve ([@wdreeveii](https://github.com/wdreeveii/))
 
 Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
@@ -32,7 +30,8 @@ GoSNMP has the following SNMP functions:
 * **Walk** - retrieves a subtree of values using GETNEXT.
 * **BulkWalk** - retrieves a subtree of values using GETBULK.
 * **Set** - supports Integers and OctetStrings
-* **SendTrap** - send TRAPs
+* **SendV1Trap** - send __SNMPv1__ TRAPS
+* **SendTrap** - send __SNMPv2c__ and __SNMPv3__ TRAPs
 * **Listen** - act as an NMS for receiving TRAPs
 
 GoSNMP has the following **helper** functions:
@@ -40,8 +39,8 @@ GoSNMP has the following **helper** functions:
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
-**soniah/gosnmp** has diverged _significantly_ from **alouca/gosnmp**.
-Your code will require modification in these (and other) locations:
+**soniah/gosnmp** has completely diverged from **alouca/gosnmp**, your code
+will require modification in these (and other) locations:
 
 * the **Get** function has a different method signature
 * the **NewGoSNMP** function has been removed, use **Connect** instead
