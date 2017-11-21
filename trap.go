@@ -26,61 +26,57 @@ import (
 // Management Station).
 //
 // See also Listen() and examples for creating an NMS.
-func (x *GoSNMP) SendTrap(pdus []SnmpPDU) (result *SnmpPacket, err error) {
+func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
+	var pdutype PDUType
+
+	if len(trap.Variables) == 0 {
+		return nil, fmt.Errorf("Sendtrap requires at least 1 pdu")
+	}
+
+	if trap.Variables[0].Type == TimeTicks {
+		// check is uint32
+		if _, ok := trap.Variables[0].Value.(uint32); !ok {
+			return nil, fmt.Errorf("Sendtrap TimeTick must be uint32")
+		}
+	}
+
 	switch x.Version {
 	case Version2c, Version3:
 		// do nothing
+		pdutype = SNMPv2Trap
+
+		if trap.Variables[0].Type != TimeTicks {
+			now := uint32(time.Now().Unix())
+			timetickPDU := SnmpPDU{"1.3.6.1.2.1.1.3.0", TimeTicks, now, x.Logger}
+			// prepend timetickPDU
+			trap.Variables = append([]SnmpPDU{timetickPDU}, trap.Variables...)
+		}
+
+	case Version1:
+		pdutype = Trap
+		if len(trap.Enterprise) == 0 {
+			return nil, fmt.Errorf("Sendtrap for SNMPV1 requires an Enterprise OID")
+		}
+		if len(trap.AgentAddress) == 0 {
+			return nil, fmt.Errorf("Sendtrap for SNMPV1 requires an Agent Address")
+		}
+
 	default:
 		err = fmt.Errorf("SendTrap doesn't support %s", x.Version)
 		return nil, err
 	}
 
-	if len(pdus) == 0 {
-		return nil, fmt.Errorf("Sendtrap requires at least 1 pdu")
+	packetOut := x.mkSnmpPacket(pdutype, trap.Variables, 0, 0)
+	if x.Version == Version1 {
+		packetOut.Enterprise = trap.Enterprise
+		packetOut.AgentAddress = trap.AgentAddress
+		packetOut.GenericTrap = trap.GenericTrap
+		packetOut.SpecificTrap = trap.SpecificTrap
+		packetOut.Timestamp = trap.Timestamp
 	}
-
-	if pdus[0].Type == TimeTicks {
-		// check is uint32
-		if _, ok := pdus[0].Value.(uint32); !ok {
-			return nil, fmt.Errorf("Sendtrap TimeTick must be uint32")
-		}
-	}
-
-	// TODO this always prepends a timetickPDU, even if one was supplied (lines 21-23)
-	// add a timetick to start, set to now
-	now := uint32(time.Now().Unix())
-	timetickPDU := SnmpPDU{"1.3.6.1.2.1.1.3.0", TimeTicks, now, x.Logger}
-	// prepend timetickPDU
-	pdus = append([]SnmpPDU{timetickPDU}, pdus...)
-
-	packetOut := x.mkSnmpPacket(SNMPv2Trap, pdus, 0, 0)
 
 	// all sends wait for the return packet, except for SNMPv2Trap
 	// -> wait is false
-	return x.send(packetOut, false)
-}
-
-func (x *GoSNMP) SendV1Trap(pdus []SnmpPDU, snmpV1TrapHeader SNMPV1TrapHeader) (result *SnmpPacket, err error) {
-	switch x.Version {
-	case Version2c, Version3:
-		err = fmt.Errorf("SendV1Trap doesn't support %s", x.Version)
-		return nil, err
-	default:
-		// do nothing
-	}
-
-	if len(pdus) == 0 {
-		return nil, fmt.Errorf("SendV1Trap requires at least 1 pdu")
-	}
-
-	packetOut := x.mkSnmpPacket(Trap, pdus, 0, 0)
-	packetOut.Enterprise = snmpV1TrapHeader.Enterprise
-	packetOut.AgentAddr = snmpV1TrapHeader.AgentAddress
-	packetOut.GenericTrap = snmpV1TrapHeader.GenericTrap
-	packetOut.SpecificTrap = snmpV1TrapHeader.SpecificTrap
-	packetOut.Timestamp = snmpV1TrapHeader.Timestamp
-	packetOut.Variables = pdus
-
 	return x.send(packetOut, false)
 }
 
@@ -103,12 +99,16 @@ type TrapListener struct {
 	c         *sync.Cond
 	m         sync.Mutex
 	conn      *net.UDPConn
+	finish    chan bool
+	done      chan bool
 }
 
 // optional constructor for TrapListener
 func NewTrapListener() *TrapListener {
 	tl := &TrapListener{}
 	tl.c = sync.NewCond(&sync.Mutex{})
+	tl.finish = make(chan bool)
+	tl.done = make(chan bool)
 	return tl
 }
 
@@ -121,12 +121,9 @@ func (t *TrapListener) ready() bool {
 
 // Close terminates the listening on TrapListener socket
 func (t *TrapListener) Close() {
-	t.m.Lock()
-	defer t.m.Unlock()
-	t.listening = false
-	t.c.Broadcast()
 	t.conn.Close()
-	t.conn = nil
+	t.finish <- true
+	<-t.done
 }
 
 // Listen listens on the UDP address addr and calls the OnNewTrap
@@ -145,7 +142,6 @@ func (t *TrapListener) Listen(addr string) (err error) {
 	if err != nil {
 		return err
 	}
-
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		return err
@@ -170,17 +166,25 @@ func (t *TrapListener) Listen(addr string) (err error) {
 	}()
 
 	for {
-		var buf [4096]byte
-		rlen, remote, err := conn.ReadFromUDP(buf[:])
-		if err != nil {
-			t.Params.logPrintf("TrapListener: error in read %s\n", err)
+		select {
+		case <-t.finish:
+			t.done <- true
+			return
+
+		default:
+			var buf [4096]byte
+			rlen, remote, err := conn.ReadFromUDP(buf[:])
+			if err != nil {
+				t.Params.logPrintf("TrapListener: error in read %s\n", err)
+			}
+
+			msg := buf[:rlen]
+			traps := t.Params.UnmarshalTrap(msg)
+			if traps != nil {
+				t.OnNewTrap(traps, remote)
+			}
 		}
 
-		msg := buf[:rlen]
-		traps := t.Params.UnmarshalTrap(msg)
-		if traps != nil {
-			t.OnNewTrap(traps, remote)
-		}
 	}
 }
 
