@@ -30,13 +30,13 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 	var pdutype PDUType
 
 	if len(trap.Variables) == 0 {
-		return nil, fmt.Errorf("Sendtrap requires at least 1 pdu")
+		return nil, fmt.Errorf("SendTrap requires at least 1 PDU")
 	}
 
 	if trap.Variables[0].Type == TimeTicks {
 		// check is uint32
 		if _, ok := trap.Variables[0].Value.(uint32); !ok {
-			return nil, fmt.Errorf("Sendtrap TimeTick must be uint32")
+			return nil, fmt.Errorf("SendTrap TimeTick must be uint32")
 		}
 	}
 
@@ -55,10 +55,10 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 	case Version1:
 		pdutype = Trap
 		if len(trap.Enterprise) == 0 {
-			return nil, fmt.Errorf("Sendtrap for SNMPV1 requires an Enterprise OID")
+			return nil, fmt.Errorf("SendTrap for SNMPV1 requires an Enterprise OID")
 		}
 		if len(trap.AgentAddress) == 0 {
-			return nil, fmt.Errorf("Sendtrap for SNMPV1 requires an Agent Address")
+			return nil, fmt.Errorf("SendTrap for SNMPV1 requires an Agent Address")
 		}
 
 	default:
@@ -87,35 +87,36 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 // GoSNMP.unmarshal() currently only handles SNMPv2Trap (ie v2c, v3)
 //
 
-// A TrapListener defineds parameters for running a SNMP Trap receiver.
+// A TrapListener defines parameters for running a SNMP Trap receiver.
 // nil values will be replaced by default values.
 type TrapListener struct {
+	sync.Mutex
 	OnNewTrap func(s *SnmpPacket, u *net.UDPAddr)
 	Params    *GoSNMP
 
-	// these unexported fields are for letting test cases
-	// know we are ready
-	listening bool
-	c         *sync.Cond
-	m         sync.Mutex
+	// These unexported fields are for letting test cases
+	// know we are ready.
 	conn      *net.UDPConn
 	finish    chan bool
 	done      chan bool
+	listening chan bool
 }
 
-// optional constructor for TrapListener
+// NewTrapListener returns an initialized TrapListener.
 func NewTrapListener() *TrapListener {
 	tl := &TrapListener{}
-	tl.c = sync.NewCond(&sync.Mutex{})
 	tl.finish = make(chan bool)
 	tl.done = make(chan bool)
+	// Buffered because one doesn't have to block on it.
+	tl.listening = make(chan bool, 1)
 	return tl
 }
 
-// safely check if TrapListener is ready and listening
-func (t *TrapListener) ready() bool {
-	t.m.Lock()
-	defer t.m.Unlock()
+// Listening returns a sentinel channel on which one can block
+// until the listener is ready to receive requests.
+func (t *TrapListener) Listening() <-chan bool {
+	t.Lock()
+	defer t.Unlock()
 	return t.listening
 }
 
@@ -127,7 +128,7 @@ func (t *TrapListener) Close() {
 }
 
 // Listen listens on the UDP address addr and calls the OnNewTrap
-// function specified in *TrapListener for every trap recieved.
+// function specified in *TrapListener for every trap received.
 func (t *TrapListener) Listen(addr string) (err error) {
 	if t.Params == nil {
 		t.Params = Default
@@ -149,21 +150,8 @@ func (t *TrapListener) Listen(addr string) (err error) {
 	t.conn = conn
 	defer conn.Close()
 
-	// mark that we are listening now
-	func() {
-		t.m.Lock()
-		defer t.m.Unlock()
-		t.listening = true
-		t.c.Broadcast()
-	}()
-
-	// don't forget to mark that we are no longer listening later on
-	defer func() {
-		t.m.Lock()
-		defer t.m.Unlock()
-		t.listening = false
-		t.c.Broadcast()
-	}()
+	// Mark that we are listening now.
+	t.listening <- true
 
 	for {
 		select {
@@ -193,7 +181,7 @@ func debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 	log.Printf("got trapdata from %+v: %+v\n", u, s)
 }
 
-// Unmarshal SNMP Trap
+// UnmarshalTrap unpacks the SNMP Trap.
 func (x *GoSNMP) UnmarshalTrap(trap []byte) (result *SnmpPacket) {
 	result = new(SnmpPacket)
 

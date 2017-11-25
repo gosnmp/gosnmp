@@ -16,7 +16,7 @@ const (
 	trapTestAddress = "127.0.0.1"
 
 	// this is bad. Listen and Connect expect different address formats
-	// so we need an int verson and a string version - they should be the same.
+	// so we need an int version and a string version - they should be the same.
 	trapTestPort       = 9162
 	trapTestPortString = "9162"
 
@@ -65,7 +65,7 @@ SANITY:
 			continue SANITY
 		}
 
-		// test enough fields fields to ensure unmarshalling was sucessful.
+		// test enough fields fields to ensure unmarshalling was successful.
 		// full unmarshal testing is performed in TestUnmarshal
 		if res.Version != test.out.Version {
 			t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
@@ -113,15 +113,15 @@ func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(
 				done <- 0
 			}
 			if packet.GenericTrap != trapTestGenericTrap {
-				t.Fatalf("incorrect trap Generic Trap identifier received, expected %s got %s", trapTestGenericTrap, packet.GenericTrap)
+				t.Fatalf("incorrect trap Generic Trap identifier received, expected %v got %v", trapTestGenericTrap, packet.GenericTrap)
 				done <- 0
 			}
 			if packet.SpecificTrap != trapTestSpecificTrap {
-				t.Fatalf("incorrect trap Specific Trap identifier received, expected %s got %s", trapTestSpecificTrap, packet.SpecificTrap)
+				t.Fatalf("incorrect trap Specific Trap identifier received, expected %v got %v", trapTestSpecificTrap, packet.SpecificTrap)
 				done <- 0
 			}
 			if packet.Timestamp != trapTestTimestamp {
-				t.Fatalf("incorrect trap Timestamp received, expected %s got %s", trapTestTimestamp, packet.Timestamp)
+				t.Fatalf("incorrect trap Timestamp received, expected %v got %v", trapTestTimestamp, packet.Timestamp)
 				done <- 0
 			}
 		}
@@ -160,19 +160,20 @@ func TestSendTrap(t *testing.T) {
 	tl.Params = Default
 
 	// listener goroutine
+	errch := make(chan error)
 	go func() {
 		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
 		if err != nil {
-			t.Fatalf("error in listen: %s", err)
+			errch <- err
 		}
 	}()
 
-	// wait until listener is ready
-	tl.c.L.Lock()
-	for !tl.ready() {
-		tl.c.Wait()
+	// Wait until the listener is ready.
+	select {
+	case <-tl.Listening():
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
 	}
-	tl.c.L.Unlock()
 
 	ts := &GoSNMP{
 		Target:    trapTestAddress,
@@ -214,6 +215,85 @@ func TestSendTrap(t *testing.T) {
 
 }
 
+// test the listener is not blocked if Listening is not used
+func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
+	done := make(chan int)
+
+	tl := NewTrapListener()
+	defer tl.Close()
+
+	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
+	tl.Params = Default
+
+	errch := make(chan error)
+	listening := make(chan bool)
+	go func() {
+		// Reduce the chance of necessity for a restart.
+		listening <- true
+
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		if err != nil {
+			errch <- err
+		}
+	}()
+
+	select {
+	case <-listening:
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
+	}
+
+	ts := &GoSNMP{
+		Target:    trapTestAddress,
+		Port:      trapTestPort,
+		Community: "public",
+		Version:   Version2c,
+		Timeout:   time.Duration(2) * time.Second,
+		Retries:   3,
+		MaxOids:   MaxOids,
+	}
+
+	err := ts.Connect()
+	if err != nil {
+		t.Fatalf("Connect() err: %v", err)
+	}
+	defer ts.Conn.Close()
+
+	pdu := SnmpPDU{
+		Name:  trapTestOid,
+		Type:  OctetString,
+		Value: trapTestPayload,
+	}
+
+	trap := SnmpTrap{
+		Variables: []SnmpPDU{pdu},
+	}
+
+	_, err = ts.SendTrap(trap)
+	if err != nil {
+		t.Fatalf("SendTrap() err: %v", err)
+	}
+
+	// Wait for a response from the handler and restart the SendTrap
+	// if the listener wasn't ready.
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		_, err = ts.SendTrap(trap)
+		if err != nil {
+			t.Fatalf("restarted SendTrap() err: %v", err)
+		}
+
+		t.Log("restarted")
+
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for trap to be received")
+		}
+	}
+}
+
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendV1Trap(t *testing.T) {
 	done := make(chan int)
@@ -225,19 +305,20 @@ func TestSendV1Trap(t *testing.T) {
 	tl.Params = Default
 
 	// listener goroutine
+	errch := make(chan error)
 	go func() {
 		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
 		if err != nil {
-			t.Fatalf("error in listen: %s", err)
+			errch <- err
 		}
 	}()
 
-	// wait until listener is ready
-	tl.c.L.Lock()
-	for !tl.ready() {
-		tl.c.Wait()
+	// Wait until the listener is ready.
+	select {
+	case <-tl.Listening():
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
 	}
-	tl.c.L.Unlock()
 
 	ts := &GoSNMP{
 		Target: trapTestAddress,
