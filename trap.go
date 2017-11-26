@@ -42,7 +42,6 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 
 	switch x.Version {
 	case Version2c, Version3:
-		// do nothing
 		pdutype = SNMPv2Trap
 
 		if trap.Variables[0].Type != TimeTicks {
