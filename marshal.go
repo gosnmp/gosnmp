@@ -65,7 +65,7 @@ type SnmpTrap struct {
 	AgentAddress string
 	GenericTrap  int
 	SpecificTrap int
-	Timestamp    int
+	Timestamp    uint
 }
 
 // VarBind struct represents an SNMP Varbind.
@@ -882,7 +882,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
 	}
 	cursor += count
-	if Timestamp, ok := rawTimestamp.(int); ok {
+	if Timestamp, ok := rawTimestamp.(uint); ok {
 		response.Timestamp = Timestamp
 		x.logPrintf("Timestamp: %d", Timestamp)
 	}
