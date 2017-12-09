@@ -1,6 +1,8 @@
-// Copyright 2012-2016 The GoSNMP Authors. All rights reserved.  Use of this
+// Copyright 2012-2018 The GoSNMP Authors. All rights reserved.  Use of this
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
+
+// +build all trap
 
 package gosnmp
 
@@ -150,7 +152,7 @@ func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(
 }
 
 // test sending a basic SNMP trap, using our own listener to receive
-func TestSendTrap(t *testing.T) {
+func TestSendTrapBasic(t *testing.T) {
 	done := make(chan int)
 
 	tl := NewTrapListener()

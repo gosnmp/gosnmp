@@ -1,4 +1,4 @@
-// Copyright 2012-2016 The GoSNMP Authors. All rights reserved.  Use of this
+// Copyright 2012-2018 The GoSNMP Authors. All rights reserved.  Use of this
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
 
@@ -155,7 +155,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		// 0x43
 		x.logPrint("decodeValue: type is TimeTicks")
 		length, cursor := parseLength(data)
-		ret, err := parseInt(data[cursor:length])
+		ret, err := parseUint(data[cursor:length])
 		if err != nil {
 			x.logPrintf("decodeValue: err is %v", err)
 			break
@@ -619,9 +619,9 @@ func parseRawField(data []byte, msg string) (interface{}, int, error) {
 		}
 	case TimeTicks:
 		length, cursor := parseLength(data)
-		ret, err := parseInt(data[cursor:length])
+		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			return nil, 0, fmt.Errorf("Error in parseInt: %s", err)
+			return nil, 0, fmt.Errorf("Error in parseUint: %s", err)
 		}
 		return ret, length, nil
 	}

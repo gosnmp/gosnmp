@@ -1,4 +1,4 @@
-// Copyright 2012-2016 The GoSNMP Authors. All rights reserved.  Use of this
+// Copyright 2012-2018 The GoSNMP Authors. All rights reserved.  Use of this
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
 
@@ -65,7 +65,7 @@ type SnmpTrap struct {
 	AgentAddress string
 	GenericTrap  int
 	SpecificTrap int
-	Timestamp    int
+	Timestamp    uint
 }
 
 // VarBind struct represents an SNMP Varbind.
@@ -882,7 +882,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("Error parsing SNMP packet error: %s", err.Error())
 	}
 	cursor += count
-	if Timestamp, ok := rawTimestamp.(int); ok {
+	if Timestamp, ok := rawTimestamp.(uint); ok {
 		response.Timestamp = Timestamp
 		x.logPrintf("Timestamp: %d", Timestamp)
 	}
