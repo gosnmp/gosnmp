@@ -2,6 +2,7 @@
 
 * Jon Auer (@jda)
 * Chris Dance (@codedance)
+* Michał Derkacz (michal@Lnet.pl)
 * Jacob Dubinsky (@jdubinsky)
 * Eduardo Ferro (@eferro)
 * Mattias Folke (@msfe)
