@@ -161,7 +161,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 			break
 		}
 		retVal.Type = TimeTicks
-		retVal.Value = ret
+		retVal.Value = uint32(ret)
 	case Counter64:
 		// 0x46
 		x.logPrint("decodeValue: type is Counter64")
