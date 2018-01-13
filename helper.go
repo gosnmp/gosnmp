@@ -323,18 +323,10 @@ func marshalBase128Int(out *bytes.Buffer, n int64) (err error) {
 	return nil
 }
 
-// marshalInt16 builds a byte representation of
-// a 16 bit int in BigEndian form.
-func marshalInt16(value int) (rs []byte, err error) {
-	if value <= 0xff {
-		rs = []byte{byte(value)}
-		return rs, nil
-	}
-	if value > 0xff && value <= 0xffff {
-		rs = []byte{byte(((value >> 8) & 0xff)), byte((value & 0xff))}
-		return rs, nil
-	}
-	return nil, fmt.Errorf("Unable to marshal %v", rs)
+// marshalInteger builds a byte representation of
+// a 32 bit int in BigEndian form.
+func marshalInteger(value int) ([]byte, error) {
+	return marshalUint32(uint32(value))
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32

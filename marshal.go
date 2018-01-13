@@ -320,6 +320,9 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 }
 
 // -- Marshalling Logic --------------------------------------------------------
+func (packet *SnmpPacket) MarshalMsg() ([]byte, error) {
+	return packet.marshalMsg()
+}
 
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
@@ -542,7 +545,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		case byte:
 			intBytes = []byte{byte(pdu.Value.(int))}
 		case int:
-			intBytes, err = marshalInt16(value)
+			intBytes, err = marshalInteger(value)
 			pdu.Check(err)
 		default:
 			return nil, fmt.Errorf("Unable to marshal PDU Integer; not byte or int.")
