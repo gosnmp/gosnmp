@@ -161,6 +161,7 @@ The following BER types have been implemented:
 * 0x41 Counter32
 * 0x42 Gauge32
 * 0x43 TimeTicks
+* 0x44 Opaque (Float & Double)
 * 0x46 Counter64
 * 0x47 Uinteger32
 * 0x80 NoSuchObject
@@ -174,7 +175,6 @@ time or haven't been able to find example devices to query:
 * 0x01 Boolean
 * 0x03 BitString
 * 0x07 ObjectDescription
-* 0x44 Opaque
 * 0x45 NsapAddress
 
 Packet Captures

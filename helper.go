@@ -67,6 +67,11 @@ func Check(err error) {
 func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
 	retVal = new(variable)
 
+	// values matching this mask have the type in subsequent byte
+	if data[0]&AsnExtensionID == AsnExtensionID {
+		data = data[1:]
+	}
+
 	switch Asn1BER(data[0]) {
 
 	case Integer:
@@ -162,6 +167,13 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		}
 		retVal.Type = TimeTicks
 		retVal.Value = ret
+	case Opaque:
+		// 0x44
+		x.logPrint("decodeValue: type is Opaque")
+		length, cursor := parseLength(data)
+		opaqueData := data[cursor:length]
+		// recursively decode opaque data
+		return x.decodeValue(opaqueData, msg)
 	case Counter64:
 		// 0x46
 		x.logPrint("decodeValue: type is Counter64")
@@ -173,6 +185,18 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		}
 		retVal.Type = Counter64
 		retVal.Value = ret
+	case OpaqueFloat:
+		// 0x78
+		x.logPrint("decodeValue: type is OpaqueFloat")
+		length, cursor := parseLength(data)
+		retVal.Type = OpaqueFloat
+		retVal.Value, err = parseFloat32(data[cursor:length])
+	case OpaqueDouble:
+		// 0x79
+		x.logPrint("decodeValue: type is OpaqueDouble")
+		length, cursor := parseLength(data)
+		retVal.Type = OpaqueDouble
+		retVal.Value, err = parseFloat64(data[cursor:length])
 	case NoSuchObject:
 		// 0x80
 		x.logPrint("decodeValue: type is NoSuchObject")
@@ -655,6 +679,26 @@ func parseUint(bytes []byte) (uint, error) {
 		return 0, errors.New("integer too large")
 	}
 	return uint(ret64), nil
+}
+
+func parseFloat32(bytes []byte) (ret float32, err error) {
+	if len(bytes) > 4 {
+		// We'll overflow a uint64 in this case.
+		err = errors.New("float too large")
+		return
+	}
+	ret = math.Float32frombits(binary.BigEndian.Uint32(bytes))
+	return
+}
+
+func parseFloat64(bytes []byte) (ret float64, err error) {
+	if len(bytes) > 8 {
+		// We'll overflow a uint64 in this case.
+		err = errors.New("float too large")
+		return
+	}
+	ret = math.Float64frombits(binary.BigEndian.Uint64(bytes))
+	return
 }
 
 // Issue 4389: math/big: add SetUint64 and Uint64 functions to *Int
