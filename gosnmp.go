@@ -129,6 +129,9 @@ type SnmpPDU struct {
 	Logger Logger
 }
 
+// AsnExtensionID mask to identify types > 30 in subsequent byte
+const AsnExtensionID = 0x1F
+
 // Asn1BER is the type of the SNMP PDU
 type Asn1BER byte
 
@@ -151,6 +154,8 @@ const (
 	NsapAddress               = 0x45
 	Counter64                 = 0x46
 	Uinteger32                = 0x47
+	OpaqueFloat               = 0x78
+	OpaqueDouble              = 0x79
 	NoSuchObject              = 0x80
 	NoSuchInstance            = 0x81
 	EndOfMibView              = 0x82
