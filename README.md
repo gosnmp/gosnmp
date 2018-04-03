@@ -70,18 +70,29 @@ Install via **go get**:
 ```shell
 go get github.com/soniah/gosnmp
 ```
-### Using dependency managers
 
-By default, `dep` tool uses versioning which is not supported in this repo.
+Using dependency managers
+-------------------------
 
-To use this package with `dep` dependency manager, please add this section to `godep.toml` file or replace existing declaration:
+By default the `dep` tool uses versioning, which is not implemented by this
+repository. To use this package with `dep`, please add the following to
+`godep.toml` or replace the existing declaration:
+
+Change from:
+
+```toml
+[[constraint]]
+  name = "github.com/soniah/gosnmp"
+  version = "1.0.0"
+```
+
+To:
 
 ```toml
 [[constraint]]
   name = "github.com/soniah/gosnmp"
   branch = "master"
 ```
-
 
 Documentation
 -------------
