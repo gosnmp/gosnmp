@@ -183,6 +183,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			return &SnmpPacket{}, nil
 		}
 
+	loop:
 		for {
 			x.logPrint("WAITING RESPONSE...")
 			// Receive response and try receiving again on any decoding error.
@@ -232,6 +233,18 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				continue
 			}
 
+			// Detect usmStats report PDUs and go out of this function with all data
+			// (usmStatsNotInTimeWindows [1.3.6.1.6.3.15.1.1.2.0] will be handled by the calling
+			// function, and retransmitted.  All others need to be handled by user code)
+			if result.Version == Version3 && len(result.Variables) == 1 && result.PDUType == Report {
+				switch result.Variables[0].Name {
+				case ".1.3.6.1.6.3.15.1.1.1.0", ".1.3.6.1.6.3.15.1.1.2.0",
+					".1.3.6.1.6.3.15.1.1.3.0", ".1.3.6.1.6.3.15.1.1.4.0",
+					".1.3.6.1.6.3.15.1.1.5.0", ".1.3.6.1.6.3.15.1.1.6.0":
+					break loop
+				}
+			}
+
 			validID := false
 			for _, id := range allReqIDs {
 				if id == result.RequestID {
@@ -243,13 +256,6 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 			if !validID {
 				x.logPrint("ERROR  out of order ")
-				if result.Version == Version3 {
-					// detect out-of-time-window error and go out of this function with all data
-					// (outside it will be handled and retransmitted )
-					if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
-						break
-					}
-				}
 				err = fmt.Errorf("Out of order response")
 				continue
 			}
