@@ -322,6 +322,17 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 			result, err = x.sendOneRequest(packetOut, wait)
 		}
 	}
+
+	// detect unknown engine id error and retransmit with updated engine id
+	if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.4.0" {
+		x.logPrintf("WARNING detected unknown enginer id ERROR")
+		err = x.updatePktSecurityParameters(packetOut)
+		if err != nil {
+			x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
+			return nil, err
+		}
+		result, err = x.sendOneRequest(packetOut, wait)
+	}
 	return result, err
 }
 
