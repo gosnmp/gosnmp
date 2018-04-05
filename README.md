@@ -4,6 +4,10 @@ gosnmp
 [![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
 https://github.com/soniah/gosnmp
 
+- ![#f03c15](https://placehold.it/15/f03c15/000000?text=+) builds are currently failing for __32 bit platforms__. They've actually been failing
+- ![#f03c15](https://placehold.it/15/f03c15/000000?text=+) for a long time, but `.travis.yml` wasn't configured to detect it. I'm working on
+- ![#f03c15](https://placehold.it/15/f03c15/000000?text=+) on a solution, but if anyone can spot the problem a PR would be welcome...
+
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
 GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
 IPv6, using __SNMPv2c__ or __SNMPv3__.
