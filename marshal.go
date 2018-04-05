@@ -160,7 +160,6 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 
 		}
-		x.logPrintf("PACKET SENT: %#+v", *packetOut)
 		if x.loggingEnabled && x.Version == Version3 {
 			packetOut.SecurityParameters.Log()
 		}
@@ -173,6 +172,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			break
 		}
 
+		x.logPrintf("SENDING PACKET: %#+v", *packetOut)
 		_, err = x.Conn.Write(outBuf)
 		if err != nil {
 			continue
@@ -183,7 +183,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			return &SnmpPacket{}, nil
 		}
 
-	loop:
+	waitingResponse:
 		for {
 			x.logPrint("WAITING RESPONSE...")
 			// Receive response and try receiving again on any decoding error.
@@ -241,7 +241,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				case ".1.3.6.1.6.3.15.1.1.1.0", ".1.3.6.1.6.3.15.1.1.2.0",
 					".1.3.6.1.6.3.15.1.1.3.0", ".1.3.6.1.6.3.15.1.1.4.0",
 					".1.3.6.1.6.3.15.1.1.5.0", ".1.3.6.1.6.3.15.1.1.6.0":
-					break loop
+					break waitingResponse
 				}
 			}
 
