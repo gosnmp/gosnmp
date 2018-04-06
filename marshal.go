@@ -545,7 +545,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		case byte:
 			intBytes = []byte{byte(pdu.Value.(int))}
 		case int:
-			intBytes, err = marshalInt32(value)
+			intBytes, err = marshalInt16(value)
 			pdu.Check(err)
 		default:
 			return nil, fmt.Errorf("Unable to marshal PDU Integer; not byte or int.")

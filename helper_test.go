@@ -78,26 +78,3 @@ func TestParseUint64(t *testing.T) {
 		}
 	}
 }
-
-func TestMarshallInt32(t *testing.T) {
-	tests := []struct {
-		goodBytes []byte
-		value   int32
-	}{
-		{[]byte{0x00}, 0},
-		{[]byte{0x01}, 1},
-		{[]byte{0xf3}, 243},
-		{[]byte{0x01, 0xfe}, 0x1fe},
-		{[]byte{0xa1, 0xb2, 0xc3}, 0xa1b2c3},
-		{[]byte{0x71, 0xb2, 0xc3, 0xd4}, 0x71b2c3d4},
-	}
-	for i, test := range tests {
-		result, err := marshalInt32(int(test.value))
-		if err != nil {
-			t.Errorf("%d: expected %0x got err %v", i, test.goodBytes, err)
-		}
-		if !checkByteEquality2(test.goodBytes, result) {
-			t.Errorf("%d: expected %0x got %0x", i, test.goodBytes, result)
-		}
-	}
-}
