@@ -74,7 +74,7 @@ RequestLoop:
 				}
 				break RequestLoop
 			}
-			if v.Name == oid {
+			if v.Name == oid && ! x.NoLexicographicWalk { // double negative...
 				return fmt.Errorf("OID not increasing: %s", v.Name)
 			}
 			// Report our pdu

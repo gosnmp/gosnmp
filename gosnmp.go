@@ -78,6 +78,10 @@ type GoSNMP struct {
 	// (default: 0 as per RFC 1905)
 	NonRepeaters int
 
+	// NoLexicographicWalk permits out-of-order oid results for walks. It corresponds
+	// to the snmpwalk -Cc option.
+	NoLexicographicWalk bool
+
 	// Internal - used to sync requests to responses
 	requestID uint32
 	random    *rand.Rand
