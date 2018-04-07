@@ -75,6 +75,8 @@ RequestLoop:
 				break RequestLoop
 			}
 			if v.Name == oid && ! x.NoLexicographicWalk { // double negative...
+				// TODO does NoLexicographicWalk require 'memory' to prevent looping indefinitely? Or to
+				// TODO handle OIDs that were skipped over? Check net-snmp source
 				return fmt.Errorf("OID not increasing: %s", v.Name)
 			}
 			// Report our pdu
