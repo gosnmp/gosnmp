@@ -170,6 +170,7 @@ func (t *TrapListener) Listen(addr string) (err error) {
 					continue
 				}
 				t.Params.logPrintf("TrapListener: error in read %s\n", err)
+				continue
 			}
 
 			msg := buf[:rlen]
