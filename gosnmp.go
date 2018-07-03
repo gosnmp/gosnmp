@@ -199,6 +199,18 @@ const (
 // For historical reasons (ie this is part of the public API), the method won't
 // be renamed.
 func (x *GoSNMP) Connect() error {
+	return x.connect("udp")
+}
+
+func (x *GoSNMP) ConnectIPv4() error {
+	return x.connect("udp4")
+}
+
+func (x *GoSNMP) ConnectIPv6() error {
+	return x.connect("udp6")
+}
+
+func (x *GoSNMP) connect(network string) error {
 	var err error
 	err = x.validateParameters()
 	if err != nil {
