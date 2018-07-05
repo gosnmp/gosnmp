@@ -1,28 +1,18 @@
 language: go
 
-# https://tinyurl.com/yb84s376 "SO which GOARCH's should be tested?"
-# for the moment, do 3 major releases, until next RC comes out
-
 go:
- - 1.8
- - 1.9
+- 1.8
+- 1.9
 - "1.10"
 
 env:
   global:
     - GOSNMP_TARGET=127.0.0.1
     - GOSNMP_PORT=161
-  matrix:
-    # I can build non-Linux platforms here, but how would I put the binary on
-    # other platforms to run the tests? Would that provide value?
-    - GOOS=linux   TRAVIS_GOARCH=amd64
-    - GOOS=linux   TRAVIS_GOARCH=386
 
 before_install:
  - sudo apt-get update -qq
  - sudo apt-get install snmpd
- - export GOARCH=$TRAVIS_GOARCH # https://github.com/travis-ci/travis-ci/issues/6126
- - go env # for debugging
 
 install:
  - go get github.com/soniah/gosnmp
