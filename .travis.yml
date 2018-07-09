@@ -1,3 +1,5 @@
+version: "= 0"
+
 language: go
 
 go:
@@ -5,10 +7,15 @@ go:
 - 1.9
 - "1.10"
 
+# TODO GOARCH 386 isn' be passed through to compiler - verify via raw logs
+
 env:
   global:
     - GOSNMP_TARGET=127.0.0.1
     - GOSNMP_PORT=161
+  matrix:
+    - GOARCH=amd64
+    - GOARCH=386
 
 before_install:
  - sudo apt-get update -qq
