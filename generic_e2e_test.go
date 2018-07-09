@@ -27,12 +27,12 @@ func setupConnection(t *testing.T) {
 	envPort := os.Getenv("GOSNMP_PORT")
 
 	if len(envTarget) <= 0 {
-		t.Skip("skipping: environment variable not set: GOSNMP_TARGET")
+		t.Error("environment variable not set: GOSNMP_TARGET")
 	}
 	Default.Target = envTarget
 
 	if len(envPort) <= 0 {
-		t.Skip("skipping: environment variable not set: GOSNMP_PORT")
+		t.Error("environment variable not set: GOSNMP_PORT")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
 	Default.Port = uint16(port)
@@ -51,12 +51,12 @@ func setupConnectionIPv4(t *testing.T) {
 	envPort := os.Getenv("GOSNMP_PORT_IPV4")
 
 	if len(envTarget) <= 0 {
-		t.Skip("skipping: environment variable not set: GOSNMP_TARGET_IPV4")
+		t.Error("environment variable not set: GOSNMP_TARGET_IPV4")
 	}
 	Default.Target = envTarget
 
 	if len(envPort) <= 0 {
-		t.Skip("skipping: environment variable not set: GOSNMP_PORT_IPV4")
+		t.Error("environment variable not set: GOSNMP_PORT_IPV4")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
 	Default.Port = uint16(port)
@@ -70,17 +70,20 @@ func setupConnectionIPv4(t *testing.T) {
 	}
 }
 
+/*
+TODO work out ipv6 networking, etc
+
 func setupConnectionIPv6(t *testing.T) {
 	envTarget := os.Getenv("GOSNMP_TARGET_IPV6")
 	envPort := os.Getenv("GOSNMP_PORT_IPV6")
 
 	if len(envTarget) <= 0 {
-		t.Skip("skipping: environment variable not set: GOSNMP_TARGET_IPV6")
+		t.Error("environment variable not set: GOSNMP_TARGET_IPV6")
 	}
 	Default.Target = envTarget
 
 	if len(envPort) <= 0 {
-		t.Skip("skipping: environment variable not set: GOSNMP_PORT_IPV6")
+		t.Error("environment variable not set: GOSNMP_PORT_IPV6")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
 	Default.Port = uint16(port)
@@ -93,6 +96,7 @@ func setupConnectionIPv6(t *testing.T) {
 		}
 	}
 }
+*/
 
 func TestGenericBasicGet(t *testing.T) {
 	setupConnection(t)
@@ -134,6 +138,7 @@ func TestGenericBasicGetIPv4Only(t *testing.T) {
 	}
 }
 
+/*
 func TestGenericBasicGetIPv6Only(t *testing.T) {
 	setupConnectionIPv6(t)
 	defer Default.Conn.Close()
@@ -153,6 +158,7 @@ func TestGenericBasicGetIPv6Only(t *testing.T) {
 		t.Fatalf("Got a zero length sysDescr")
 	}
 }
+*/
 
 func TestGenericMultiGet(t *testing.T) {
 	setupConnection(t)

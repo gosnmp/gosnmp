@@ -7,12 +7,16 @@ go:
 - 1.9
 - "1.10"
 
-# TODO GOARCH 386 isn' be passed through to compiler - verify via raw logs
+# TODO GOARCH 386 isn't being passed through to compiler - verify via raw logs
 
 env:
   global:
     - GOSNMP_TARGET=127.0.0.1
     - GOSNMP_PORT=161
+    - GOSNMP_TARGET_IPV4=127.0.0.1
+    - GOSNMP_PORT_IPV4=161
+    - GOSNMP_TARGET_IPV6='::1'
+    - GOSNMP_PORT_IPV6=161
   matrix:
     - GOARCH=amd64
     - GOARCH=386
@@ -24,6 +28,7 @@ before_install:
 install:
  - go get github.com/soniah/gosnmp
  - sudo ./snmp_users.sh
+ - sudo cat /etc/snmp/snmpd.conf
  - sudo /etc/init.d/snmpd restart
 
 script:
