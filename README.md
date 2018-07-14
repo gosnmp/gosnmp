@@ -201,6 +201,21 @@ time or haven't been able to find example devices to query:
 * 0x07 ObjectDescription
 * 0x45 NsapAddress
 
+Contributions
+-------------
+
+Contributions are welcome, especially ones that have packet captures.
+
+If you've never contributed to a Go project before here is an example workflow.
+
+1. [fork this repo on the GitHub webpage](https://github.com/soniah/gosnmp/fork)
+1. `go get github.com/soniah/gosnmp`
+1. `cd $GOPATH/src/github.com/soniah/gosnmp`
+1. `git remote rename origin upstream`
+1. `git remote add origin git@github.com:<your-github-username>/gosnmp.git`
+1. `git checkout -b development`
+1. `git push -u origin development` (setup where you push to, check it works)
+
 Packet Captures
 ---------------
 
