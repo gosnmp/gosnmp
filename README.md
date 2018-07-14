@@ -18,7 +18,7 @@ completely rewritten. Many thanks to Andreas Louca, other contributors
 
 * Whitham Reeve ([@wdreeveii](https://github.com/wdreeveii/))
 
-Sonia Hamilton, sonia@snowfrog.net, http://www.snowfrog.net.
+Sonia Hamilton, sonia@snowfrog.net
 
 Overview
 --------
@@ -57,60 +57,22 @@ type Logger interface {
 }
 ```
 
-GoSNMP is still under development, therefore API's may change and bugs
-will be squashed. Test Driven Development is used - you can help by
-sending packet captures (see Packet Captures below). There may be more
-than one branch on github. **master** is safe to pull from, other
-branches unsafe as history may be rewritten.
-
 Installation
 ------------
-
-Install via **go get**:
 
 ```shell
 go get github.com/soniah/gosnmp
 ```
 
-Using dependency managers
--------------------------
-
-By default the `dep` tool uses versioning, which is not implemented by this
-repository. To use this package with `dep`, please add the following to
-`godep.toml` or replace the existing declaration:
-
-Change from:
-
-```toml
-[[constraint]]
-  name = "github.com/soniah/gosnmp"
-  version = "1.0.0"
-```
-
-To:
-
-```toml
-[[constraint]]
-  name = "github.com/soniah/gosnmp"
-  branch = "master"
-```
-
 Documentation
 -------------
 
-See http://godoc.org/github.com/soniah/gosnmp or your local go doc
-server for full documentation, as well as the examples.
-
-```shell
-cd $GOPATH
-godoc -http=:6060 &
-$preferred_browser http://localhost:6060/pkg &
-```
+http://godoc.org/github.com/soniah/gosnmp
 
 Usage
 -----
 
-Here is code from **examples/example.go**, demonstrating how to use GoSNMP:
+Here is `examples/example.go`, demonstrating how to use GoSNMP:
 
 ```go
 // Default is a pointer to a GoSNMP struct that contains sensible defaults
@@ -154,57 +116,17 @@ Running this example gives the following output (from my printer):
 1: oid: 1.3.6.1.2.1.1.7.0 number: 104
 ```
 
-**examples/example2.go** is similar to example.go, however is uses a custom
-`&GoSNMP` rather than `g.Default`.
-
-**examples/walkexample.go** demonstrates using `BulkWalk`.
-
-**examples/example3.go** demonstrates `SNMPv3`
-
-**examples/trapserver.go** demonstrates writing an SNMP v2c trap server
-
-Bugs
-----
-
-Rane's document [SNMP: Simple? Network Management
-Protocol](http://www.rane.com/note161.html) was useful for me when
-learning the SNMP protocol.
-
-Please create an [issue](https://github.com/soniah/gosnmp/issues) on
-Github with packet captures (upload capture to Google Drive, Dropbox, or
-similar) containing samples of missing BER types, or of any other bugs
-you find. If possible, please include 2 or 3 examples of the
-missing/faulty BER type.
-
-The following BER types have been implemented:
-
-* 0x02 Integer
-* 0x04 OctetString
-* 0x06 ObjectIdentifier
-* 0x40 IPAddress (IPv4 & IPv6)
-* 0x41 Counter32
-* 0x42 Gauge32
-* 0x43 TimeTicks
-* 0x44 Opaque (Float & Double)
-* 0x46 Counter64
-* 0x47 Uinteger32
-* 0x80 NoSuchObject
-* 0x81 NoSuchInstance
-* 0x82 EndOfMibView
-
-The following (less common) BER types haven't been implemented, as I ran out of
-time or haven't been able to find example devices to query:
-
-* 0x00 EndOfContents
-* 0x01 Boolean
-* 0x03 BitString
-* 0x07 ObjectDescription
-* 0x45 NsapAddress
+* `examples/example2.go` is similar to `example.go`, however it uses a
+  custom `&GoSNMP` rather than `g.Default`
+* `examples/walkexample.go` demonstrates using `BulkWalk`
+* `examples/example3.go` demonstrates `SNMPv3`
+* `examples/trapserver.go` demonstrates writing an SNMP v2c trap server
 
 Contributions
 -------------
 
-Contributions are welcome, especially ones that have packet captures.
+Contributions are welcome, especially ones that have packet captures (see
+below).
 
 If you've never contributed to a Go project before here is an example workflow.
 
@@ -237,8 +159,57 @@ A packet capture, obtained while running the snmpget. For example:
 sudo tcpdump -s 0 -i eth0 -w foo.pcap host 203.50.251.17 and port 161
 ```
 
+Bugs
+----
+
+Rane's document [SNMP: Simple? Network Management
+Protocol](http://www.rane.com/note161.html) was useful when learning the SNMP
+protocol.
+
+Please create an [issue](https://github.com/soniah/gosnmp/issues) on
+Github with packet captures (upload capture to Google Drive, Dropbox, or
+similar) containing samples of missing BER types, or of any other bugs
+you find. If possible, please include 2 or 3 examples of the
+missing/faulty BER type.
+
+The following BER types have been implemented:
+
+* 0x02 Integer
+* 0x04 OctetString
+* 0x06 ObjectIdentifier
+* 0x40 IPAddress (IPv4 & IPv6)
+* 0x41 Counter32
+* 0x42 Gauge32
+* 0x43 TimeTicks
+* 0x44 Opaque (Float & Double)
+* 0x46 Counter64
+* 0x47 Uinteger32
+* 0x80 NoSuchObject
+* 0x81 NoSuchInstance
+* 0x82 EndOfMibView
+
+The following (less common) BER types haven't been implemented, as I ran out of
+time or haven't been able to find example devices to query:
+
+* 0x00 EndOfContents
+* 0x01 Boolean
+* 0x03 BitString
+* 0x07 ObjectDescription
+* 0x45 NsapAddress
+
 Running the Tests
 -----------------
+
+```shell
+export GOSNMP_TARGET=1.2.3.4
+export GOSNMP_PORT=161
+export GOSNMP_TARGET_IPV4=1.2.3.4
+export GOSNMP_PORT_IPV4=161
+export GOSNMP_TARGET_IPV6='0:0:0:0:0:ffff:102:304'
+export GOSNMP_PORT_IPV6=161
+go test -v -tags all        # for example
+go test -v -tags helper     # for example
+```
 
 Tests are grouped as follows:
 
@@ -252,13 +223,6 @@ Tests are grouped as follows:
 
 The generic end-to-end integration test `generic_e2e_test.go` should
 work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
-To use, set the environment variables `GOSNMP_TARGET` & `GOSNMP_PORT`, for
-example:
-
-```shell
-export GOSNMP_TARGET=1.2.3.4
-export GOSNMP_PORT=161
-```
 
 To profile cpu usage:
 
@@ -287,9 +251,10 @@ gocov test github.com/soniah/gosnmp | gocov-html > gosnmp.html && firefox gosnmp
 License
 -------
 
-Some parts of the code are borrowed by the Golang project (specifically some
-functions for unmarshaling BER responses), which are under the same terms and
-conditions as the Go language. The rest of the code is under a BSD license.
+Parts of the code are taken from the Golang project (specifically some
+functions for unmarshaling BER responses), which are under the same terms
+and conditions as the Go language. The rest of the code is under a BSD
+license.
 
 See the LICENSE file for more details.
 
