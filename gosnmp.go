@@ -210,6 +210,72 @@ func (x *GoSNMP) ConnectIPv6() error {
 	return x.connect("udp6")
 }
 
+func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) ([]byte, error) {
+	pkt := x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
+
+	// Request ID is an atomic counter (started at a random value)
+	reqID := atomic.AddUint32(&(x.requestID), 1) // TODO: fix overflows
+	pkt.RequestID = reqID
+
+	if x.Version == Version3 {
+		msgID := atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
+		pkt.MsgID = msgID
+
+		err = x.initPacket(packetOut)
+		if err != nil {
+			return []byte{}, err
+		}
+	}
+
+	var out []byte
+	out, err = pkt.marshalMsg()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return out, nil
+}
+
+func (x *GoSNMP) SnmpDecodePacket(resp []byte) (SnmpPacket, error) {
+	result = new(SnmpPacket)
+	result.Logger = x.Logger
+
+	var cursor int
+	cursor, err = x.unmarshalHeader(resp, result)
+	if err != nil {
+		x.logPrintf("ERROR on unmarshall header: %s", err)
+		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		continue
+	}
+
+	if x.Version == Version3 {
+		err = x.testAuthentication(resp, result)
+		if err != nil {
+			x.logPrintf("ERROR on Test Authentication on v3: %s", err)
+			return result, err
+		}
+		resp, cursor, err = x.decryptPacket(resp, cursor, result)
+		if err != nil {
+			x.logPrintf("ERROR decrypting on v3: %s", err)
+			return result, err
+		}
+	}
+
+	err = x.unmarshalPayload(resp, cursor, result)
+	if err != nil {
+		x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
+		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		return result, err
+	}
+
+	if result == nil || len(result.Variables) < 1 {
+		x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
+		err = fmt.Errorf("Unable to decode packet: nil")
+		return result, err
+	}
+	return result, nil
+}
+
 func (x *GoSNMP) connect(network string) error {
 	var err error
 	err = x.validateParameters()
