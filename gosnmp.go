@@ -16,6 +16,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"time"
 )
 
@@ -211,6 +212,8 @@ func (x *GoSNMP) ConnectIPv6() error {
 }
 
 func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) ([]byte, error) {
+	var err error = nil
+
 	pkt := x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
 
 	// Request ID is an atomic counter (started at a random value)
@@ -221,7 +224,7 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 		msgID := atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
 		pkt.MsgID = msgID
 
-		err = x.initPacket(packetOut)
+		err = x.initPacket(pkt)
 		if err != nil {
 			return []byte{}, err
 		}
@@ -236,8 +239,10 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 	return out, nil
 }
 
-func (x *GoSNMP) SnmpDecodePacket(resp []byte) (SnmpPacket, error) {
-	result = new(SnmpPacket)
+func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
+	var err error = nil
+
+	result := new(SnmpPacket)
 	result.Logger = x.Logger
 
 	var cursor int
@@ -245,7 +250,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (SnmpPacket, error) {
 	if err != nil {
 		x.logPrintf("ERROR on unmarshall header: %s", err)
 		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
-		continue
+		return result, err
 	}
 
 	if x.Version == Version3 {
