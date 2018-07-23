@@ -248,7 +248,6 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	var cursor int
 	cursor, err = x.unmarshalHeader(resp, result)
 	if err != nil {
-		x.logPrintf("ERROR on unmarshall header: %s", err)
 		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 		return result, err
 	}
@@ -256,26 +255,22 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	if x.Version == Version3 {
 		err = x.testAuthentication(resp, result)
 		if err != nil {
-			x.logPrintf("ERROR on Test Authentication on v3: %s", err)
 			return result, err
 		}
 		resp, cursor, err = x.decryptPacket(resp, cursor, result)
 		if err != nil {
-			x.logPrintf("ERROR decrypting on v3: %s", err)
 			return result, err
 		}
 	}
 
 	err = x.unmarshalPayload(resp, cursor, result)
 	if err != nil {
-		x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
 		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 		return result, err
 	}
 
 	if result == nil || len(result.Variables) < 1 {
-		x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
-		err = fmt.Errorf("Unable to decode packet: nil")
+		err = fmt.Errorf("Unable to decode packet: no variables")
 		return result, err
 	}
 	return result, nil
