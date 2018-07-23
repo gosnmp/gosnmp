@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+//go:generate mockgen --destination gosnmp_mock.go --package=gosnmp --source interface.go
+
 // Handler is a GoSNMP interface
 //
 // Handler is provided to assist with testing using mocks
