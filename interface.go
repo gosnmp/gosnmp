@@ -13,6 +13,8 @@ import (
 )
 
 // Handler is a GoSNMP interface
+//
+// Handler is provided to assist with testing using mocks
 type Handler interface {
 	// Connect creates and opens a socket. Because UDP is a connectionless
 	// protocol, you won't know if the remote host is responding until you send
