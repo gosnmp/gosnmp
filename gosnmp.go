@@ -193,23 +193,29 @@ const (
 
 // Connect creates and opens a socket. Because UDP is a connectionless
 // protocol, you won't know if the remote host is responding until you send
-// packets. And if the host is regularly disappearing and reappearing, you won't
-// know if you've only done a Connect().
+// packets. Neither will you know if the host is regularly disappearing and reappearing.
 //
 // For historical reasons (ie this is part of the public API), the method won't
-// be renamed.
+// be renamed to Dial().
 func (x *GoSNMP) Connect() error {
 	return x.connect("udp")
 }
 
+// ConnectIPv4 forces an IPv4-only connection
 func (x *GoSNMP) ConnectIPv4() error {
 	return x.connect("udp4")
 }
 
+// ConnectIPv6 forces an IPv6-only connection
 func (x *GoSNMP) ConnectIPv6() error {
 	return x.connect("udp6")
 }
 
+// connect to address addr on the given network
+//
+// https://golang.org/pkg/net/#Dial gives acceptable network values as:
+//   "tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),"udp6" (IPv6-only), "ip",
+//   "ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket"
 func (x *GoSNMP) connect(network string) error {
 	var err error
 	err = x.validateParameters()
@@ -218,7 +224,7 @@ func (x *GoSNMP) connect(network string) error {
 	}
 
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
-	x.Conn, err = net.DialTimeout("udp", addr, x.Timeout)
+	x.Conn, err = net.DialTimeout(network, addr, x.Timeout)
 	if err != nil {
 		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
