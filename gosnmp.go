@@ -391,7 +391,7 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 	return out, nil
 }
 
-// SnmpEncodePacket exposes SNMP packet parsing to external callers.
+// SnmpDecodePacket exposes SNMP packet parsing to external callers.
 // This is useful for processing traffic from other sources and
 // building test harnesses.
 func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
