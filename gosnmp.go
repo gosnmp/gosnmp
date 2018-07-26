@@ -16,6 +16,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"time"
 )
 
@@ -363,6 +364,77 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 	// Marshal and send the packet
 	packetOut := x.mkSnmpPacket(GetBulkRequest, pdus, nonRepeaters, maxRepetitions)
 	return x.send(packetOut, true)
+}
+
+// SnmpEncodePacket exposes SNMP packet generation to external callers.
+// This is useful for generating traffic for use over separate transport
+// stacks and creating traffic samples for test purposes.
+func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) ([]byte, error) {
+	var err error = nil
+
+	pkt := x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
+
+	// Request ID is an atomic counter (started at a random value)
+	reqID := atomic.AddUint32(&(x.requestID), 1) // TODO: fix overflows
+	pkt.RequestID = reqID
+
+	if x.Version == Version3 {
+		msgID := atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
+		pkt.MsgID = msgID
+
+		err = x.initPacket(pkt)
+		if err != nil {
+			return []byte{}, err
+		}
+	}
+
+	var out []byte
+	out, err = pkt.marshalMsg()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return out, nil
+}
+
+// SnmpDecodePacket exposes SNMP packet parsing to external callers.
+// This is useful for processing traffic from other sources and
+// building test harnesses.
+func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
+	var err error = nil
+
+	result := new(SnmpPacket)
+	result.Logger = x.Logger
+
+	var cursor int
+	cursor, err = x.unmarshalHeader(resp, result)
+	if err != nil {
+		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		return result, err
+	}
+
+	if x.Version == Version3 {
+		err = x.testAuthentication(resp, result)
+		if err != nil {
+			return result, err
+		}
+		resp, cursor, err = x.decryptPacket(resp, cursor, result)
+		if err != nil {
+			return result, err
+		}
+	}
+
+	err = x.unmarshalPayload(resp, cursor, result)
+	if err != nil {
+		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		return result, err
+	}
+
+	if result == nil || len(result.Variables) < 1 {
+		err = fmt.Errorf("Unable to decode packet: no variables")
+		return result, err
+	}
+	return result, nil
 }
 
 //
