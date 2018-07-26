@@ -28,6 +28,7 @@ before_install:
 
 install:
  - go get github.com/soniah/gosnmp
+ - go get github.com/golang/mock/gomock
  - sudo ./snmp_users.sh
  - sudo /etc/init.d/snmpd restart
 
