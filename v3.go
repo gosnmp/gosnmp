@@ -346,19 +346,20 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	_, cursorTmp = parseLength(packet[cursor:])
 	cursor += cursorTmp
 
-	if response.SecurityParameters == nil {
-		return 0, fmt.Errorf("Unable to parse V3 packet - unknown security model")
+	if response.SecurityParameters != nil {
+		cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
-	if err != nil {
-		return 0, err
-	}
 	return cursor, nil
 }
 
 func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) ([]byte, int, error) {
 	var err error
+	var decrypted = false
+
 	switch PDUType(packet[cursor]) {
 	case OctetString:
 		// pdu is encrypted
@@ -366,14 +367,28 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		if err != nil {
 			return nil, 0, err
 		}
+		decrypted = true
 		fallthrough
 	case Sequence:
-		// pdu is plaintext
-		tlength, cursorTmp := parseLength(packet[cursor:])
-		// truncate padding that may have been included with
-		// the encrypted PDU
-		packet = packet[:cursor+tlength]
-		cursor += cursorTmp
+		// pdu is plaintext or has been decrypted
+
+		if decrypted {
+			// truncate padding that might have been included with
+			// the encrypted PDU
+			tlength, cursorTmp := parseLength(packet[cursor:])
+			packet = packet[:cursor+tlength]
+			cursor += cursorTmp
+
+		} else {
+			// skip past the unencrypted header sequence
+			tlength, _ := parseLength(packet[cursor:])
+			cursor += tlength
+
+			// skip to the msgData.contextEngineID
+			tlength, cursorTmp := parseLength(packet[cursor:])
+			cursor += cursorTmp
+		}
+
 		rawContextEngineID, count, err := parseRawField(packet[cursor:], "contextEngineID")
 		if err != nil {
 			return nil, 0, fmt.Errorf("Error parsing SNMPV3 contextEngineID: %s", err.Error())
@@ -383,6 +398,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 			response.ContextEngineID = contextEngineID
 			x.logPrintf("Parsed contextEngineID %s", contextEngineID)
 		}
+
 		rawContextName, count, err := parseRawField(packet[cursor:], "contextName")
 		if err != nil {
 			return nil, 0, fmt.Errorf("Error parsing SNMPV3 contextName: %s", err.Error())
