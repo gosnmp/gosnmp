@@ -91,7 +91,7 @@ type GoSNMP struct {
 	// SecurityModel is an SNMPV3 Security Model
 	SecurityModel SnmpV3SecurityModel
 
-	// SecurityParameters is an SNMPV3 Security Model paramaters struct
+	// SecurityParameters is an SNMPV3 Security Model parameters struct
 	SecurityParameters SnmpV3SecurityParameters
 
 	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU
@@ -409,15 +409,11 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	var cursor int
 	cursor, err = x.unmarshalHeader(resp, result)
 	if err != nil {
-		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		err = fmt.Errorf("Unable to decode packet header: %s", err.Error())
 		return result, err
 	}
 
-	if x.Version == Version3 {
-		err = x.testAuthentication(resp, result)
-		if err != nil {
-			return result, err
-		}
+	if result.Version == Version3 {
 		resp, cursor, err = x.decryptPacket(resp, cursor, result)
 		if err != nil {
 			return result, err
@@ -426,7 +422,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 
 	err = x.unmarshalPayload(resp, cursor, result)
 	if err != nil {
-		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		err = fmt.Errorf("Unable to decode packet body: %s", err.Error())
 		return result, err
 	}
 
