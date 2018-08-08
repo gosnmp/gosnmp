@@ -91,7 +91,7 @@ type GoSNMP struct {
 	// SecurityModel is an SNMPV3 Security Model
 	SecurityModel SnmpV3SecurityModel
 
-	// SecurityParameters is an SNMPV3 Security Model paramaters struct
+	// SecurityParameters is an SNMPV3 Security Model parameters struct
 	SecurityParameters SnmpV3SecurityParameters
 
 	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU
@@ -372,6 +372,11 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) ([]byte, error) {
 	var err error = nil
 
+	err = x.validateParameters()
+	if err != nil {
+		return []byte{}, err
+	}
+
 	pkt := x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
 
 	// Request ID is an atomic counter (started at a random value)
@@ -404,20 +409,23 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	var err error = nil
 
 	result := new(SnmpPacket)
+
+	err = x.validateParameters()
+	if err != nil {
+		return result, err
+	}
+
 	result.Logger = x.Logger
+	result.SecurityParameters = x.SecurityParameters.Copy()
 
 	var cursor int
 	cursor, err = x.unmarshalHeader(resp, result)
 	if err != nil {
-		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		err = fmt.Errorf("Unable to decode packet header: %s", err.Error())
 		return result, err
 	}
 
-	if x.Version == Version3 {
-		err = x.testAuthentication(resp, result)
-		if err != nil {
-			return result, err
-		}
+	if result.Version == Version3 {
 		resp, cursor, err = x.decryptPacket(resp, cursor, result)
 		if err != nil {
 			return result, err
@@ -426,7 +434,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 
 	err = x.unmarshalPayload(resp, cursor, result)
 	if err != nil {
-		err = fmt.Errorf("Unable to decode packet: %s", err.Error())
+		err = fmt.Errorf("Unable to decode packet body: %s", err.Error())
 		return result, err
 	}
 
@@ -435,6 +443,16 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 		return result, err
 	}
 	return result, nil
+}
+
+// SetRequestID sets the base ID value for future requests
+func (x *GoSNMP) SetRequestID(reqID uint32) {
+	x.requestID = reqID
+}
+
+// SetMsgID sets the base ID value for future messages
+func (x *GoSNMP) SetMsgID(msgID uint32) {
+	x.msgID = msgID & 0x7fffffff
 }
 
 //
