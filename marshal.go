@@ -122,16 +122,15 @@ func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	wait bool) (result *SnmpPacket, err error) {
-	finalDeadline := time.Now().Add(x.Timeout)
-
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	allMsgIDs := make([]uint32, 0, x.Retries+1)
+
+	timeout := x.Timeout
 	for retries := 0; ; retries++ {
 		if retries > 0 {
 			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
-			if time.Now().After(finalDeadline) {
-				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
-				break
+			if x.ExponentialTimeout {
+				timeout *= 2
 			}
 			if retries > x.Retries {
 				// Report last error
@@ -140,7 +139,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		}
 		err = nil
 
-		reqDeadline := time.Now().Add(x.Timeout / time.Duration(x.Retries+1))
+		reqDeadline := time.Now().Add(timeout)
 		x.Conn.SetDeadline(reqDeadline)
 
 		// Request ID is an atomic counter (started at a random value)
