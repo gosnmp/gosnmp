@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -122,25 +123,27 @@ func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	wait bool) (result *SnmpPacket, err error) {
-	finalDeadline := time.Now().Add(x.Timeout)
-
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	allMsgIDs := make([]uint32, 0, x.Retries+1)
+
+	timeout := x.Timeout
 	for retries := 0; ; retries++ {
 		if retries > 0 {
 			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
-			if time.Now().After(finalDeadline) {
-				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
-				break
+			if x.ExponentialTimeout {
+				// https://www.webnms.com/snmp/help/snmpapi/snmpv3/v1/timeout.html
+				timeout *= 2
 			}
 			if retries > x.Retries {
-				// Report last error
+				if strings.Contains(err.Error(), "timeout") {
+					err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
+				}
 				break
 			}
 		}
 		err = nil
 
-		reqDeadline := time.Now().Add(x.Timeout / time.Duration(x.Retries+1))
+		reqDeadline := time.Now().Add(timeout)
 		x.Conn.SetDeadline(reqDeadline)
 
 		// Request ID is an atomic counter (started at a random value)
