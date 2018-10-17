@@ -133,7 +133,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				timeout *= 2
 			}
 			if retries > x.Retries {
-				// Report last error
+				err = fmt.Errorf("Request timeout (after %d retries)", retries-1)
 				break
 			}
 		}
