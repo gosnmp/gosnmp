@@ -541,18 +541,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(ltmp)
 		tmpBuf.WriteTo(pduBuf)
 
-	/*
-		snmp Integer32 and INTEGER:
-		-2^31 and 2^31-1 inclusive (-2147483648 to 2147483647 decimal)
-		(FYI https://groups.google.com/forum/#!topic/comp.protocols.snmp/1xaAMzCe_hE)
-
-		snmp Counter32, Gauge32, TimeTicks, Unsigned32:
-		non-negative integer, maximum value of 2^32-1 (4294967295 decimal)
-	*/
-
 	case Integer:
-		// TODO tests currently only cover positive integers
-
 		// Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
@@ -563,7 +552,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		case byte:
 			intBytes = []byte{byte(pdu.Value.(int))}
 		case int:
-			intBytes, err = marshalInt16(value)
+			intBytes, err = marshalInt32(value)
 			pdu.Check(err)
 		default:
 			return nil, fmt.Errorf("Unable to marshal PDU Integer; not byte or int.")
@@ -599,7 +588,6 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(tmpBuf.Bytes())
 
 	case OctetString:
-
 		//Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
@@ -637,7 +625,6 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(tmpBytes)
 
 	case ObjectIdentifier:
-
 		//Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
@@ -665,7 +652,6 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(length)
 		pduBuf.Write(tmpBytes)
 
-	// TODO no tests
 	case IPAddress:
 		//Oid
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
