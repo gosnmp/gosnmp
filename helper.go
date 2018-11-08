@@ -364,13 +364,6 @@ func marshalInt32(value int) (rs []byte, err error) {
 	rs = make([]byte, 4)
 	if 0 <= value && value <= 2147483647 {
 		binary.BigEndian.PutUint32(rs, uint32(value))
-		i := 0
-		for ; i < 3; i++ {
-			if rs[i] != 0 {
-				break
-			}
-		}
-		rs = rs[i:]
 		return rs, nil
 	}
 	if -2147483648 <= value && value < 0 {
