@@ -199,7 +199,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				// receive error. retrying won't help. abort
 				break
 			}
-			x.logPrint("GET RESPONSE OK : %+v", resp)
+			x.logPrintf("GET RESPONSE OK: %+v", resp)
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
 
@@ -259,7 +259,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				validID = true
 			}
 			if !validID {
-				x.logPrint("ERROR  out of order ")
+				x.logPrint("ERROR  out of order")
 				err = fmt.Errorf("Out of order response")
 				continue
 			}
@@ -317,7 +317,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 
 		// detect out-of-time-window error and retransmit with updated auth engine parameters
 		if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
-			x.logPrintf("WARNING detected out-of-time-window ERROR")
+			x.logPrint("WARNING detected out-of-time-window ERROR")
 			err = x.updatePktSecurityParameters(packetOut)
 			if err != nil {
 				x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
@@ -329,7 +329,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 
 	// detect unknown engine id error and retransmit with updated engine id
 	if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.4.0" {
-		x.logPrintf("WARNING detected unknown enginer id ERROR")
+		x.logPrint("WARNING detected unknown enginer id ERROR")
 		err = x.updatePktSecurityParameters(packetOut)
 		if err != nil {
 			x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
