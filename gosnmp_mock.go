@@ -121,6 +121,7 @@ func (mr *MockHandlerMockRecorder) GetNext(oids interface{}) *gomock.Call {
 }
 
 // Walk mocks base method
+
 func (m *MockHandler) Walk(rootOid string, walkFn WalkFunc) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Walk", rootOid, walkFn)
@@ -135,6 +136,7 @@ func (mr *MockHandlerMockRecorder) Walk(rootOid, walkFn interface{}) *gomock.Cal
 }
 
 // WalkAll mocks base method
+
 func (m *MockHandler) WalkAll(rootOid string) ([]SnmpPDU, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WalkAll", rootOid)
