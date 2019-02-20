@@ -378,7 +378,7 @@ func marshalInt32(value int) (rs []byte, err error) {
 	if -2147483648 <= value && value < 0 {
 		value = ^value
 		binary.BigEndian.PutUint32(rs, uint32(value))
-		for k,v := range rs {
+		for k, v := range rs {
 			rs[k] = ^v
 		}
 		return rs, nil
@@ -613,10 +613,7 @@ func parseLength(bytes []byte) (length int, cursor int) {
 // that are assigned in a hierarchy.
 func parseObjectIdentifier(bytes []byte) (s []int, err error) {
 	if len(bytes) == 0 {
-		//err = fmt.Errorf("zero length OBJECT IDENTIFIER")
-		s = make([]int, 1)
-		s[0] = 0
-		return
+		return []int{0}, nil
 	}
 
 	// In the worst case, we get two elements from the first byte (which is

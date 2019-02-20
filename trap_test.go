@@ -46,7 +46,7 @@ var testsUnmarshalTrap = []struct {
 				UserName:                 "myuser",
 				AuthenticationProtocol:   MD5,
 				AuthenticationPassphrase: "mypassword",
-				Logger: log.New(os.Stdout, "", 0),
+				Logger:                   log.New(os.Stdout, "", 0),
 			},
 		},
 	},
