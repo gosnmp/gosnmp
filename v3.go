@@ -343,7 +343,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		x.logPrintf("Parsed security model %d", SecModel)
 	}
 
-	if PDUType(packet[cursor]) != OctetString {
+	if PDUType(packet[cursor]) != PDUType(OctetString) {
 		return 0, fmt.Errorf("Invalid SNMPV3 Security Parameters\n")
 	}
 	_, cursorTmp = parseLength(packet[cursor:])
@@ -364,7 +364,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 	var decrypted = false
 
 	switch PDUType(packet[cursor]) {
-	case OctetString:
+	case PDUType(OctetString):
 		// pdu is encrypted
 		packet, err = response.SecurityParameters.decryptPacket(packet, cursor)
 		if err != nil {
