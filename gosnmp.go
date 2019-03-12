@@ -168,6 +168,8 @@ const (
 	EndOfMibView      Asn1BER = 0x82
 )
 
+//go:generate stringer -type SNMPError
+
 // SNMPError is the type for standard SNMP errors.
 type SNMPError uint8
 
