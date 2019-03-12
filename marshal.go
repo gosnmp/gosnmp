@@ -397,19 +397,19 @@ func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 		return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
 	}
 
-	buf.Write([]byte{ObjectIdentifier, byte(len(mOid))})
+	buf.Write([]byte{byte(ObjectIdentifier), byte(len(mOid))})
 	buf.Write(mOid)
 
 	// write IPAddress type, length and ipAddress value
 	ip := net.ParseIP(packet.AgentAddress)
 	ipAddressBytes := ipv4toBytes(ip)
-	buf.Write([]byte{IPAddress, byte(len(ipAddressBytes))})
+	buf.Write([]byte{byte(IPAddress), byte(len(ipAddressBytes))})
 	buf.Write(ipAddressBytes)
 
-	buf.Write([]byte{Integer, 1})
+	buf.Write([]byte{byte(Integer), 1})
 	buf.WriteByte(byte(packet.GenericTrap))
 
-	buf.Write([]byte{Integer, 1})
+	buf.Write([]byte{byte(Integer), 1})
 	buf.WriteByte(byte(packet.SpecificTrap))
 
 	timeTicks, e := marshalUint32(uint32(packet.Timestamp))
@@ -417,7 +417,7 @@ func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 		return nil, fmt.Errorf("Unable to Timestamp: %s\n", e.Error())
 	}
 
-	buf.Write([]byte{TimeTicks, byte(len(timeTicks))})
+	buf.Write([]byte{byte(TimeTicks), byte(len(timeTicks))})
 	buf.Write(timeTicks)
 
 	return buf.Bytes(), nil
@@ -534,7 +534,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBuf.Write([]byte{byte(ObjectIdentifier)})
 		tmpBuf.Write(ltmp)
 		tmpBuf.Write(oid)
-		tmpBuf.Write([]byte{Null, 0x00})
+		tmpBuf.Write([]byte{byte(Null), byte(EndOfContents)})
 
 		ltmp, err = marshalLength(tmpBuf.Len())
 		if err != nil {
