@@ -424,7 +424,9 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	}
 
 	result.Logger = x.Logger
-	result.SecurityParameters = x.SecurityParameters.Copy()
+	if x.SecurityParameters != nil {
+		result.SecurityParameters = x.SecurityParameters.Copy()
+	}
 
 	var cursor int
 	cursor, err = x.unmarshalHeader(resp, result)
