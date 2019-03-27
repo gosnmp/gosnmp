@@ -379,7 +379,7 @@ func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 		return nil, err2
 	}
 	msg.Write(bufLengthBytes)
-	buf.WriteTo(msg) // reverse logic - want to do msg.Write(buf)
+	buf.WriteTo(msg)
 
 	authenticatedMessage, err := packet.authenticate(msg.Bytes())
 	if err != nil {
@@ -392,33 +392,47 @@ func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
-	mOid, err := marshalOID(packet.Enterprise)
+	// marshal OID
+	oidBytes, err := marshalOID(packet.Enterprise)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
 	}
+	buf.Write([]byte{byte(ObjectIdentifier), byte(len(oidBytes))})
+	buf.Write(oidBytes)
 
-	buf.Write([]byte{byte(ObjectIdentifier), byte(len(mOid))})
-	buf.Write(mOid)
-
-	// write IPAddress type, length and ipAddress value
+	// marshal AgentAddress (ip address)
 	ip := net.ParseIP(packet.AgentAddress)
 	ipAddressBytes := ipv4toBytes(ip)
 	buf.Write([]byte{byte(IPAddress), byte(len(ipAddressBytes))})
 	buf.Write(ipAddressBytes)
 
-	buf.Write([]byte{byte(Integer), 1})
-	buf.WriteByte(byte(packet.GenericTrap))
+	// marshal GenericTrap. Could just cast GenericTrap to a single byte as IDs greater than 6 are unknown,
+	// but do it properly. See issue 182.
+	var genericTrapBytes []byte
+	genericTrapBytes, err = marshalInt32(packet.GenericTrap)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to marshal SNMPv1 GenericTrap: %s", err.Error())
+	}
+	buf.Write([]byte{byte(Integer), byte(len(genericTrapBytes))})
+	buf.Write(genericTrapBytes)
 
-	buf.Write([]byte{byte(Integer), 1})
-	buf.WriteByte(byte(packet.SpecificTrap))
+	// marshal SpecificTrap
+	var specificTrapBytes []byte
+	specificTrapBytes, err = marshalInt32(packet.SpecificTrap)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to marshal SNMPv1 SpecificTrap: %s", err.Error())
+	}
+	buf.Write([]byte{byte(Integer), byte(len(specificTrapBytes))})
+	buf.Write(specificTrapBytes)
 
-	timeTicks, e := marshalUint32(uint32(packet.Timestamp))
+
+	// marshal timeTicks
+	timeTickBytes, e := marshalUint32(uint32(packet.Timestamp))
 	if e != nil {
 		return nil, fmt.Errorf("Unable to Timestamp: %s\n", e.Error())
 	}
-
-	buf.Write([]byte{byte(TimeTicks), byte(len(timeTicks))})
-	buf.Write(timeTicks)
+	buf.Write([]byte{byte(TimeTicks), byte(len(timeTickBytes))})
+	buf.Write(timeTickBytes)
 
 	return buf.Bytes(), nil
 }
@@ -485,7 +499,7 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 	}
 	pdu.Write(bufLengthBytes)
 
-	buf.WriteTo(pdu) // reverse logic - want to do pdu.Write(buf)
+	buf.WriteTo(pdu)
 	return pdu.Bytes(), nil
 }
 
