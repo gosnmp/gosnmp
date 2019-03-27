@@ -411,7 +411,7 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 
 	var extkey [64]byte
 
-	copy(extkey[:], sp.secretKey)
+	copy(extkey[:], packetSecParams.secretKey)
 
 	var k1, k2 [64]byte
 

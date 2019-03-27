@@ -37,7 +37,7 @@ type SnmpPacket struct {
 	Version            SnmpVersion
 	MsgFlags           SnmpV3MsgFlags
 	SecurityModel      SnmpV3SecurityModel
-	SecurityParameters SnmpV3SecurityParameters
+	SecurityParameters SnmpV3SecurityParameters // interface
 	ContextEngineID    string
 	ContextName        string
 	Community          string
@@ -50,7 +50,7 @@ type SnmpPacket struct {
 	NonRepeaters       uint8
 	MaxRepetitions     uint8
 	Variables          []SnmpPDU
-	Logger             Logger
+	Logger             Logger // interface
 
 	// v1 traps have a very different format from v2c and v3 traps.
 	//
