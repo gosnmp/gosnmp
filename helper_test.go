@@ -7,8 +7,9 @@
 package gosnmp
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // https://www.scadacore.com/tools/programming-calculators/online-hex-converter/ is useful
