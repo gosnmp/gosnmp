@@ -1,3 +1,8 @@
+## v1.19
+
+* bug fix: handle uninitialized v3 SecurityParameters in SnmpDecodePacket()
+* SNMPError, Asn1BER - stringers; types on constants
+
 ## v1.18
 
 * bug fix: use format flags - logPrintf() not logPrint()
