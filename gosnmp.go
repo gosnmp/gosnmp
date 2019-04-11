@@ -82,6 +82,13 @@ type GoSNMP struct {
 	// (default: 0 as per RFC 1905)
 	NonRepeaters int
 
+	// netsnmp has '-C APPOPTS - set various application specific behaviours'
+	//
+	// - 'c: do not check returned OIDs are increasing' - use AppOpts = map[string]interface{"c":true} with
+	//   Walk() or BulkWalk(). The library user needs to implement their own policy for terminating walks.
+	// - 'p,i,I,t,E' -> pull requests welcome
+	AppOpts map[string]interface{}
+
 	// Internal - used to sync requests to responses
 	requestID uint32
 	random    *rand.Rand
@@ -482,7 +489,9 @@ func (x *GoSNMP) BulkWalk(rootOid string, walkFn WalkFunc) error {
 }
 
 // BulkWalkAll is similar to BulkWalk but returns a filled array of all values
-// rather than using a callback function to stream results.
+// rather than using a callback function to stream results. Caution: if you
+// have set x.AppOpts to 'c', BulkWalkAll may loop indefinitely and cause an
+// Out Of Memory - use BulkWalk instead.
 func (x *GoSNMP) BulkWalkAll(rootOid string) (results []SnmpPDU, err error) {
 	return x.walkAll(GetBulkRequest, rootOid)
 }
@@ -497,7 +506,9 @@ func (x *GoSNMP) Walk(rootOid string, walkFn WalkFunc) error {
 }
 
 // WalkAll is similar to Walk but returns a filled array of all values rather
-// than using a callback function to stream results.
+// than using a callback function to stream results. Caution: if you have set
+// x.AppOpts to 'c', WalkAll may loop indefinitely and cause an Out Of Memory -
+// use Walk instead.
 func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
 	return x.walkAll(GetNextRequest, rootOid)
 }

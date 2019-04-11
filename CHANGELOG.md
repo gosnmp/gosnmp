@@ -1,3 +1,7 @@
+## v1.21.0
+
+* add netsnmp functionality "not check returned OIDs are increasing"
+
 ## v1.20.0
 
 * convert all tags to correct semantic versioning, and remove old tags

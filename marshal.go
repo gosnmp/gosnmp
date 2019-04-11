@@ -425,7 +425,6 @@ func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 	buf.Write([]byte{byte(Integer), byte(len(specificTrapBytes))})
 	buf.Write(specificTrapBytes)
 
-
 	// marshal timeTicks
 	timeTickBytes, e := marshalUint32(uint32(packet.Timestamp))
 	if e != nil {
