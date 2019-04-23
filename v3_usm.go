@@ -62,8 +62,8 @@ type UsmSecurityParameters struct {
 	AuthenticationPassphrase string
 	PrivacyPassphrase        string
 
-	secretKey  []byte
-	privacyKey []byte
+	SecretKey  []byte
+	PrivacyKey []byte
 
 	Logger Logger
 }
@@ -84,8 +84,8 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 		PrivacyProtocol:          sp.PrivacyProtocol,
 		AuthenticationPassphrase: sp.AuthenticationPassphrase,
 		PrivacyPassphrase:        sp.PrivacyPassphrase,
-		secretKey:                sp.secretKey,
-		privacyKey:               sp.privacyKey,
+		SecretKey:                sp.SecretKey,
+		PrivacyKey:               sp.PrivacyKey,
 		localDESSalt:             sp.localDESSalt,
 		localAESSalt:             sp.localAESSalt,
 		Logger:                   sp.Logger,
@@ -106,13 +106,13 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 
 	if sp.AuthoritativeEngineID != insp.AuthoritativeEngineID {
 		sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
-		if sp.AuthenticationProtocol > NoAuth {
-			sp.secretKey = genlocalkey(sp.AuthenticationProtocol,
+		if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
+			sp.SecretKey = genlocalkey(sp.AuthenticationProtocol,
 				sp.AuthenticationPassphrase,
 				sp.AuthoritativeEngineID)
 		}
-		if sp.PrivacyProtocol > NoPriv {
-			sp.privacyKey = genlocalkey(sp.AuthenticationProtocol,
+		if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
+			sp.PrivacyKey = genlocalkey(sp.AuthenticationProtocol,
 				sp.PrivacyPassphrase,
 				sp.AuthoritativeEngineID)
 		}
@@ -146,13 +146,13 @@ func (sp *UsmSecurityParameters) validate(flags SnmpV3MsgFlags) error {
 		return fmt.Errorf("MsgFlags must be populated with an appropriate security level")
 	}
 
-	if sp.PrivacyProtocol > NoPriv {
+	if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
 		if sp.PrivacyPassphrase == "" {
 			return fmt.Errorf("SecurityParameters.PrivacyPassphrase is required when a privacy protocol is specified.")
 		}
 	}
 
-	if sp.AuthenticationProtocol > NoAuth {
+	if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
 		if sp.AuthenticationPassphrase == "" {
 			return fmt.Errorf("SecurityParameters.AuthenticationPassphrase is required when an authentication protocol is specified.")
 		}
@@ -363,7 +363,7 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 
 	var extkey [64]byte
 
-	copy(extkey[:], sp.secretKey)
+	copy(extkey[:], sp.SecretKey)
 
 	var k1, k2 [64]byte
 
@@ -411,7 +411,7 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 
 	var extkey [64]byte
 
-	copy(extkey[:], packetSecParams.secretKey)
+	copy(extkey[:], packetSecParams.SecretKey)
 
 	var k1, k2 [64]byte
 
@@ -456,7 +456,7 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
 		copy(iv[8:], sp.PrivacyParameters)
 
-		block, err := aes.NewCipher(sp.privacyKey[:16])
+		block, err := aes.NewCipher(sp.PrivacyKey[:16])
 		if err != nil {
 			return nil, err
 		}
@@ -470,12 +470,12 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		b = append([]byte{byte(OctetString)}, pduLen...)
 		scopedPdu = append(b, ciphertext...)
 	default:
-		preiv := sp.privacyKey[8:]
+		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
 		for i := 0; i < len(iv); i++ {
 			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
-		block, err := des.NewCipher(sp.privacyKey[:8])
+		block, err := des.NewCipher(sp.PrivacyKey[:8])
 		if err != nil {
 			return nil, err
 		}
@@ -508,7 +508,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
 		copy(iv[8:], sp.PrivacyParameters)
 
-		block, err := aes.NewCipher(sp.privacyKey[:16])
+		block, err := aes.NewCipher(sp.PrivacyKey[:16])
 		if err != nil {
 			return nil, err
 		}
@@ -521,12 +521,12 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
 			return nil, fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
 		}
-		preiv := sp.privacyKey[8:]
+		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
 		for i := 0; i < len(iv); i++ {
 			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
-		block, err := des.NewCipher(sp.privacyKey[:8])
+		block, err := des.NewCipher(sp.PrivacyKey[:8])
 		if err != nil {
 			return nil, err
 		}
@@ -617,13 +617,13 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		if sp.AuthoritativeEngineID != AuthoritativeEngineID {
 			sp.AuthoritativeEngineID = AuthoritativeEngineID
 			sp.Logger.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
-			if sp.AuthenticationProtocol > NoAuth {
-				sp.secretKey = genlocalkey(sp.AuthenticationProtocol,
+			if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
+				sp.SecretKey = genlocalkey(sp.AuthenticationProtocol,
 					sp.AuthenticationPassphrase,
 					sp.AuthoritativeEngineID)
 			}
-			if sp.PrivacyProtocol > NoPriv {
-				sp.privacyKey = genlocalkey(sp.AuthenticationProtocol,
+			if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
+				sp.PrivacyKey = genlocalkey(sp.AuthenticationProtocol,
 					sp.PrivacyPassphrase,
 					sp.AuthoritativeEngineID)
 			}
