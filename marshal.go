@@ -9,6 +9,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -195,7 +196,14 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 
 			var resp []byte
 			resp, err = x.receive()
-			if err != nil {
+			if err == io.EOF && strings.HasPrefix(x.Transport, "tcp") {
+				// EOF on TCP: reconnect and retry. Do not count
+				// as retry as socket was broken
+				x.logPrintf("ERROR: EOF. Performing reconnect")
+				x.net_connect()
+				retries--
+				break
+			} else if err != nil {
 				// receive error. retrying won't help. abort
 				break
 			}
@@ -972,8 +980,10 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 // receive response from network and read into a byte array
 func (x *GoSNMP) receive() ([]byte, error) {
 	n, err := x.Conn.Read(x.rxBuf[:])
-	if err != nil {
-		return nil, fmt.Errorf("Error reading from UDP: %s", err.Error())
+	if err == io.EOF {
+		return nil, err
+	} else if err != nil {
+		return nil, fmt.Errorf("Error reading from socket: %s", err.Error())
 	}
 
 	if n == rxBufSize {
