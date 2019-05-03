@@ -475,14 +475,14 @@ func marshalOID(oid string) ([]byte, error) {
 	for i := 0; i < len(oidParts); i++ {
 		oidBytes[i], err = strconv.Atoi(oidParts[i])
 		if err != nil {
-			return nil, fmt.Errorf("Unable to parse OID: %s\n", err.Error())
+			return nil, fmt.Errorf("unable to parse OID: %s", err.Error())
 		}
 	}
 
 	mOid, err := marshalObjectIdentifier(oidBytes)
 
 	if err != nil {
-		return nil, fmt.Errorf("Unable to marshal OID: %s\n", err.Error())
+		return nil, fmt.Errorf("unable to marshal OID: %s", err.Error())
 	}
 
 	return mOid, err
@@ -674,7 +674,7 @@ func parseRawField(data []byte, msg string) (interface{}, int, error) {
 		return ret, length, nil
 	}
 
-	return nil, 0, fmt.Errorf("Unknown field type: %x\n", data[0])
+	return nil, 0, fmt.Errorf("unknown field type: %x", data[0])
 }
 
 // parseUint64 treats the given bytes as a big-endian, unsigned integer and returns

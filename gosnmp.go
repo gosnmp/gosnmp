@@ -246,7 +246,7 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 	x.Transport = x.Transport + networkSuffix
 	err = x.netConnect()
 	if err != nil {
-		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
+		return fmt.Errorf("error establishing connection to host: %s", err.Error())
 	}
 
 	if x.random == nil {
@@ -403,7 +403,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 // This is useful for generating traffic for use over separate transport
 // stacks and creating traffic samples for test purposes.
 func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) ([]byte, error) {
-	var err error = nil
+	var err error
 
 	err = x.validateParameters()
 	if err != nil {
@@ -439,7 +439,7 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 // This is useful for processing traffic from other sources and
 // building test harnesses.
 func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
-	var err error = nil
+	var err error
 
 	result := new(SnmpPacket)
 

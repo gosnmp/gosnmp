@@ -68,6 +68,7 @@ type UsmSecurityParameters struct {
 	Logger Logger
 }
 
+// Log logs security paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Log() {
 	sp.Logger.Printf("SECURITY PARAMETERS:%+v", sp)
 }
@@ -148,13 +149,13 @@ func (sp *UsmSecurityParameters) validate(flags SnmpV3MsgFlags) error {
 
 	if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
 		if sp.PrivacyPassphrase == "" {
-			return fmt.Errorf("SecurityParameters.PrivacyPassphrase is required when a privacy protocol is specified.")
+			return fmt.Errorf("securityParameters.PrivacyPassphrase is required when a privacy protocol is specified")
 		}
 	}
 
 	if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
 		if sp.AuthenticationPassphrase == "" {
-			return fmt.Errorf("SecurityParameters.AuthenticationPassphrase is required when an authentication protocol is specified.")
+			return fmt.Errorf("securityParameters.AuthenticationPassphrase is required when an authentication protocol is specified")
 		}
 	}
 
@@ -171,14 +172,14 @@ func (sp *UsmSecurityParameters) init(log Logger) error {
 		salt := make([]byte, 8)
 		_, err = crand.Read(salt)
 		if err != nil {
-			return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+			return fmt.Errorf("error creating a cryptographically secure salt: %s", err.Error())
 		}
 		sp.localAESSalt = binary.BigEndian.Uint64(salt)
 	case DES:
 		salt := make([]byte, 4)
 		_, err = crand.Read(salt)
 		if err != nil {
-			return fmt.Errorf("Error creating a cryptographically secure salt: %s\n", err.Error())
+			return fmt.Errorf("error creating a cryptographically secure salt: %s", err.Error())
 		}
 		sp.localDESSalt = binary.BigEndian.Uint32(salt)
 	}
@@ -519,7 +520,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		packet = packet[:cursor+len(plaintext)]
 	default:
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
-			return nil, fmt.Errorf("Error decrypting ScopedPDU: not multiple of des block size.")
+			return nil, fmt.Errorf("error decrypting ScopedPDU: not multiple of des block size")
 		}
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
@@ -603,7 +604,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	var err error
 
 	if PDUType(packet[cursor]) != Sequence {
-		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model parameters\n")
+		return 0, fmt.Errorf("error parsing SNMPV3 User Security Model parameters")
 	}
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursor += cursorTmp

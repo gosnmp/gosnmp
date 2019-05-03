@@ -297,7 +297,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	response *SnmpPacket) (int, error) {
 
 	if PDUType(packet[cursor]) != Sequence {
-		return 0, fmt.Errorf("Invalid SNMPV3 Header\n")
+		return 0, fmt.Errorf("invalid SNMPV3 Header")
 	}
 
 	_, cursorTmp := parseLength(packet[cursor:])
@@ -344,7 +344,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 
 	if PDUType(packet[cursor]) != PDUType(OctetString) {
-		return 0, fmt.Errorf("Invalid SNMPV3 Security Parameters\n")
+		return 0, fmt.Errorf("invalid SNMPV3 Security Parameters")
 	}
 	_, cursorTmp = parseLength(packet[cursor:])
 	cursor += cursorTmp
@@ -401,7 +401,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		}
 
 	default:
-		return nil, 0, fmt.Errorf("Error parsing SNMPV3 scoped PDU\n")
+		return nil, 0, fmt.Errorf("error parsing SNMPV3 scoped PDU")
 	}
 	return packet, cursor, nil
 }
