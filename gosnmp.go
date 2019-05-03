@@ -45,7 +45,7 @@ type GoSNMP struct {
 	// Port is a port
 	Port uint16
 
-	// Transport is a string defining the transport protocol to use ("udp" or "tcp")
+	// Transport is the transport protocol to use ("udp" or "tcp"); if unset "udp" will be used.
 	Transport string
 
 	// Community is an SNMP Community string
@@ -236,15 +236,15 @@ func (x *GoSNMP) ConnectIPv6() error {
 // https://golang.org/pkg/net/#Dial gives acceptable network values as:
 //   "tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),"udp6" (IPv6-only), "ip",
 //   "ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket"
-func (x *GoSNMP) connect(network_suffix string) error {
+func (x *GoSNMP) connect(networkSuffix string) error {
 	var err error
 	err = x.validateParameters()
 	if err != nil {
 		return err
 	}
 
-	x.Transport = x.Transport + network_suffix
-	err = x.net_connect()
+	x.Transport = x.Transport + networkSuffix
+	err = x.netConnect()
 	if err != nil {
 		return fmt.Errorf("Error establishing connection to host: %s\n", err.Error())
 	}
@@ -266,7 +266,7 @@ func (x *GoSNMP) connect(network_suffix string) error {
 
 // Performs the real socket opening network operation. This can be used to do a
 // reconnect (needed for TCP)
-func (x *GoSNMP) net_connect() error {
+func (x *GoSNMP) netConnect() error {
 	var err error
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
 	x.Conn, err = net.DialTimeout(x.Transport, addr, x.Timeout)

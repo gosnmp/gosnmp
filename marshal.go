@@ -200,7 +200,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				// EOF on TCP: reconnect and retry. Do not count
 				// as retry as socket was broken
 				x.logPrintf("ERROR: EOF. Performing reconnect")
-				x.net_connect()
+				x.netConnect()
 				retries--
 				break
 			} else if err != nil {
