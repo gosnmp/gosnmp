@@ -56,6 +56,9 @@ func (x *GoSNMP) validateParametersV3() error {
 	if x.SecurityModel != UserSecurityModel {
 		return fmt.Errorf("The SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
 	}
+	if x.SecurityParameters == nil {
+		return fmt.Errorf("SNMPV3 SecurityParameters must be set")
+	}
 
 	return x.SecurityParameters.validate(x.MsgFlags)
 }
