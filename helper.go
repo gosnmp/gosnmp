@@ -349,7 +349,7 @@ func marshalLength(length int) ([]byte, error) {
 	// strip leading zeros
 	for idx, octect := range bufBytes {
 		if octect != 00 {
-			bufBytes = bufBytes[idx:len(bufBytes)]
+			bufBytes = bufBytes[idx:]
 			break
 		}
 	}

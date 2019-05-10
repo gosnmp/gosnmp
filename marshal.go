@@ -125,7 +125,7 @@ func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	wait bool) (result *SnmpPacket, err error) {
 	allReqIDs := make([]uint32, 0, x.Retries+1)
-	allMsgIDs := make([]uint32, 0, x.Retries+1)
+	// allMsgIDs := make([]uint32, 0, x.Retries+1) // unused
 
 	timeout := x.Timeout
 	for retries := 0; ; retries++ {
@@ -158,7 +158,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 
 		if x.Version == Version3 {
 			msgID := atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
-			allMsgIDs = append(allMsgIDs, msgID)
+			// allMsgIDs = append(allMsgIDs, msgID) // unused
 
 			packetOut.MsgID = msgID
 
@@ -187,7 +187,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		}
 
 		// all sends wait for the return packet, except for SNMPv2Trap
-		if wait == false {
+		if !wait {
 			return &SnmpPacket{}, nil
 		}
 
