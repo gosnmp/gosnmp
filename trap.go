@@ -159,7 +159,7 @@ func (t *TrapListener) Listen(addr string) (err error) {
 		switch {
 		case atomic.LoadInt32(&t.finish) == 1:
 			t.done <- true
-			return
+			return nil
 
 		default:
 			var buf [4096]byte

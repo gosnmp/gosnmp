@@ -9,6 +9,7 @@ package gosnmp
 import (
 	"bytes"
 	"errors"
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
 )
@@ -107,7 +108,8 @@ var testSnmpV3MD5HMAC = []struct {
 
 func TestMD5HMAC(t *testing.T) {
 	for i, test := range testSnmpV3MD5HMAC {
-		result := md5HMAC(test.password, test.engineid)
+		result, err := md5HMAC(test.password, test.engineid)
+		assert.NoError(t, err)
 		if !bytes.Equal(result, test.outKey) {
 			t.Errorf("#%d, got %v expected %v", i, result, test.outKey)
 		}
@@ -124,7 +126,7 @@ var testSnmpV3SHAHMAC = []struct {
 
 func TestSHAHMAC(t *testing.T) {
 	for i, test := range testSnmpV3SHAHMAC {
-		result := shaHMAC(test.password, test.engineid)
+		result, _ := shaHMAC(test.password, test.engineid)
 		if !bytes.Equal(result, test.outKey) {
 			t.Errorf("#%d, got %v expected %v", i, result, test.outKey)
 		}

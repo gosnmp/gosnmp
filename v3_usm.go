@@ -108,14 +108,20 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 	if sp.AuthoritativeEngineID != insp.AuthoritativeEngineID {
 		sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
 		if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
-			sp.SecretKey = genlocalkey(sp.AuthenticationProtocol,
+			sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
 				sp.AuthenticationPassphrase,
 				sp.AuthoritativeEngineID)
+			if err != nil {
+				return err
+			}
 		}
 		if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
-			sp.PrivacyKey = genlocalkey(sp.AuthenticationProtocol,
+			sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
 				sp.PrivacyPassphrase,
 				sp.AuthoritativeEngineID)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
@@ -201,7 +207,7 @@ var (
 )
 
 // Common passwordToKey algorithm, "caches" the result to avoid extra computation each reuse
-func cachedPasswordToKey(hash hash.Hash, hashType string, password string) []byte {
+func cachedPasswordToKey(hash hash.Hash, hashType string, password string) ([]byte, error) {
 	cacheKey := hashType + ":" + password
 
 	passwordKeyHashMutex.RLock()
@@ -209,7 +215,7 @@ func cachedPasswordToKey(hash hash.Hash, hashType string, password string) []byt
 	passwordKeyHashMutex.RUnlock()
 
 	if value != nil {
-		return value
+		return value, nil
 	}
 	var pi int // password index
 	for i := 0; i < 1048576; i += 64 {
@@ -218,7 +224,9 @@ func cachedPasswordToKey(hash hash.Hash, hashType string, password string) []byt
 			chunk = append(chunk, password[pi%len(password)])
 			pi++
 		}
-		hash.Write(chunk)
+		if _, err := hash.Write(chunk); err != nil {
+			return []byte{}, err
+		}
 	}
 	hashed := hash.Sum(nil)
 
@@ -226,48 +234,81 @@ func cachedPasswordToKey(hash hash.Hash, hashType string, password string) []byt
 	passwordKeyHashCache[cacheKey] = hashed
 	passwordKeyHashMutex.Unlock()
 
-	return hashed
+	return hashed, nil
 }
 
 // MD5 HMAC key calculation algorithm
-func md5HMAC(password string, engineID string) []byte {
-	var compressed []byte
-
-	compressed = cachedPasswordToKey(md5.New(), "MD5", password)
+func md5HMAC(password string, engineID string) ([]byte, error) {
+	compressed, err := cachedPasswordToKey(md5.New(), "MD5", password)
+	if err != nil {
+		return []byte{}, nil
+	}
 
 	local := md5.New()
-	local.Write(compressed)
-	local.Write([]byte(engineID))
-	local.Write(compressed)
+	_, err = local.Write(compressed)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	_, err = local.Write([]byte(engineID))
+	if err != nil {
+		return []byte{}, err
+	}
+
+	_, err = local.Write(compressed)
+	if err != nil {
+		return []byte{}, err
+	}
+
 	final := local.Sum(nil)
-	return final
+	return final, nil
 }
 
 // SHA HMAC key calculation algorithm
-func shaHMAC(password string, engineID string) []byte {
-	var hashed []byte
-
-	hashed = cachedPasswordToKey(sha1.New(), "SHA1", password)
+func shaHMAC(password string, engineID string) ([]byte, error) {
+	hashed, err := cachedPasswordToKey(sha1.New(), "SHA1", password)
+	if err != nil {
+		return []byte{}, nil
+	}
 
 	local := sha1.New()
-	local.Write(hashed)
-	local.Write([]byte(engineID))
-	local.Write(hashed)
+	_, err = local.Write(hashed)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	_, err = local.Write([]byte(engineID))
+	if err != nil {
+		return []byte{}, err
+	}
+
+	_, err = local.Write(hashed)
+	if err != nil {
+		return []byte{}, err
+	}
+
 	final := local.Sum(nil)
-	return final
+	return final, nil
 }
 
-func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) []byte {
+func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) ([]byte, error) {
 	var secretKey []byte
+	var err error
 
 	switch authProtocol {
 	default:
-		secretKey = md5HMAC(passphrase, engineID)
+		secretKey, err = md5HMAC(passphrase, engineID)
+		if err != nil {
+			return []byte{}, err
+		}
 	case SHA:
-		secretKey = shaHMAC(passphrase, engineID)
+		secretKey, err = shaHMAC(passphrase, engineID)
+		if err != nil {
+			return []byte{}, err
+		}
 	}
 
-	return secretKey
+	return secretKey, nil
 }
 
 // http://tools.ietf.org/html/rfc2574#section-8.1.1.1
@@ -361,8 +402,8 @@ func usmFindAuthParamStart(packet []byte) (uint32, error) {
 }
 
 func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
-
 	var extkey [64]byte
+	var err error
 
 	copy(extkey[:], sp.SecretKey)
 
@@ -384,11 +425,27 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 		h2 = sha1.New()
 	}
 
-	h.Write(k1[:])
-	h.Write(packet)
+	_, err = h.Write(k1[:])
+	if err != nil {
+		return err
+	}
+
+	_, err = h.Write(packet)
+	if err != nil {
+		return err
+	}
+
 	d1 := h.Sum(nil)
-	h2.Write(k2[:])
-	h2.Write(d1)
+	_, err = h2.Write(k2[:])
+	if err != nil {
+		return err
+	}
+
+	_, err = h2.Write(d1)
+	if err != nil {
+		return err
+	}
+
 	authParamStart, err := usmFindAuthParamStart(packet)
 	if err != nil {
 		return err
@@ -432,11 +489,27 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 		h2 = sha1.New()
 	}
 
-	h.Write(k1[:])
-	h.Write(packetBytes)
+	_, err = h.Write(k1[:])
+	if err != nil {
+		return false, err
+	}
+
+	_, err = h.Write(packetBytes)
+	if err != nil {
+		return false, err
+	}
+
 	d1 := h.Sum(nil)
-	h2.Write(k2[:])
-	h2.Write(d1)
+
+	_, err = h2.Write(k2[:])
+	if err != nil {
+		return false, err
+	}
+
+	_, err = h2.Write(d1)
+	if err != nil {
+		return false, err
+	}
 
 	result := h2.Sum(nil)[:12]
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
@@ -619,14 +692,20 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 			sp.AuthoritativeEngineID = AuthoritativeEngineID
 			sp.Logger.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
 			if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
-				sp.SecretKey = genlocalkey(sp.AuthenticationProtocol,
+				sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
 					sp.AuthenticationPassphrase,
 					sp.AuthoritativeEngineID)
+				if err != nil {
+					return 0, err
+				}
 			}
 			if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
-				sp.PrivacyKey = genlocalkey(sp.AuthenticationProtocol,
+				sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
 					sp.PrivacyPassphrase,
 					sp.AuthoritativeEngineID)
+				if err != nil {
+					return 0, err
+				}
 			}
 		}
 	}
