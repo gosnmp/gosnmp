@@ -140,12 +140,12 @@ func (t *TrapListener) Listen(addr string) error {
 
 	t.Params.validateParameters()
 	/*
-	TODO returning an error causes TestSendTrapBasic() (and others) to hang
-	err := t.Params.validateParameters()
-	if err != nil {
-		return err
-	}
-	 */
+		TODO returning an error causes TestSendTrapBasic() (and others) to hang
+		err := t.Params.validateParameters()
+		if err != nil {
+			return err
+		}
+	*/
 
 	if t.OnNewTrap == nil {
 		t.OnNewTrap = debugTrapHandler

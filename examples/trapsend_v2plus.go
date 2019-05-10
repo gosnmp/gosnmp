@@ -5,9 +5,10 @@
 package main
 
 import (
-	g "github.com/soniah/gosnmp"
 	"log"
 	"os"
+
+	g "github.com/soniah/gosnmp"
 )
 
 func main() {

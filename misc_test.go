@@ -9,9 +9,10 @@ package gosnmp
 import (
 	"bytes"
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Tests in alphabetical order of function being tested
