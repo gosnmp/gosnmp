@@ -27,12 +27,12 @@ func setupConnection(t *testing.T) {
 	envPort := os.Getenv("GOSNMP_PORT")
 
 	if len(envTarget) <= 0 {
-		t.Error("environment variable not set: GOSNMP_TARGET")
+		t.Skip("environment variable not set: GOSNMP_TARGET")
 	}
 	Default.Target = envTarget
 
 	if len(envPort) <= 0 {
-		t.Error("environment variable not set: GOSNMP_PORT")
+		t.Skip("environment variable not set: GOSNMP_PORT")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
 	Default.Port = uint16(port)
@@ -51,12 +51,12 @@ func setupConnectionIPv4(t *testing.T) {
 	envPort := os.Getenv("GOSNMP_PORT_IPV4")
 
 	if len(envTarget) <= 0 {
-		t.Error("environment variable not set: GOSNMP_TARGET_IPV4")
+		t.Skip("environment variable not set: GOSNMP_TARGET_IPV4")
 	}
 	Default.Target = envTarget
 
 	if len(envPort) <= 0 {
-		t.Error("environment variable not set: GOSNMP_PORT_IPV4")
+		t.Skip("environment variable not set: GOSNMP_PORT_IPV4")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
 	Default.Port = uint16(port)
@@ -277,6 +277,11 @@ func TestGenericFailureUnknownHost(t *testing.T) {
 }
 
 func TestGenericFailureConnectionTimeout(t *testing.T) {
+	envTarget := os.Getenv("GOSNMP_TARGET")
+	if len(envTarget) <= 0 {
+		t.Skip("local testing - skipping this slow one") // TODO test tag, or something
+	}
+
 	Default.Target = "198.51.100.1" // Black hole
 	err := Default.Connect()
 	if err != nil {

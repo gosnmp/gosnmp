@@ -237,8 +237,7 @@ func (x *GoSNMP) ConnectIPv6() error {
 //   "tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),"udp6" (IPv6-only), "ip",
 //   "ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket"
 func (x *GoSNMP) connect(networkSuffix string) error {
-	var err error
-	err = x.validateParameters()
+	err := x.validateParameters()
 	if err != nil {
 		return err
 	}
@@ -403,9 +402,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 // This is useful for generating traffic for use over separate transport
 // stacks and creating traffic samples for test purposes.
 func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) ([]byte, error) {
-	var err error
-
-	err = x.validateParameters()
+	err := x.validateParameters()
 	if err != nil {
 		return []byte{}, err
 	}
