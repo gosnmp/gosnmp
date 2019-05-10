@@ -211,7 +211,7 @@ func TestSendTrapBasic(t *testing.T) {
 	// wait for response from handler
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for trap to be received")
 	}
 
@@ -361,7 +361,7 @@ func TestSendV1Trap(t *testing.T) {
 	// wait for response from handler
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for trap to be received")
 	}
 
