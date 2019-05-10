@@ -8,9 +8,12 @@ package gosnmp
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -1471,4 +1474,64 @@ func trap1() []byte {
 		0x27, 0x0c, 0x03, 0x00, 0x08, 0x00, 0x74, 0x3a, 0x05, 0x00, 0x18, 0x94, 0x67, 0x0c, 0x04, 0x00,
 		0x08, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6c, 0x00, 0x00, 0x00}
+}
+
+// dump bytes in a format similar to Wireshark
+func dumpBytes1(data []byte, msg string, maxlength int) {
+	var buffer bytes.Buffer
+	buffer.WriteString(msg)
+	length := maxlength
+	if len(data) < maxlength {
+		length = len(data)
+	}
+	length *= 2 //One Byte Symobls Two Hex
+	hexStr := hex.EncodeToString(data)
+	for i := 0; length >= i+16; i += 16 {
+		buffer.WriteString("\n")
+		buffer.WriteString(strconv.Itoa(i / 2))
+		buffer.WriteString("\t")
+		buffer.WriteString(hexStr[i : i+2])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+2 : i+4])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+4 : i+6])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+6 : i+8])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+8 : i+10])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+10 : i+12])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+12 : i+14])
+		buffer.WriteString(" ")
+		buffer.WriteString(hexStr[i+14 : i+16])
+	}
+	leftOver := length % 16
+	if leftOver != 0 {
+		buffer.WriteString("\n")
+		buffer.WriteString(strconv.Itoa((length - leftOver) / 2))
+		buffer.WriteString("\t")
+		for i := 0; leftOver >= i+2; i += 2 {
+			buffer.WriteString(hexStr[i : i+2])
+			buffer.WriteString(" ")
+		}
+	}
+	buffer.WriteString("\n")
+}
+
+// dump bytes in one row, up to about screen width. Returns a string
+// rather than (dumpBytes1) writing to debugging log.
+func dumpBytes2(desc string, bb []byte, cursor int) string {
+	cursor = cursor - 4 // give some context to dump
+	if cursor < 0 {
+		cursor = 0
+	}
+	result := desc
+	for i, b := range bb[cursor:] {
+		if i > 30 { // about screen width...
+			break
+		}
+		result += fmt.Sprintf(" %02x", b)
+	}
+	return result
 }
