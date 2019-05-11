@@ -10,12 +10,11 @@ package gosnmp
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des"
-	"crypto/md5"
 	crand "crypto/rand"
-	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -31,7 +30,57 @@ const (
 	NoAuth SnmpV3AuthProtocol = 1
 	MD5    SnmpV3AuthProtocol = 2
 	SHA    SnmpV3AuthProtocol = 3
+	SHA224 SnmpV3AuthProtocol = 4
+	SHA256 SnmpV3AuthProtocol = 5
+	SHA384 SnmpV3AuthProtocol = 6
+	SHA512 SnmpV3AuthProtocol = 7
 )
+
+var macVarbinds = [][]byte{
+	[]byte{},
+	[]byte{byte(OctetString), 0},
+	[]byte{byte(OctetString), 12,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0},
+	[]byte{byte(OctetString), 12,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0},
+	[]byte{byte(OctetString), 16,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0},
+	[]byte{byte(OctetString), 24,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0},
+	[]byte{byte(OctetString), 32,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0},
+	[]byte{byte(OctetString), 48,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0}}
 
 // SnmpV3PrivProtocol is the privacy protocol in use by an private SnmpV3 connection.
 type SnmpV3PrivProtocol uint8
@@ -257,17 +306,7 @@ var (
 	passwordKeyHashMutex sync.RWMutex
 )
 
-// Common passwordToKey algorithm, "caches" the result to avoid extra computation each reuse
-func cachedPasswordToKey(hash hash.Hash, hashType string, password string) ([]byte, error) {
-	cacheKey := hashType + ":" + password
-
-	passwordKeyHashMutex.RLock()
-	value := passwordKeyHashCache[cacheKey]
-	passwordKeyHashMutex.RUnlock()
-
-	if value != nil {
-		return value, nil
-	}
+func hashPassword(hash hash.Hash, password string) ([]byte, error) {
 	var pi int // password index
 	for i := 0; i < 1048576; i += 64 {
 		var chunk []byte
@@ -280,6 +319,23 @@ func cachedPasswordToKey(hash hash.Hash, hashType string, password string) ([]by
 		}
 	}
 	hashed := hash.Sum(nil)
+	return hashed, nil
+}
+
+// Common passwordToKey algorithm, "caches" the result to avoid extra computation each reuse
+func cachedPasswordToKey(hash hash.Hash, cacheKey string, password string) ([]byte, error) {
+	passwordKeyHashMutex.RLock()
+	value := passwordKeyHashCache[cacheKey]
+	passwordKeyHashMutex.RUnlock()
+
+	if value != nil {
+		return value, nil
+	}
+
+	hashed, err := hashPassword(hash, password)
+	if err != nil {
+		return nil, err
+	}
 
 	passwordKeyHashMutex.Lock()
 	passwordKeyHashCache[cacheKey] = hashed
@@ -288,41 +344,13 @@ func cachedPasswordToKey(hash hash.Hash, hashType string, password string) ([]by
 	return hashed, nil
 }
 
-// MD5 HMAC key calculation algorithm
-func md5HMAC(password string, engineID string) ([]byte, error) {
-	compressed, err := cachedPasswordToKey(md5.New(), "MD5", password)
+func hMAC(hash crypto.Hash, cacheKey string, password string, engineID string) ([]byte, error) {
+	hashed, err := cachedPasswordToKey(hash.New(), cacheKey, password)
 	if err != nil {
 		return []byte{}, nil
 	}
 
-	local := md5.New()
-	_, err = local.Write(compressed)
-	if err != nil {
-		return []byte{}, err
-	}
-
-	_, err = local.Write([]byte(engineID))
-	if err != nil {
-		return []byte{}, err
-	}
-
-	_, err = local.Write(compressed)
-	if err != nil {
-		return []byte{}, err
-	}
-
-	final := local.Sum(nil)
-	return final, nil
-}
-
-// SHA HMAC key calculation algorithm
-func shaHMAC(password string, engineID string) ([]byte, error) {
-	hashed, err := cachedPasswordToKey(sha1.New(), "SHA1", password)
-	if err != nil {
-		return []byte{}, nil
-	}
-
-	local := sha1.New()
+	local := hash.New()
 	_, err = local.Write(hashed)
 	if err != nil {
 		return []byte{}, err
@@ -427,17 +455,28 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 	var secretKey []byte
 	var err error
 
+	var cacheKey = make([]byte, 1+len(passphrase))
+	cacheKey = append(cacheKey, 'h'+byte(authProtocol))
+	cacheKey = append(cacheKey, []byte(passphrase)...)
+
 	switch authProtocol {
 	default:
-		secretKey, err = md5HMAC(passphrase, engineID)
-		if err != nil {
-			return []byte{}, err
-		}
+		secretKey, err = hMAC(crypto.MD5, string(cacheKey), passphrase, engineID)
 	case SHA:
-		secretKey, err = shaHMAC(passphrase, engineID)
-		if err != nil {
-			return []byte{}, err
-		}
+		secretKey, err = hMAC(crypto.SHA1, string(cacheKey), passphrase, engineID)
+	case SHA224:
+		secretKey, err = hMAC(crypto.SHA224, string(cacheKey), passphrase, engineID)
+	case SHA256:
+		secretKey, err = hMAC(crypto.SHA256, string(cacheKey), passphrase, engineID)
+	case SHA384:
+		secretKey, err = hMAC(crypto.SHA384, string(cacheKey), passphrase, engineID)
+	case SHA512:
+		secretKey, err = hMAC(crypto.SHA512, string(cacheKey), passphrase, engineID)
+
+	}
+
+	if err != nil {
+		return []byte{}, err
 	}
 
 	return secretKey, nil
@@ -520,19 +559,6 @@ func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
 	return nil
 }
 
-func usmFindAuthParamStart(packet []byte) (uint32, error) {
-	idx := bytes.Index(packet, []byte{byte(OctetString), 12,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0})
-
-	if idx < 0 {
-		return 0, fmt.Errorf("Unable to locate the position in packet to write authentication key")
-	}
-
-	return uint32(idx + 2), nil
-}
-
 func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 	var extkey [64]byte
 	var err error
@@ -550,11 +576,23 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 
 	switch sp.AuthenticationProtocol {
 	default:
-		h = md5.New()
-		h2 = md5.New()
+		h = crypto.MD5.New()
+		h2 = crypto.MD5.New()
 	case SHA:
-		h = sha1.New()
-		h2 = sha1.New()
+		h = crypto.SHA1.New()
+		h2 = crypto.SHA1.New()
+	case SHA224:
+		h = crypto.SHA224.New()
+		h2 = crypto.SHA224.New()
+	case SHA256:
+		h = crypto.SHA256.New()
+		h2 = crypto.SHA256.New()
+	case SHA384:
+		h = crypto.SHA384.New()
+		h2 = crypto.SHA384.New()
+	case SHA512:
+		h = crypto.SHA512.New()
+		h2 = crypto.SHA512.New()
 	}
 
 	_, err = h.Write(k1[:])
@@ -583,7 +621,7 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 		return nil
 	}
 
-	copy(packet[authParamStart:authParamStart+12], h2.Sum(nil)[:12])
+	copy(packet[idx+2:idx+len(macVarbinds[sp.AuthenticationProtocol])], h2.Sum(nil))
 
 	return nil
 }
@@ -614,11 +652,23 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 
 	switch sp.AuthenticationProtocol {
 	default:
-		h = md5.New()
-		h2 = md5.New()
+		h = crypto.MD5.New()
+		h2 = crypto.MD5.New()
 	case SHA:
-		h = sha1.New()
-		h2 = sha1.New()
+		h = crypto.SHA1.New()
+		h2 = crypto.SHA1.New()
+	case SHA224:
+		h = crypto.SHA224.New()
+		h2 = crypto.SHA224.New()
+	case SHA256:
+		h = crypto.SHA256.New()
+		h2 = crypto.SHA256.New()
+	case SHA384:
+		h = crypto.SHA384.New()
+		h2 = crypto.SHA384.New()
+	case SHA512:
+		h = crypto.SHA512.New()
+		h2 = crypto.SHA512.New()
 	}
 
 	_, err = h.Write(k1[:])
@@ -643,7 +693,7 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 		return false, err
 	}
 
-	result := h2.Sum(nil)[:12]
+	result := h2.Sum(nil)
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
 		if result[k] != v {
 			return false, nil
@@ -776,20 +826,7 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 
 	// msgAuthenticationParameters
 	if flags&AuthNoPriv > 0 {
-		if len(sp.AuthenticationParameters) == 0 {
-			buf.Write([]byte{byte(OctetString), 12,
-				0, 0, 0, 0,
-				0, 0, 0, 0,
-				0, 0, 0, 0})
-		} else {
-			authlen, err := marshalLength(len(sp.AuthenticationParameters))
-			if err != nil {
-				return nil, err
-			}
-			buf.Write([]byte{byte(OctetString)})
-			buf.Write(authlen)
-			buf.Write([]byte(sp.AuthenticationParameters))
-		}
+		buf.Write(macVarbinds[sp.AuthenticationProtocol])
 	} else {
 		buf.Write([]byte{byte(OctetString), 0})
 	}
@@ -909,8 +946,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	// blank msgAuthenticationParameters to prepare for authentication check later
 	if flags&AuthNoPriv > 0 {
-		blank := make([]byte, 12)
-		copy(packet[cursor+2:cursor+14], blank)
+		copy(packet[cursor+2:cursor+len(macVarbinds[sp.AuthenticationProtocol])], macVarbinds[sp.AuthenticationProtocol][2:])
 	}
 	cursor += count
 
