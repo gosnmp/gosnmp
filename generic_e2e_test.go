@@ -396,7 +396,6 @@ func TestSnmpV3AuthNoPrivSHA224Get(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
-	fmt.Println(result, err)
 	if len(result.Variables) != 1 {
 		t.Fatalf("Expected result of size 1")
 	}
