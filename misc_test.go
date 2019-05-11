@@ -9,6 +9,8 @@ package gosnmp
 import (
 	"bytes"
 	"crypto"
+	_ "crypto/md5"
+	_ "crypto/sha1"
 	"errors"
 	"reflect"
 	"testing"
