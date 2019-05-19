@@ -1,3 +1,12 @@
+## v1.22.0
+
+* travis now failing build when goimports needs running
+* gometalinter
+* shell script for running local tests
+* SNMPv3 - avoid crash when missing SecurityParameters
+* add support for Walk and Get over TCP - RFC 3430
+* SNMPv3 - allow input of private key instead of passphrase
+
 ## v1.21.0
 
 * add netsnmp functionality "not check returned OIDs are increasing"
