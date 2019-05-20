@@ -226,7 +226,6 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			cursor, err = x.unmarshalHeader(resp, result)
 			if err != nil {
 				x.logPrintf("ERROR on unmarshall header: %s", err)
-				err = fmt.Errorf("Unable to decode packet: %s", err.Error())
 				continue
 			}
 
