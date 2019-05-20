@@ -271,7 +271,6 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 			if !validID {
 				x.logPrint("ERROR  out of order")
-				err = fmt.Errorf("Out of order response")
 				continue
 			}
 
