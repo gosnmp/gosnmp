@@ -245,7 +245,6 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 			if len(result.Variables) < 1 {
 				x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
-				err = fmt.Errorf("Unable to decode packet: nil")
 				continue
 			}
 
