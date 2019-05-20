@@ -235,7 +235,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 					x.logPrintf("ERROR on Test Authentication on v3: %s", err)
 					break
 				}
-				resp, cursor, err = x.decryptPacket(resp, cursor, result)
+				resp, cursor, _ = x.decryptPacket(resp, cursor, result)
 			}
 
 			err = x.unmarshalPayload(resp, cursor, result)
