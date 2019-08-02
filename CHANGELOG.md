@@ -1,3 +1,6 @@
+* The mocks have been moved to `github.com/soniah/gosnmp/mocks`.
+  If you use them, you will need to adjust your imports.
+
 ## v1.22.0
 
 * travis now failing build when goimports needs running
