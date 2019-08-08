@@ -198,7 +198,15 @@ func (t *TrapListener) Listen(addr string) error {
 				}
 
 				// Send the return packet back.
-				conn.WriteTo(ob, remote)
+				count, err := conn.WriteTo(ob, remote)
+				if err != nil {
+					return fmt.Errorf("Error sending INFORM response: %v\n", err)
+				}
+
+				// This isn't fatal, but should be logged.
+				if count != len(ob) {
+					log.Printf("Failed to send all bytes of INFORM response!\n")
+				}
 			}
 		}
 	}
