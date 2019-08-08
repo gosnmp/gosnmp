@@ -305,7 +305,20 @@ func marshalInt32(value int) (rs []byte, err error) {
 // Counter32, Gauge32, TimeTicks, Unsigned32
 func marshalUint32(v interface{}) ([]byte, error) {
 	bs := make([]byte, 4)
-	source := v.(uint32)
+
+	var source uint32
+	switch val := v.(type) {
+	case uint32:
+		source = val
+	case uint:
+		source = uint32(val)
+	// We could do others here, but coercing from anything else is dangerous.
+	// Even uint could be 64 bits, though in practice nothing we work with here
+	// is.
+	default:
+		return nil, fmt.Errorf("unable to marshal %T to uint32", v)
+	}
+
 	binary.BigEndian.PutUint32(bs, source) // will panic on failure
 	// truncate leading zeros. Cleaner technique?
 	if source <= 0x80 {
