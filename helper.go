@@ -165,7 +165,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 			break
 		}
 		retVal.Type = TimeTicks
-		retVal.Value = ret
+		retVal.Value = uint32(ret)
 	case Opaque:
 		// 0x44
 		x.logPrint("decodeValue: type is Opaque")
