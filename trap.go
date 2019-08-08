@@ -188,6 +188,18 @@ func (t *TrapListener) Listen(addr string) error {
 			if traps != nil {
 				t.OnNewTrap(traps, remote)
 			}
+			if traps.PDUType == InformRequest {
+				traps.PDUType = GetResponse
+				log.Printf("sending INFORM response: %+v\n", traps)
+
+				ob, err := traps.marshalMsg()
+				if err != nil {
+					return fmt.Errorf("Error sending INFORM response: %v\n", err)
+				}
+
+				// Send the return packet back.
+				conn.WriteTo(ob, remote)
+			}
 		}
 	}
 }
