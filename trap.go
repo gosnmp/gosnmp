@@ -194,7 +194,7 @@ func (t *TrapListener) Listen(addr string) error {
 
 				ob, err := traps.marshalMsg()
 				if err != nil {
-					return fmt.Errorf("Error sending INFORM response: %v\n", err)
+					return fmt.Errorf("Error marshaling INFORM response: %v\n", err)
 				}
 
 				// Send the return packet back.
