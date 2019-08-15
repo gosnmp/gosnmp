@@ -6,6 +6,7 @@ package gosnmp
 
 import (
 	"bytes"
+	"context"
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 	"net"
 	"strings"
 	"sync/atomic"
-	"time"
 )
 
 //
@@ -144,8 +144,14 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		}
 		err = nil
 
-		reqDeadline := time.Now().Add(timeout)
-		err = x.Conn.SetDeadline(reqDeadline)
+		if x.Context.Err() != nil {
+			return nil, x.Context.Err()
+		}
+
+		ctx, cancel := context.WithTimeout(x.Context, timeout)
+		defer cancel()
+		deadline, _ := ctx.Deadline()
+		err = x.Conn.SetDeadline(deadline)
 		if err != nil {
 			return nil, err
 		}
