@@ -57,6 +57,12 @@ type Logger interface {
 }
 ```
 
+Changes
+-------
+**akosbalogh005/gosnmp** is derived from **soniah/gosnmp**.  Added TCP trap listening function.
+Waiting for contribution...
+
+
 Installation
 ------------
 
