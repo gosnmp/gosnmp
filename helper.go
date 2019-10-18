@@ -280,13 +280,13 @@ func marshalInt32(value int) (rs []byte, err error) {
 	rs = make([]byte, 4)
 	if 0 <= value && value <= 2147483647 {
 		binary.BigEndian.PutUint32(rs, uint32(value))
-		if value <= 0x80 {
+		if value < 0x80 {
 			return rs[3:], nil
 		}
-		if value <= 0x8000 {
+		if value < 0x8000 {
 			return rs[2:], nil
 		}
-		if value <= 0x800000 {
+		if value < 0x800000 {
 			return rs[1:], nil
 		}
 		return rs, nil
@@ -308,13 +308,13 @@ func marshalUint32(v interface{}) ([]byte, error) {
 	source := v.(uint32)
 	binary.BigEndian.PutUint32(bs, source) // will panic on failure
 	// truncate leading zeros. Cleaner technique?
-	if source <= 0x80 {
+	if source < 0x80 {
 		return bs[3:], nil
 	}
-	if source <= 0x8000 {
+	if source < 0x8000 {
 		return bs[2:], nil
 	}
-	if source <= 0x800000 {
+	if source < 0x800000 {
 		return bs[1:], nil
 	}
 	return bs, nil
