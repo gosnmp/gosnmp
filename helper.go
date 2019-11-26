@@ -575,6 +575,9 @@ func parseObjectIdentifier(bytes []byte) (s []int, err error) {
 }
 
 func parseRawField(data []byte, msg string) (interface{}, int, error) {
+	if len(data) == 0 {
+		return nil, 0, fmt.Errorf("empty data passed to parseRawField")
+	}
 	switch Asn1BER(data[0]) {
 	case Integer:
 		length, cursor := parseLength(data)
