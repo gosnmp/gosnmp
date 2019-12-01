@@ -66,8 +66,15 @@ func Check(err error) {
 func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
 	retVal = new(variable)
 
+	if len(data) == 0 {
+		return retVal, fmt.Errorf("err: zero byte buffer")
+	}
+
 	// values matching this mask have the type in subsequent byte
 	if data[0]&AsnExtensionID == AsnExtensionID {
+		if len(data) < 2 {
+			return retVal, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), 2)
+		}
 		data = data[1:]
 	}
 
