@@ -256,7 +256,11 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 	// msgID INTEGER (0..2147483647)
 	x.msgID = uint32(x.random.Int31())
 	// RequestID is Integer32 from SNMPV2-SMI and uses all 32 bits
-	x.requestID = x.random.Uint32()
+	// TrueSpeed: However, some SNMP devices do not implement the spec properly,
+	// and get confused with negative integers. Our DeepSea Generator just ignores
+	// these requests. So we take care not to allow any numbers that are large enough
+	// to overflow.
+	x.requestID = uint32(x.random.Int31() / 2)
 
 	x.rxBuf = new([rxBufSize]byte)
 
