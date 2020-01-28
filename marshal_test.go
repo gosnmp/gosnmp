@@ -339,6 +339,22 @@ func TestEnmarshalMsg(t *testing.T) {
 			t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
 		}
 		checkByteEquality(t, test, testBytes, 0, test.finish)
+		t.Run(fmt.Sprintf("TestEnmarshalMsgUnmarshal/PDU[%v]/RequestID[%v]", test.requestType, test.requestid), func(t *testing.T) {
+			vhandle := GoSNMP{}
+			result, err := vhandle.SnmpDecodePacket(testBytes)
+			if err != nil {
+				t.Errorf("#%s: SnmpDecodePacket() err returned: %v", test.funcName, err)
+			}
+			newResultTestBytes, err := result.marshalMsg()
+			if err != nil {
+				t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
+			}
+			if len(newResultTestBytes) == 0 {
+				t.Errorf("#%s: marshal() length of result is 0 : %v", test.funcName, (newResultTestBytes))
+				return
+			}
+			checkByteEquality(t, test, newResultTestBytes, 0, test.finish)
+		})
 	}
 }
 

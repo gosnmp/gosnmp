@@ -190,7 +190,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 			return retVal, fmt.Errorf("not enough data for TimeTicks %x (data %d length %d)", data, len(data), length)
 		}
 
-		ret, err := parseUint(data[cursor:length])
+		ret, err := parseUint32(data[cursor:length])
 		if err != nil {
 			x.logPrintf("decodeValue: err is %v", err)
 			break
@@ -365,6 +365,7 @@ func marshalUint32(v interface{}) ([]byte, error) {
 		return bs[1:], nil
 	}
 	return bs, nil
+
 }
 
 // marshalLength builds a byte representation of length
@@ -654,6 +655,16 @@ func parseUint64(bytes []byte) (ret uint64, err error) {
 		ret |= uint64(bytes[bytesRead])
 	}
 	return
+}
+
+// parseUint32 treats the given bytes as a big-endian, signed integer and returns
+// the result.
+func parseUint32(bytes []byte) (uint32, error) {
+	ret, err := parseUint(bytes)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(ret), nil
 }
 
 // parseUint treats the given bytes as a big-endian, signed integer and returns

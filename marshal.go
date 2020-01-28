@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 	"strings"
 	"sync/atomic"
 )
@@ -620,7 +621,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 			intBytes, err = marshalUint32(value)
 			pdu.Check(err)
 		default:
-			return nil, fmt.Errorf("Unable to marshal pdu.Type %v; unknown pdu.Value %v", pdu.Type, pdu.Value)
+			return nil, fmt.Errorf("Unable to marshal pdu.Type %v; unknown pdu.Value %v[type=%v]", pdu.Type, pdu.Value, reflect.TypeOf(pdu.Value))
 		}
 		tmpBuf.Write([]byte{byte(pdu.Type), byte(len(intBytes))})
 		tmpBuf.Write(intBytes)
@@ -796,7 +797,7 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 	requestType := PDUType(packet[cursor])
 	switch requestType {
 	// known, supported types
-	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPv2Trap:
+	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPv2Trap, GetRequest, SetRequest, InformRequest:
 		response.PDUType = requestType
 		err = x.unmarshalResponse(packet[cursor:], response)
 		if err != nil {
