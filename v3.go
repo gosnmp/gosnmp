@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"runtime"
 )
 
 // SnmpV3MsgFlags contains various message flags to describe Authentication, Privacy, and whether a report PDU must be sent.
@@ -67,7 +68,9 @@ func (x *GoSNMP) validateParametersV3() error {
 func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 	defer func() {
 		if e := recover(); e != nil {
-			fmt.Printf("recover: %v\n", e)
+			var buf = make([]byte, 8192)
+			runtime.Stack(buf, true)
+			fmt.Printf("[v3::authenticate]recover: %v. Stack=%v\n", e, string(buf))
 		}
 	}()
 	if packet.Version != Version3 {
@@ -194,6 +197,7 @@ func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		return emptyBuffer, err
 	}
 	buf.Write([]byte{byte(Sequence), byte(len(header))})
+	packet.logPrintf("Marshal V3 Header len=%d. Eaten Last 4 Bytes=%v", len(header), header[len(header)-4:])
 	buf.Write(header)
 
 	var securityParameters []byte
@@ -201,6 +205,8 @@ func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	if err != nil {
 		return emptyBuffer, err
 	}
+	packet.logPrintf("Marshal V3 SecurityParameters len=%d. Eaten Last 4 Bytes=%v",
+		len(securityParameters), securityParameters[len(securityParameters)-4:])
 
 	buf.Write([]byte{byte(OctetString)})
 	secParamLen, err := marshalLength(len(securityParameters))
@@ -228,17 +234,31 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	oldLen := 0
+	packet.logPrintf("MarshalV3Header msgID len=%v", buf.Len()-oldLen)
+	oldLen = buf.Len()
 	// maximum response msg size
-	maxmsgsize := marshalUvarInt(rxBufSize)
+	var maxBufSize uint32 = rxBufSize
+	if packet.MsgMaxSize != 0 {
+		maxBufSize = packet.MsgMaxSize
+	}
+	maxmsgsize := marshalUvarInt(maxBufSize)
 	buf.Write([]byte{byte(Integer), byte(len(maxmsgsize))})
 	buf.Write(maxmsgsize)
+	packet.logPrintf("MarshalV3Header maxmsgsize len=%v", buf.Len()-oldLen)
+	oldLen = buf.Len()
 
 	// msg flags
 	buf.Write([]byte{byte(OctetString), 1, byte(packet.MsgFlags)})
 
+	packet.logPrintf("MarshalV3Header msg flags len=%v", buf.Len()-oldLen)
+	oldLen = buf.Len()
+
 	// msg security model
 	buf.Write([]byte{byte(Integer), 1, byte(packet.SecurityModel)})
+
+	packet.logPrintf("MarshalV3Header msg security model len=%v", buf.Len()-oldLen)
+	oldLen = buf.Len()
 
 	return buf.Bytes(), nil
 }
@@ -373,13 +393,15 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	if cursor > len(packet) {
 		return 0, fmt.Errorf("Error parsing SNMPV3 message ID: truncted packet")
 	}
-
-	if response.SecurityParameters != nil {
-		cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
-		if err != nil {
-			return 0, err
-		}
+	if response.SecurityParameters == nil {
+		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
 	}
+
+	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
+	if err != nil {
+		return 0, err
+	}
+	x.logPrintf("Parsed Security Parameters. now offset=%v,", cursor)
 
 	return cursor, nil
 }

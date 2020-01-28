@@ -190,7 +190,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 			return retVal, fmt.Errorf("not enough data for TimeTicks %x (data %d length %d)", data, len(data), length)
 		}
 
-		ret, err := parseUint(data[cursor:length])
+		ret, err := parseUint32(data[cursor:length])
 		if err != nil {
 			x.logPrintf("decodeValue: err is %v", err)
 			break
@@ -349,6 +349,15 @@ func marshalInt32(value int) (rs []byte, err error) {
 	return nil, fmt.Errorf("unable to marshal %d", value)
 }
 
+func marshalUint64(v interface{}) ([]byte, error) {
+	bs := make([]byte, 8)
+	source := v.(uint64)
+	binary.BigEndian.PutUint64(bs, source) // will panic on failure
+	// truncate leading zeros. Cleaner technique?
+	return bytes.TrimLeft(bs, "\x00"), nil
+	//return bs, nil
+}
+
 // Counter32, Gauge32, TimeTicks, Unsigned32
 func marshalUint32(v interface{}) ([]byte, error) {
 	bs := make([]byte, 4)
@@ -365,6 +374,21 @@ func marshalUint32(v interface{}) ([]byte, error) {
 		return bs[1:], nil
 	}
 	return bs, nil
+
+}
+
+func marshalFloat32(v interface{}) ([]byte, error) {
+	//func Float64bits(f float64) uint64
+	source := v.(float32)
+	i32 := math.Float32bits(source)
+	return marshalUint32(i32)
+}
+
+func marshalFloat64(v interface{}) ([]byte, error) {
+	//func Float64bits(f float64) uint64
+	source := v.(float64)
+	i64 := math.Float64bits(source)
+	return marshalUint64(i64)
 }
 
 // marshalLength builds a byte representation of length
@@ -654,6 +678,16 @@ func parseUint64(bytes []byte) (ret uint64, err error) {
 		ret |= uint64(bytes[bytesRead])
 	}
 	return
+}
+
+// parseUint32 treats the given bytes as a big-endian, signed integer and returns
+// the result.
+func parseUint32(bytes []byte) (uint32, error) {
+	ret, err := parseUint(bytes)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(ret), nil
 }
 
 // parseUint treats the given bytes as a big-endian, signed integer and returns
