@@ -448,7 +448,7 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 
 	authParamStart, err := usmFindAuthParamStart(packet)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	copy(packet[authParamStart:authParamStart+12], h2.Sum(nil)[:12])
@@ -644,10 +644,20 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 
 	// msgAuthenticationParameters
 	if flags&AuthNoPriv > 0 {
-		buf.Write([]byte{byte(OctetString), 12,
-			0, 0, 0, 0,
-			0, 0, 0, 0,
-			0, 0, 0, 0})
+		if len(sp.AuthenticationParameters) == 0 {
+			buf.Write([]byte{byte(OctetString), 12,
+				0, 0, 0, 0,
+				0, 0, 0, 0,
+				0, 0, 0, 0})
+		} else {
+			authlen, err := marshalLength(len(sp.AuthenticationParameters))
+			if err != nil {
+				return nil, err
+			}
+			buf.Write([]byte{byte(OctetString)})
+			buf.Write(authlen)
+			buf.Write([]byte(sp.AuthenticationParameters))
+		}
 	} else {
 		buf.Write([]byte{byte(OctetString), 0})
 	}

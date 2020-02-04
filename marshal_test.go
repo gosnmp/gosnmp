@@ -19,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Tests in alphabetical order of function being tested
@@ -726,74 +728,87 @@ func TestUnmarshal(t *testing.T) {
 			if err != nil {
 				t.Errorf("#%s: SnmpDecodePacket() err returned: %v", funcName, err)
 			}
-
-			// test "header" fields
-			if res.Version != test.out.Version {
-				t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
-			}
-			if res.Community != test.out.Community {
-				t.Errorf("#%d Community result: %v, test: %v", i, res.Community, test.out.Community)
-			}
-			if res.PDUType != test.out.PDUType {
-				t.Errorf("#%d PDUType result: %v, test: %v", i, res.PDUType, test.out.PDUType)
-			}
-			if res.RequestID != test.out.RequestID {
-				t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
-			}
-			if res.Error != test.out.Error {
-				t.Errorf("#%d Error result: %v, test: %v", i, res.Error, test.out.Error)
-			}
-			if res.ErrorIndex != test.out.ErrorIndex {
-				t.Errorf("#%d ErrorIndex result: %v, test: %v", i, res.ErrorIndex, test.out.ErrorIndex)
-			}
-
-			// test varbind values
-			for n, vb := range test.out.Variables {
-				if len(res.Variables) < n {
-					t.Errorf("#%d:%d ran out of varbind results", i, n)
-					return
+			t.Run("unmarshal", func(t *testing.T) {
+				// test "header" fields
+				if res.Version != test.out.Version {
+					t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
 				}
-				vbr := res.Variables[n]
-
-				if vbr.Name != vb.Name {
-					t.Errorf("#%d:%d Name result: %v, test: %v", i, n, vbr.Name, vb.Name)
+				if res.Community != test.out.Community {
+					t.Errorf("#%d Community result: %v, test: %v", i, res.Community, test.out.Community)
 				}
-				if vbr.Type != vb.Type {
-					t.Errorf("#%d:%d Type result: %v, test: %v", i, n, vbr.Type, vb.Type)
+				if res.PDUType != test.out.PDUType {
+					t.Errorf("#%d PDUType result: %v, test: %v", i, res.PDUType, test.out.PDUType)
+				}
+				if res.RequestID != test.out.RequestID {
+					t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
+				}
+				if res.Error != test.out.Error {
+					t.Errorf("#%d Error result: %v, test: %v", i, res.Error, test.out.Error)
+				}
+				if res.ErrorIndex != test.out.ErrorIndex {
+					t.Errorf("#%d ErrorIndex result: %v, test: %v", i, res.ErrorIndex, test.out.ErrorIndex)
 				}
 
-				switch vb.Type {
-				case Integer, Gauge32, Counter32, TimeTicks, Counter64:
-					vbval := ToBigInt(vb.Value)
-					vbrval := ToBigInt(vbr.Value)
-					if vbval.Cmp(vbrval) != 0 {
-						t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+				// test varbind values
+				for n, vb := range test.out.Variables {
+					if len(res.Variables) < n {
+						t.Errorf("#%d:%d ran out of varbind results", i, n)
+						return
 					}
-				case OctetString:
-					if !bytes.Equal(vb.Value.([]byte), vbr.Value.([]byte)) {
-						t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-					}
-				case IPAddress, ObjectIdentifier:
-					if vb.Value != vbr.Value {
-						t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-					}
-				case Null, NoSuchObject, NoSuchInstance:
-					if (vb.Value != nil) || (vbr.Value != nil) {
-						t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-					}
-				case OpaqueFloat:
-					if vb.Value.(float32) != vbr.Value.(float32) {
-						t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-					}
-				case OpaqueDouble:
-					if vb.Value.(float64) != vbr.Value.(float64) {
-						t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-					}
-				default:
-					t.Errorf("#%d:%d Unhandled case result: %v, test: %v", i, n, vbr.Value, vb.Value)
-				}
+					vbr := res.Variables[n]
 
-			}
+					if vbr.Name != vb.Name {
+						t.Errorf("#%d:%d Name result: %v, test: %v", i, n, vbr.Name, vb.Name)
+					}
+					if vbr.Type != vb.Type {
+						t.Errorf("#%d:%d Type result: %v, test: %v", i, n, vbr.Type, vb.Type)
+					}
+
+					switch vb.Type {
+					case Integer, Gauge32, Counter32, TimeTicks, Counter64:
+						vbval := ToBigInt(vb.Value)
+						vbrval := ToBigInt(vbr.Value)
+						if vbval.Cmp(vbrval) != 0 {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case OctetString:
+						if !bytes.Equal(vb.Value.([]byte), vbr.Value.([]byte)) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case IPAddress, ObjectIdentifier:
+						if vb.Value != vbr.Value {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case Null, NoSuchObject, NoSuchInstance:
+						if (vb.Value != nil) || (vbr.Value != nil) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case OpaqueFloat:
+						if vb.Value.(float32) != vbr.Value.(float32) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case OpaqueDouble:
+						if vb.Value.(float64) != vbr.Value.(float64) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					default:
+						t.Errorf("#%d:%d Unhandled case result: %v, test: %v", i, n, vbr.Value, vb.Value)
+					}
+
+				}
+			})
+			t.Run("remarshal", func(t *testing.T) {
+				result, err := res.marshalMsg()
+				if err != nil {
+					t.Fatalf("#%s: marshalMsg() err returned: %v", funcName, err)
+				}
+				resNew, err := vhandle.SnmpDecodePacket(result)
+				if err != nil {
+					t.Fatalf("#%s: SnmpDecodePacket() err returned: %v", funcName, err)
+				}
+				assert.EqualValues(t, res, resNew)
+
+			})
 		})
 
 	}

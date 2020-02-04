@@ -349,6 +349,15 @@ func marshalInt32(value int) (rs []byte, err error) {
 	return nil, fmt.Errorf("unable to marshal %d", value)
 }
 
+func marshalUint64(v interface{}) ([]byte, error) {
+	bs := make([]byte, 8)
+	source := v.(uint64)
+	binary.BigEndian.PutUint64(bs, source) // will panic on failure
+	// truncate leading zeros. Cleaner technique?
+	return bytes.TrimLeft(bs, "\x00"), nil
+	//return bs, nil
+}
+
 // Counter32, Gauge32, TimeTicks, Unsigned32
 func marshalUint32(v interface{}) ([]byte, error) {
 	bs := make([]byte, 4)
@@ -366,6 +375,20 @@ func marshalUint32(v interface{}) ([]byte, error) {
 	}
 	return bs, nil
 
+}
+
+func marshalFloat32(v interface{}) ([]byte, error) {
+	//func Float64bits(f float64) uint64
+	source := v.(float32)
+	i32 := math.Float32bits(source)
+	return marshalUint32(i32)
+}
+
+func marshalFloat64(v interface{}) ([]byte, error) {
+	//func Float64bits(f float64) uint64
+	source := v.(float64)
+	i64 := math.Float64bits(source)
+	return marshalUint64(i64)
 }
 
 // marshalLength builds a byte representation of length

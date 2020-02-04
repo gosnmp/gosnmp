@@ -495,6 +495,7 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		}
 
 		buf.Write(snmpV1TrapHeader)
+
 	default:
 		// requestid
 		buf.Write([]byte{2, 4})
@@ -629,6 +630,9 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		case uint32:
 			intBytes, err = marshalUint32(value)
 			pdu.Check(err)
+		case uint:
+			intBytes, err = marshalUint32(uint32(value))
+			pdu.Check(err)
 		default:
 			return nil, fmt.Errorf("Unable to marshal pdu.Type %v; unknown pdu.Value %v[type=%v]", pdu.Type, pdu.Value, reflect.TypeOf(pdu.Value))
 		}
@@ -726,7 +730,42 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.WriteByte(byte(Sequence))
 		pduBuf.WriteByte(byte(len(oid) + len(ipAddressBytes) + 4))
 		pduBuf.Write(tmpBuf.Bytes())
-
+	case Counter64, OpaqueFloat, OpaqueDouble:
+		converters := map[Asn1BER]func(interface{}) ([]byte, error){
+			Counter64:    marshalUint64,
+			OpaqueFloat:  marshalFloat32,
+			OpaqueDouble: marshalFloat64,
+		}
+		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
+		tmpBuf.Write(oid)
+		tmpBuf.WriteByte(byte(pdu.Type))
+		intBytes, err := converters[pdu.Type](pdu.Value)
+		pdu.Check(err)
+		tmpBuf.WriteByte(byte(len(intBytes)))
+		tmpBuf.Write(intBytes)
+		tmpBytes := tmpBuf.Bytes()
+		length, err := marshalLength(len(tmpBytes))
+		if err != nil {
+			return nil, err
+		}
+		// Sequence, length of oid + oid, then oid/oid data
+		pduBuf.WriteByte(byte(Sequence))
+		pduBuf.Write(length)
+		pduBuf.Write(tmpBytes)
+	case NoSuchInstance, NoSuchObject:
+		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
+		tmpBuf.Write(oid)
+		tmpBuf.WriteByte(byte(pdu.Type))
+		tmpBuf.WriteByte(byte(EndOfContents))
+		tmpBytes := tmpBuf.Bytes()
+		length, err := marshalLength(len(tmpBytes))
+		if err != nil {
+			return nil, err
+		}
+		// Sequence, length of oid + oid, then oid/oid data
+		pduBuf.WriteByte(byte(Sequence))
+		pduBuf.Write(length)
+		pduBuf.Write(tmpBytes)
 	default:
 		return nil, fmt.Errorf("Unable to marshal PDU: unknown BER type %q", pdu.Type)
 	}
