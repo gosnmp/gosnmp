@@ -752,7 +752,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.WriteByte(byte(Sequence))
 		pduBuf.Write(length)
 		pduBuf.Write(tmpBytes)
-	case NoSuchInstance, NoSuchObject:
+	case NoSuchInstance, NoSuchObject, EndOfMibView:
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
 		tmpBuf.WriteByte(byte(pdu.Type))
