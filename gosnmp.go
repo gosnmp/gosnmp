@@ -68,7 +68,8 @@ type GoSNMP struct {
 	// x.Logger = log.New(os.Stdout, "", 0)
 	Logger Logger
 
-	// loggingEnabled is set if the Logger is nil, short circuits any 'Logger' calls
+	// loggingEnabled is set if the Logger isn't nil, otherwise any logging calls
+	// are ignored via shortcircuit
 	loggingEnabled bool
 
 	// MaxOids is the maximum number of oids allowed in a Get()
