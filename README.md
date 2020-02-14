@@ -122,6 +122,12 @@ Running this example gives the following output (from my printer):
 * `examples/example3.go` demonstrates `SNMPv3`
 * `examples/trapserver.go` demonstrates writing an SNMP v2c trap server
 
+MIB Parser
+----------
+
+I don't have any plans to write a mib parser. Others have suggested
+https://github.com/sleepinggenius2/gosmi
+
 Contributions
 -------------
 
