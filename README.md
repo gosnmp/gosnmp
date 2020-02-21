@@ -180,28 +180,27 @@ missing/faulty BER type.
 
 The following BER types have been implemented:
 
+* 0x00 UnknownType
+* 0x01 Boolean
 * 0x02 Integer
+* 0x03 BitString
 * 0x04 OctetString
+* 0x05 Null
 * 0x06 ObjectIdentifier
+* 0x07 ObjectDescription
 * 0x40 IPAddress (IPv4 & IPv6)
 * 0x41 Counter32
 * 0x42 Gauge32
 * 0x43 TimeTicks
 * 0x44 Opaque (Float & Double)
+* 0x45 NsapAddress
 * 0x46 Counter64
 * 0x47 Uinteger32
+* 0x78 OpaqueFloat
+* 0x79 OpaqueDouble
 * 0x80 NoSuchObject
 * 0x81 NoSuchInstance
 * 0x82 EndOfMibView
-
-The following (less common) BER types haven't been implemented, as I ran out of
-time or haven't been able to find example devices to query:
-
-* 0x00 EndOfContents
-* 0x01 Boolean
-* 0x03 BitString
-* 0x07 ObjectDescription
-* 0x45 NsapAddress
 
 Running the Tests
 -----------------
