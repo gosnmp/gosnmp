@@ -267,5 +267,5 @@ license.
 
 See the LICENSE file for more details.
 
-The remaining code is Copyright 2012-2018 the GoSNMP Authors - see
+The remaining code is Copyright 2012-2020 the GoSNMP Authors - see
 AUTHORS.md for a list of authors.
