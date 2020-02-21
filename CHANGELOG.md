@@ -1,3 +1,14 @@
+## v1.24.0
+
+* doco, fix AUTHORS, fix copyright
+* decode more packet types
+* TCP trap listening
+
+## v1.23.1
+
+* add support for contexts
+* fix panic conditions by checking for out-of-bounds reads
+
 ## v1.23.0
 
 * BREAKING CHANGE: The mocks have been moved to `github.com/soniah/gosnmp/mocks`.
