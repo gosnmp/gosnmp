@@ -37,10 +37,15 @@ const (
 type SnmpV3PrivProtocol uint8
 
 // NoPriv, DES implemented, AES planned
+// Changed: AES192, AES256, AES192C, AES256C added
 const (
-	NoPriv SnmpV3PrivProtocol = 1
-	DES    SnmpV3PrivProtocol = 2
-	AES    SnmpV3PrivProtocol = 3
+	NoPriv  SnmpV3PrivProtocol = 1
+	DES     SnmpV3PrivProtocol = 2
+	AES     SnmpV3PrivProtocol = 3
+	AES192  SnmpV3PrivProtocol = 4 // Blumenthal-AES192
+	AES256  SnmpV3PrivProtocol = 5 // Blumenthal-AES256
+	AES192C SnmpV3PrivProtocol = 6 // Reeder-AES192
+	AES256C SnmpV3PrivProtocol = 7 // Reeder-AES256
 )
 
 // UsmSecurityParameters is an implementation of SnmpV3SecurityParameters for the UserSecurityModel
@@ -116,11 +121,23 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 			}
 		}
 		if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
-			sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
-				sp.PrivacyPassphrase,
-				sp.AuthoritativeEngineID)
-			if err != nil {
-				return err
+			switch sp.PrivacyProtocol {
+			// Changed: The Output of SHA1 is a 20 octets array, therefore for AES128 (16 octets) either key extension algorithm can be used.
+			case AES, AES192, AES256, AES192C, AES256C:
+				//Use abstract AES key localization algorithms
+				sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol,
+					sp.PrivacyPassphrase,
+					sp.AuthoritativeEngineID)
+				if err != nil {
+					return err
+				}
+			default:
+				sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
+					sp.PrivacyPassphrase,
+					sp.AuthoritativeEngineID)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -174,7 +191,7 @@ func (sp *UsmSecurityParameters) init(log Logger) error {
 	sp.Logger = log
 
 	switch sp.PrivacyProtocol {
-	case AES:
+	case AES, AES192, AES256, AES192C, AES256C:
 		salt := make([]byte, 8)
 		_, err = crand.Read(salt)
 		if err != nil {
@@ -291,6 +308,49 @@ func shaHMAC(password string, engineID string) ([]byte, error) {
 	return final, nil
 }
 
+// Changed: New function to calculate the Privacy Key for abstract AES
+func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, password string, engineID string) ([]byte, error) {
+	var keylen int
+	var localPrivKey []byte
+	switch privProtocol {
+	case AES:
+		keylen = 16
+	case AES192, AES192C:
+		keylen = 24
+	case AES256, AES256C:
+		keylen = 32
+	}
+	key, err := shaHMAC(password, engineID)
+	if err != nil {
+		return nil, err
+	}
+	switch privProtocol {
+
+	case AES, AES192C, AES256C:
+		// Extending the localized privacy key according to Reeder Key extension algorithm:
+		// https://tools.ietf.org/html/draft-reeder-snmpv3-usm-3dese
+		// Many vendors, including Cisco, use the 3DES key extension algorithm to extend the privacy keys that are too short when using AES,AES192 and AES256.
+		// Previously implemented in net-snmp and pysnmp libraries.
+		// Tested for AES128 and AES256
+		newkey, err := shaHMAC(string(key), engineID)
+		if err != nil {
+			return nil, err
+		}
+		localPrivKey = append(key, newkey...)
+	case AES192, AES256:
+		// Extending the localized privacy key according to Blumenthal key extension algorithm:
+		// https://tools.ietf.org/html/draft-blumenthal-aes-usm-04#page-7
+		// Not many vendors use this algorithm.
+		// Previously implemented in the net-snmp and pysnmp libraries.
+		// Not tested
+		newkey := sha1.New()
+		newkey.Write(key)
+		localPrivKey = append(key, newkey.Sum(nil)...)
+
+	}
+	return localPrivKey[:keylen], nil
+}
+
 func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) ([]byte, error) {
 	var secretKey []byte
 	var err error
@@ -317,7 +377,7 @@ func (sp *UsmSecurityParameters) usmAllocateNewSalt() (interface{}, error) {
 	var newSalt interface{}
 
 	switch sp.PrivacyProtocol {
-	case AES:
+	case AES, AES192C, AES256C:
 		newSalt = atomic.AddUint64(&(sp.localAESSalt), 1)
 	default:
 		newSalt = atomic.AddUint32(&(sp.localDESSalt), 1)
@@ -328,7 +388,7 @@ func (sp *UsmSecurityParameters) usmAllocateNewSalt() (interface{}, error) {
 func (sp *UsmSecurityParameters) usmSetSalt(newSalt interface{}) error {
 
 	switch sp.PrivacyProtocol {
-	case AES:
+	case AES, AES192, AES256, AES192C, AES256C:
 		aesSalt, ok := newSalt.(uint64)
 		if !ok {
 			return fmt.Errorf("salt provided to usmSetSalt is not the correct type for the AES privacy protocol")
@@ -524,13 +584,13 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 	var b []byte
 
 	switch sp.PrivacyProtocol {
-	case AES:
+	case AES, AES192, AES256, AES192C, AES256C:
 		var iv [16]byte
 		binary.BigEndian.PutUint32(iv[:], sp.AuthoritativeEngineBoots)
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
 		copy(iv[8:], sp.PrivacyParameters)
-
-		block, err := aes.NewCipher(sp.PrivacyKey[:16])
+		// aes.NewCipher(sp.PrivacyKey[:16]) changed to aes.NewCipher(sp.PrivacyKey)
+		block, err := aes.NewCipher(sp.PrivacyKey)
 		if err != nil {
 			return nil, err
 		}
@@ -579,13 +639,13 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 	}
 
 	switch sp.PrivacyProtocol {
-	case AES:
+	case AES, AES192, AES256, AES192C, AES256C:
 		var iv [16]byte
 		binary.BigEndian.PutUint32(iv[:], sp.AuthoritativeEngineBoots)
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
 		copy(iv[8:], sp.PrivacyParameters)
 
-		block, err := aes.NewCipher(sp.PrivacyKey[:16])
+		block, err := aes.NewCipher(sp.PrivacyKey)
 		if err != nil {
 			return nil, err
 		}
@@ -716,11 +776,22 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 				}
 			}
 			if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
-				sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
-					sp.PrivacyPassphrase,
-					sp.AuthoritativeEngineID)
-				if err != nil {
-					return 0, err
+				switch sp.PrivacyProtocol {
+				case AES, AES192, AES256, AES192C, AES256C:
+					sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol,
+						sp.PrivacyPassphrase,
+						sp.AuthoritativeEngineID)
+					if err != nil {
+						return 0, err
+					}
+				default:
+					sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
+						sp.PrivacyPassphrase,
+						sp.AuthoritativeEngineID)
+					if err != nil {
+						return 0, err
+					}
+
 				}
 			}
 		}
