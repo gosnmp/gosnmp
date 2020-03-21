@@ -377,7 +377,7 @@ func (sp *UsmSecurityParameters) usmAllocateNewSalt() (interface{}, error) {
 	var newSalt interface{}
 
 	switch sp.PrivacyProtocol {
-	case AES, AES192C, AES256C:
+	case AES, AES192, AES256, AES192C, AES256C:
 		newSalt = atomic.AddUint64(&(sp.localAESSalt), 1)
 	default:
 		newSalt = atomic.AddUint32(&(sp.localDESSalt), 1)
