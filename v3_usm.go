@@ -125,7 +125,7 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 			// Changed: The Output of SHA1 is a 20 octets array, therefore for AES128 (16 octets) either key extension algorithm can be used.
 			case AES, AES192, AES256, AES192C, AES256C:
 				//Use abstract AES key localization algorithms
-				sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol,
+				sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol, sp.AuthenticationProtocol,
 					sp.PrivacyPassphrase,
 					sp.AuthoritativeEngineID)
 				if err != nil {
@@ -309,21 +309,18 @@ func shaHMAC(password string, engineID string) ([]byte, error) {
 }
 
 // Changed: New function to calculate the Privacy Key for abstract AES
-func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, password string, engineID string) ([]byte, error) {
+func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthProtocol, password string, engineID string) ([]byte, error) {
 	var keylen int
 	var localPrivKey []byte
 	switch privProtocol {
-	case AES:
+	case AES, DES:
 		keylen = 16
 	case AES192, AES192C:
 		keylen = 24
 	case AES256, AES256C:
 		keylen = 32
 	}
-	key, err := shaHMAC(password, engineID)
-	if err != nil {
-		return nil, err
-	}
+
 	switch privProtocol {
 
 	case AES, AES192C, AES256C:
@@ -332,20 +329,61 @@ func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, password string, engineID 
 		// Many vendors, including Cisco, use the 3DES key extension algorithm to extend the privacy keys that are too short when using AES,AES192 and AES256.
 		// Previously implemented in net-snmp and pysnmp libraries.
 		// Tested for AES128 and AES256
-		newkey, err := shaHMAC(string(key), engineID)
-		if err != nil {
-			return nil, err
+		switch authProtocol {
+		case SHA:
+
+			key, err := shaHMAC(password, engineID)
+			if err != nil {
+				return nil, err
+			}
+			newkey, err := shaHMAC(string(key), engineID)
+			if err != nil {
+				return nil, err
+			}
+			localPrivKey = append(key, newkey...)
+		case MD5:
+
+			key, err := md5HMAC(password, engineID)
+			if err != nil {
+				return nil, err
+			}
+			newkey, err := md5HMAC(string(key), engineID)
+			if err != nil {
+				return nil, err
+			}
+			localPrivKey = append(key, newkey...)
+
 		}
-		localPrivKey = append(key, newkey...)
 	case AES192, AES256:
 		// Extending the localized privacy key according to Blumenthal key extension algorithm:
 		// https://tools.ietf.org/html/draft-blumenthal-aes-usm-04#page-7
 		// Not many vendors use this algorithm.
 		// Previously implemented in the net-snmp and pysnmp libraries.
 		// Not tested
-		newkey := sha1.New()
-		newkey.Write(key)
-		localPrivKey = append(key, newkey.Sum(nil)...)
+		switch authProtocol {
+		case SHA:
+			key, err := shaHMAC(password, engineID)
+			if err != nil {
+				return nil, err
+			}
+			newkey := sha1.New()
+			newkey.Write(key)
+			localPrivKey = append(key, newkey.Sum(nil)...)
+		case MD5:
+			key, err := md5HMAC(password, engineID)
+			if err != nil {
+				return nil, err
+			}
+			newkey := md5.New()
+			newkey.Write(key)
+			localPrivKey = append(key, newkey.Sum(nil)...)
+		}
+	default:
+		var err error
+		localPrivKey, err = genlocalkey(authProtocol, password, engineID)
+		if err != nil {
+			return nil, err
+		}
 
 	}
 	return localPrivKey[:keylen], nil
@@ -778,7 +816,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 			if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
 				switch sp.PrivacyProtocol {
 				case AES, AES192, AES256, AES192C, AES256C:
-					sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol,
+					sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol, sp.AuthenticationProtocol,
 						sp.PrivacyPassphrase,
 						sp.AuthoritativeEngineID)
 					if err != nil {
