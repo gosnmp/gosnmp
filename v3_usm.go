@@ -14,6 +14,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des"
+	"crypto/hmac"
 	_ "crypto/md5"
 	crand "crypto/rand"
 	_ "crypto/sha1"
@@ -39,6 +40,25 @@ const (
 	SHA384 SnmpV3AuthProtocol = 6
 	SHA512 SnmpV3AuthProtocol = 7
 )
+
+//go:generate stringer -type=SnmpV3AuthProtocol
+
+func (authProtocol SnmpV3AuthProtocol) HashType() crypto.Hash {
+	switch authProtocol {
+	default:
+		return crypto.MD5
+	case SHA:
+		return crypto.SHA1
+	case SHA224:
+		return crypto.SHA224
+	case SHA256:
+		return crypto.SHA256
+	case SHA384:
+		return crypto.SHA384
+	case SHA512:
+		return crypto.SHA512
+	}
+}
 
 var macVarbinds = [][]byte{
 	[]byte{},
@@ -100,6 +120,8 @@ const (
 	AES192C SnmpV3PrivProtocol = 6 // Reeder-AES192
 	AES256C SnmpV3PrivProtocol = 7 // Reeder-AES256
 )
+
+//go:generate stringer -type=SnmpV3PrivProtocol
 
 // UsmSecurityParameters is an implementation of SnmpV3SecurityParameters for the UserSecurityModel
 type UsmSecurityParameters struct {
@@ -315,6 +337,7 @@ func cachedPasswordToKey(hash hash.Hash, cacheKey string, password string) ([]by
 }
 
 func hMAC(hash crypto.Hash, cacheKey string, password string, engineID string) ([]byte, error) {
+
 	hashed, err := cachedPasswordToKey(hash.New(), cacheKey, password)
 	if err != nil {
 		return []byte{}, nil
@@ -340,10 +363,61 @@ func hMAC(hash crypto.Hash, cacheKey string, password string, engineID string) (
 	return final, nil
 }
 
+func cacheKey(authProtocol SnmpV3AuthProtocol, passphrase string) string {
+	var cacheKey = make([]byte, 1+len(passphrase))
+	cacheKey = append(cacheKey, 'h'+byte(authProtocol))
+	cacheKey = append(cacheKey, []byte(passphrase)...)
+	return string(cacheKey)
+}
+
+// Extending the localized privacy key according to Reeder Key extension algorithm:
+// https://tools.ietf.org/html/draft-reeder-snmpv3-usm-3dese
+// Many vendors, including Cisco, use the 3DES key extension algorithm to extend the privacy keys that are too short when using AES,AES192 and AES256.
+// Previously implemented in net-snmp and pysnmp libraries.
+// Tested for AES128 and AES256
+func extendKeyReeder(authProtocol SnmpV3AuthProtocol, password string, engineID string) ([]byte, error) {
+
+	var key []byte
+	var err error
+
+	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, password), password, engineID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	newkey, err := hMAC(authProtocol.HashType(), cacheKey(authProtocol, string(key)), string(key), engineID)
+
+	return append(key, newkey...), err
+}
+
+// Extending the localized privacy key according to Blumenthal key extension algorithm:
+// https://tools.ietf.org/html/draft-blumenthal-aes-usm-04#page-7
+// Not many vendors use this algorithm.
+// Previously implemented in the net-snmp and pysnmp libraries.
+// Not tested
+func extendKeyBlumenthal(authProtocol SnmpV3AuthProtocol, password string, engineID string) ([]byte, error) {
+
+	var key []byte
+	var err error
+
+	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, ""), password, engineID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	newkey := authProtocol.HashType().New()
+	newkey.Write(key)
+	return append(key, newkey.Sum(nil)...), err
+}
+
 // Changed: New function to calculate the Privacy Key for abstract AES
 func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthProtocol, password string, engineID string) ([]byte, error) {
 	var keylen int
 	var localPrivKey []byte
+	var err error
+
 	switch privProtocol {
 	case AES, DES:
 		keylen = 16
@@ -356,68 +430,19 @@ func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthPro
 	switch privProtocol {
 
 	case AES, AES192C, AES256C:
-		// Extending the localized privacy key according to Reeder Key extension algorithm:
-		// https://tools.ietf.org/html/draft-reeder-snmpv3-usm-3dese
-		// Many vendors, including Cisco, use the 3DES key extension algorithm to extend the privacy keys that are too short when using AES,AES192 and AES256.
-		// Previously implemented in net-snmp and pysnmp libraries.
-		// Tested for AES128 and AES256
-		switch authProtocol {
-		case SHA:
+		localPrivKey, err = extendKeyReeder(authProtocol, password, engineID)
 
-			key, err := shaHMAC(password, engineID)
-			if err != nil {
-				return nil, err
-			}
-			newkey, err := shaHMAC(string(key), engineID)
-			if err != nil {
-				return nil, err
-			}
-			localPrivKey = append(key, newkey...)
-		case MD5:
-
-			key, err := md5HMAC(password, engineID)
-			if err != nil {
-				return nil, err
-			}
-			newkey, err := md5HMAC(string(key), engineID)
-			if err != nil {
-				return nil, err
-			}
-			localPrivKey = append(key, newkey...)
-
-		}
 	case AES192, AES256:
-		// Extending the localized privacy key according to Blumenthal key extension algorithm:
-		// https://tools.ietf.org/html/draft-blumenthal-aes-usm-04#page-7
-		// Not many vendors use this algorithm.
-		// Previously implemented in the net-snmp and pysnmp libraries.
-		// Not tested
-		switch authProtocol {
-		case SHA:
-			key, err := shaHMAC(password, engineID)
-			if err != nil {
-				return nil, err
-			}
-			newkey := sha1.New()
-			newkey.Write(key)
-			localPrivKey = append(key, newkey.Sum(nil)...)
-		case MD5:
-			key, err := md5HMAC(password, engineID)
-			if err != nil {
-				return nil, err
-			}
-			newkey := md5.New()
-			newkey.Write(key)
-			localPrivKey = append(key, newkey.Sum(nil)...)
-		}
-	default:
-		var err error
-		localPrivKey, err = genlocalkey(authProtocol, password, engineID)
-		if err != nil {
-			return nil, err
-		}
+		localPrivKey, err = extendKeyBlumenthal(authProtocol, password, engineID)
 
+	default:
+		localPrivKey, err = genlocalkey(authProtocol, password, engineID)
 	}
+
+	if err != nil {
+		return nil, err
+	}
+
 	return localPrivKey[:keylen], nil
 }
 
@@ -425,25 +450,7 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 	var secretKey []byte
 	var err error
 
-	var cacheKey = make([]byte, 1+len(passphrase))
-	cacheKey = append(cacheKey, 'h'+byte(authProtocol))
-	cacheKey = append(cacheKey, []byte(passphrase)...)
-
-	switch authProtocol {
-	default:
-		secretKey, err = hMAC(crypto.MD5, string(cacheKey), passphrase, engineID)
-	case SHA:
-		secretKey, err = hMAC(crypto.SHA1, string(cacheKey), passphrase, engineID)
-	case SHA224:
-		secretKey, err = hMAC(crypto.SHA224, string(cacheKey), passphrase, engineID)
-	case SHA256:
-		secretKey, err = hMAC(crypto.SHA256, string(cacheKey), passphrase, engineID)
-	case SHA384:
-		secretKey, err = hMAC(crypto.SHA384, string(cacheKey), passphrase, engineID)
-	case SHA512:
-		secretKey, err = hMAC(crypto.SHA512, string(cacheKey), passphrase, engineID)
-
-	}
+	secretKey, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, passphrase), passphrase, engineID)
 
 	if err != nil {
 		return []byte{}, err
@@ -529,70 +536,39 @@ func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
 	return nil
 }
 
-func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
-	var extkey [64]byte
-	var err error
-
-	copy(extkey[:], sp.SecretKey)
-
-	var k1, k2 [64]byte
-
-	for i := 0; i < 64; i++ {
-		k1[i] = extkey[i] ^ 0x36
-		k2[i] = extkey[i] ^ 0x5c
-	}
-
-	var h, h2 hash.Hash
+func (sp *UsmSecurityParameters) calcPacketDigest(packet []byte) []byte {
+	var mac hash.Hash
 
 	switch sp.AuthenticationProtocol {
 	default:
-		h = crypto.MD5.New()
-		h2 = crypto.MD5.New()
+		mac = hmac.New(crypto.MD5.New, sp.SecretKey)
 	case SHA:
-		h = crypto.SHA1.New()
-		h2 = crypto.SHA1.New()
+		mac = hmac.New(crypto.SHA1.New, sp.SecretKey)
 	case SHA224:
-		h = crypto.SHA224.New()
-		h2 = crypto.SHA224.New()
+		mac = hmac.New(crypto.SHA224.New, sp.SecretKey)
 	case SHA256:
-		h = crypto.SHA256.New()
-		h2 = crypto.SHA256.New()
+		mac = hmac.New(crypto.SHA256.New, sp.SecretKey)
 	case SHA384:
-		h = crypto.SHA384.New()
-		h2 = crypto.SHA384.New()
+		mac = hmac.New(crypto.SHA384.New, sp.SecretKey)
 	case SHA512:
-		h = crypto.SHA512.New()
-		h2 = crypto.SHA512.New()
+		mac = hmac.New(crypto.SHA512.New, sp.SecretKey)
 	}
 
-	_, err = h.Write(k1[:])
-	if err != nil {
-		return err
+	mac.Write(packet)
+	msgDigest := mac.Sum(nil)
+	return msgDigest
+}
+
+func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
+
+	msgDigest := sp.calcPacketDigest(packet)
+	idx := bytes.Index(packet, macVarbinds[sp.AuthenticationProtocol])
+
+	if idx < 0 {
+		return fmt.Errorf("Unable to locate the position in packet to write authentication key")
 	}
 
-	_, err = h.Write(packet)
-	if err != nil {
-		return err
-	}
-
-	d1 := h.Sum(nil)
-	_, err = h2.Write(k2[:])
-	if err != nil {
-		return err
-	}
-
-	_, err = h2.Write(d1)
-	if err != nil {
-		return err
-	}
-
-	authParamStart, err := usmFindAuthParamStart(packet)
-	if err != nil {
-		return nil
-	}
-
-	copy(packet[idx+2:idx+len(macVarbinds[sp.AuthenticationProtocol])], h2.Sum(nil))
-
+	copy(packet[idx+2:idx+len(macVarbinds[sp.AuthenticationProtocol])], msgDigest)
 	return nil
 }
 
@@ -607,65 +583,10 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 	}
 	// TODO: investigate call chain to determine if this is really the best spot for this
 
-	var extkey [64]byte
+	msgDigest := sp.calcPacketDigest(packetBytes)
 
-	copy(extkey[:], packetSecParams.SecretKey)
-
-	var k1, k2 [64]byte
-
-	for i := 0; i < 64; i++ {
-		k1[i] = extkey[i] ^ 0x36
-		k2[i] = extkey[i] ^ 0x5c
-	}
-
-	var h, h2 hash.Hash
-
-	switch sp.AuthenticationProtocol {
-	default:
-		h = crypto.MD5.New()
-		h2 = crypto.MD5.New()
-	case SHA:
-		h = crypto.SHA1.New()
-		h2 = crypto.SHA1.New()
-	case SHA224:
-		h = crypto.SHA224.New()
-		h2 = crypto.SHA224.New()
-	case SHA256:
-		h = crypto.SHA256.New()
-		h2 = crypto.SHA256.New()
-	case SHA384:
-		h = crypto.SHA384.New()
-		h2 = crypto.SHA384.New()
-	case SHA512:
-		h = crypto.SHA512.New()
-		h2 = crypto.SHA512.New()
-	}
-
-	_, err = h.Write(k1[:])
-	if err != nil {
-		return false, err
-	}
-
-	_, err = h.Write(packetBytes)
-	if err != nil {
-		return false, err
-	}
-
-	d1 := h.Sum(nil)
-
-	_, err = h2.Write(k2[:])
-	if err != nil {
-		return false, err
-	}
-
-	_, err = h2.Write(d1)
-	if err != nil {
-		return false, err
-	}
-
-	result := h2.Sum(nil)
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
-		if result[k] != v {
+		if msgDigest[k] != v {
 			return false, nil
 		}
 	}
