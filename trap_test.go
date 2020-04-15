@@ -413,6 +413,7 @@ func TestSendV3TrapNoAuthNoPriv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           NoAuthNoPriv,
 	}
 
 	err := ts.Connect()
@@ -498,6 +499,7 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthNoPriv,
 	}
 
 	err := ts.Connect()
@@ -583,6 +585,7 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthNoPriv,
 	}
 
 	err := ts.Connect()
@@ -670,6 +673,7 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -756,6 +760,7 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -842,6 +847,7 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -928,6 +934,7 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -1013,6 +1020,7 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -1099,6 +1107,7 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
