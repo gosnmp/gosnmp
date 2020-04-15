@@ -459,7 +459,7 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 
 	sp := &UsmSecurityParameters{
 		UserName:                 "test",
-		AuthenticationProtocol:   SHA,
+		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: "password",
 		AuthoritativeEngineBoots: 1,
 		AuthoritativeEngineTime:  1,
