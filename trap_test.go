@@ -493,13 +493,20 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthNoPriv,
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   MD5,
+			AuthenticationPassphrase: "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthNoPriv,
 	}
 
 	err := ts.Connect()
@@ -579,13 +586,116 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthNoPriv,
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   SHA,
+			AuthenticationPassphrase: "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthNoPriv,
+	}
+
+	err := ts.Connect()
+	if err != nil {
+		t.Fatalf("Connect() err: %v", err)
+	}
+	defer ts.Conn.Close()
+
+	pdu := SnmpPDU{
+		Name:  trapTestOid,
+		Type:  OctetString,
+		Value: trapTestPayload,
+	}
+
+	trap := SnmpTrap{
+		Variables:    []SnmpPDU{pdu},
+		Enterprise:   trapTestEnterpriseOid,
+		AgentAddress: trapTestAgentAddress,
+		GenericTrap:  trapTestGenericTrap,
+		SpecificTrap: trapTestSpecificTrap,
+		Timestamp:    trapTestTimestamp,
+	}
+
+	_, err = ts.SendTrap(trap)
+	if err != nil {
+		t.Fatalf("SendTrap() err: %v", err)
+	}
+
+	// wait for response from handler
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
+	}
+
+}
+func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
+	done := make(chan int)
+
+	tl := NewTrapListener()
+	defer tl.Close()
+
+	sp := &UsmSecurityParameters{
+		UserName:                 "test",
+		AuthenticationProtocol:   SHA,
+		AuthenticationPassphrase: "password",
+		PrivacyProtocol:          DES,
+		PrivacyPassphrase:        "password",
+		AuthoritativeEngineBoots: 1,
+		AuthoritativeEngineTime:  1,
+		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
+	}
+
+	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.Params = Default
+	tl.Params.Version = Version3
+	tl.Params.SecurityParameters = sp
+	tl.Params.SecurityModel = UserSecurityModel
+	tl.Params.MsgFlags = AuthPriv
+
+	// listener goroutine
+	errch := make(chan error)
+	go func() {
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		if err != nil {
+			errch <- err
+		}
+	}()
+
+	// Wait until the listener is ready.
+	select {
+	case <-tl.Listening():
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
+	}
+
+	ts := &GoSNMP{
+		Target: trapTestAddress,
+		Port:   trapTestPort,
+		//Community: "public",
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   SHA,
+			AuthenticationPassphrase: "password",
+			PrivacyProtocol:          DES,
+			PrivacyPassphrase:        "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -667,13 +777,22 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthPriv,
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   SHA,
+			AuthenticationPassphrase: "password",
+			PrivacyProtocol:          AES,
+			PrivacyPassphrase:        "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -710,93 +829,7 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 	}
 
 }
-func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
-	done := make(chan int)
 
-	tl := NewTrapListener()
-	defer tl.Close()
-
-	sp := &UsmSecurityParameters{
-		UserName:                 "test",
-		AuthenticationProtocol:   SHA,
-		AuthenticationPassphrase: "password",
-		PrivacyProtocol:          DES,
-		PrivacyPassphrase:        "password",
-		AuthoritativeEngineBoots: 1,
-		AuthoritativeEngineTime:  1,
-		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
-	}
-
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
-	tl.Params = Default
-	tl.Params.Version = Version3
-	tl.Params.SecurityParameters = sp
-	tl.Params.SecurityModel = UserSecurityModel
-	tl.Params.MsgFlags = AuthPriv
-
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
-	ts := &GoSNMP{
-		Target: trapTestAddress,
-		Port:   trapTestPort,
-		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthPriv,
-	}
-
-	err := ts.Connect()
-	if err != nil {
-		t.Fatalf("Connect() err: %v", err)
-	}
-	defer ts.Conn.Close()
-
-	pdu := SnmpPDU{
-		Name:  trapTestOid,
-		Type:  OctetString,
-		Value: trapTestPayload,
-	}
-
-	trap := SnmpTrap{
-		Variables:    []SnmpPDU{pdu},
-		Enterprise:   trapTestEnterpriseOid,
-		AgentAddress: trapTestAgentAddress,
-		GenericTrap:  trapTestGenericTrap,
-		SpecificTrap: trapTestSpecificTrap,
-		Timestamp:    trapTestTimestamp,
-	}
-
-	_, err = ts.SendTrap(trap)
-	if err != nil {
-		t.Fatalf("SendTrap() err: %v", err)
-	}
-
-	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
-
-}
 func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 	done := make(chan int)
 
@@ -841,13 +874,22 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthPriv,
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   SHA,
+			AuthenticationPassphrase: "password",
+			PrivacyProtocol:          AES192,
+			PrivacyPassphrase:        "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -928,13 +970,22 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthPriv,
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   SHA,
+			AuthenticationPassphrase: "password",
+			PrivacyProtocol:          AES192C,
+			PrivacyPassphrase:        "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -1014,13 +1065,22 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthPriv,
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   SHA,
+			AuthenticationPassphrase: "password",
+			PrivacyProtocol:          AES256,
+			PrivacyPassphrase:        "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -1101,13 +1161,22 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:            Version3,
-		Timeout:            time.Duration(2) * time.Second,
-		Retries:            3,
-		MaxOids:            MaxOids,
-		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
-		MsgFlags:           AuthPriv,
+		Version:       Version3,
+		Timeout:       time.Duration(2) * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   SHA,
+			AuthenticationPassphrase: "password",
+			PrivacyProtocol:          AES256C,
+			PrivacyPassphrase:        "password",
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
+		},
+		MsgFlags: AuthPriv,
 	}
 
 	err := ts.Connect()
