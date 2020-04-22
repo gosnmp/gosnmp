@@ -8,9 +8,6 @@ package gosnmp
 
 import (
 	"bytes"
-	"crypto"
-	_ "crypto/md5"
-	_ "crypto/sha1"
 	"errors"
 	"reflect"
 	"testing"
@@ -112,11 +109,7 @@ var testSnmpV3MD5HMAC = []struct {
 
 func TestMD5HMAC(t *testing.T) {
 	for i, test := range testSnmpV3MD5HMAC {
-		cacheKey := make([]byte, 1+len(test.password))
-		cacheKey = append(cacheKey, 'h'+byte(MD5))
-		cacheKey = append(cacheKey, []byte(test.password)...)
-
-		result, err := hMAC(crypto.MD5, string(cacheKey), test.password, test.engineid)
+		result, err := md5HMAC(test.password, test.engineid)
 		assert.NoError(t, err)
 		if !bytes.Equal(result, test.outKey) {
 			t.Errorf("#%d, got %v expected %v", i, result, test.outKey)
@@ -134,11 +127,7 @@ var testSnmpV3SHAHMAC = []struct {
 
 func TestSHAHMAC(t *testing.T) {
 	for i, test := range testSnmpV3SHAHMAC {
-		cacheKey := make([]byte, 1+len(test.password))
-		cacheKey = append(cacheKey, 'h'+byte(SHA))
-		cacheKey = append(cacheKey, []byte(test.password)...)
-
-		result, _ := hMAC(crypto.SHA1, string(cacheKey), test.password, test.engineid)
+		result, _ := shaHMAC(test.password, test.engineid)
 		if !bytes.Equal(result, test.outKey) {
 			t.Errorf("#%d, got %v expected %v", i, result, test.outKey)
 		}
