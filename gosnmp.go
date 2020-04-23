@@ -318,8 +318,7 @@ func (x *GoSNMP) validateParameters() error {
 func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
 	var newSecParams SnmpV3SecurityParameters
 	if x.SecurityParameters != nil {
-		newSecParams = Default.SecurityParameters
-		newSecParams.setSecurityParameters(x.SecurityParameters)
+		newSecParams = x.SecurityParameters.Copy()
 	}
 	return &SnmpPacket{
 		Version:            x.Version,

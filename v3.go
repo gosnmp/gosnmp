@@ -50,6 +50,7 @@ type SnmpV3SecurityParameters interface {
 	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
 	decryptPacket(packet []byte, cursor int) ([]byte, error)
+	initSecurityKeys() error
 }
 
 func (x *GoSNMP) validateParametersV3() error {
@@ -142,6 +143,11 @@ func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket, wait 
 
 		err = x.updatePktSecurityParameters(packetOut)
 		if err != nil {
+			return err
+		}
+	} else {
+		err := packetOut.SecurityParameters.initSecurityKeys()
+		if err == nil {
 			return err
 		}
 	}

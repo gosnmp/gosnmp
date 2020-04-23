@@ -101,6 +101,39 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 func (sp *UsmSecurityParameters) getDefaultContextEngineID() string {
 	return sp.AuthoritativeEngineID
 }
+func (sp *UsmSecurityParameters) initSecurityKeys() error {
+	var err error
+
+	if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
+		sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
+			sp.AuthenticationPassphrase,
+			sp.AuthoritativeEngineID)
+		if err != nil {
+			return err
+		}
+	}
+	if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
+		switch sp.PrivacyProtocol {
+		// Changed: The Output of SHA1 is a 20 octets array, therefore for AES128 (16 octets) either key extension algorithm can be used.
+		case AES, AES192, AES256, AES192C, AES256C:
+			//Use abstract AES key localization algorithms
+			sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol, sp.AuthenticationProtocol,
+				sp.PrivacyPassphrase,
+				sp.AuthoritativeEngineID)
+			if err != nil {
+				return err
+			}
+		default:
+			sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
+				sp.PrivacyPassphrase,
+				sp.AuthoritativeEngineID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParameters) error {
 	var insp *UsmSecurityParameters
