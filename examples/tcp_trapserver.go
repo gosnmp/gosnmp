@@ -2,16 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	gosnmp "github.com/soniah/gosnmp"
 )
 
 func main() {
-	log.SetLevel(log.DebugLevel)
-	log.Infof("Starting")
+	log.Println("Starting")
 
 	var port uint16
 	port = 2162
@@ -45,11 +44,11 @@ func main() {
 		time.Sleep(time.Duration(1) * time.Second)
 		err := gosnmp.Default.Connect()
 		if err != nil {
-			log.Panicf(err.Error())
+			log.Fatal(err)
 		}
 		defer gosnmp.Default.Conn.Close()
 		//RebuildCron()
-		log.Infof("Running (%d)", cou)
+		log.Printf("Running (%d)\n", cou)
 
 		trap := gosnmp.SnmpTrap{
 			Variables:    []gosnmp.SnmpPDU{oid, oid1, oid2},
@@ -61,29 +60,28 @@ func main() {
 		}
 		_, err = gosnmp.Default.SendTrap(trap)
 		if err != nil {
-			log.Fatalf("SendTrap() err: %v", err)
+			log.Fatalf("SendTrap() err: %v\n", err)
 		}
 
 		cou--
 	}
 	//time.Sleep(time.Duration(10) * time.Second)
 
-	log.Infof("Stop...")
+	log.Println("Stop...")
 }
 
 // Start SNMP server
 func Start(address string) {
 
-	log.Infof("Starting SNMP TRAP Server on: %s", address)
+	log.Printf("Starting SNMP TRAP Server on: %s\n", address)
 	tl := gosnmp.NewTrapListener()
-	tl.OnNewTrap = myTrapHandler
+	tl.OnNewTrap = myTrapHandlerTCP
 	tl.Params = gosnmp.Default
-	//tl.Params.Logger = log.New()
 
 	err := tl.Listen(address)
 	if err != nil {
 		time.Sleep(1)
-		log.Fatalf("Error in TRAP listen: %s", err)
+		log.Fatalf("Error in TRAP listen: %s\n", err)
 	}
 }
 
@@ -92,8 +90,8 @@ type valueAndTypeType struct {
 	Type  string
 }
 
-func myTrapHandler(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
-	log.Infof("SNMP trap received from: %s:%d. Community:%s, SnmpVersion:%s ", addr.IP, addr.Port, packet.Community, packet.Version)
+func myTrapHandlerTCP(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
+	log.Printf("SNMP trap received from: %s:%d. Community:%s, SnmpVersion:%s\n", addr.IP, addr.Port, packet.Community, packet.Version)
 	for i, variable := range packet.Variables {
 		var val string
 		switch variable.Type {
@@ -113,7 +111,7 @@ func myTrapHandler(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
 			a := gosnmp.ToBigInt(variable.Value)
 			val = fmt.Sprintf("%d", (*a).Int64())
 		}
-		log.Debugf("- oid[%d]: %s (%s) = %v ", i, variable.Name, variable.Type, val)
+		log.Printf("- oid[%d]: %s (%s) = %v \n", i, variable.Name, variable.Type, val)
 
 	}
 }
