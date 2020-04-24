@@ -1,3 +1,9 @@
+## v1.25.0
+
+* SNMPv3 new hash functions for SNMPV3 USM RFC7860
+* SNMPv3 tests for SNMPv3 traps
+* go versions 1.12 1.13
+
 ## v1.24.0
 
 * doco, fix AUTHORS, fix copyright
