@@ -26,10 +26,10 @@ install:
  - go get github.com/stretchr/testify/assert
  - sudo ./snmp_users.sh
  - sudo /etc/init.d/snmpd restart
- - make tools
+#- make tools
 
 script:
- - make lint
+#- make lint
  - go test -v -tags helper
  - go test -v -tags marshal
  - go test -v -tags misc
