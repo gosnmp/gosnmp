@@ -12,8 +12,7 @@ import (
 func main() {
 	log.Println("Starting")
 
-	var port uint16
-	port = 2162
+	var port uint16 = 2162
 	go Start(fmt.Sprintf("tcp://0.0.0.0:%d", port))
 
 	gosnmp.Default.Target = "127.0.0.1"
@@ -80,18 +79,14 @@ func Start(address string) {
 
 	err := tl.Listen(address)
 	if err != nil {
-		time.Sleep(1)
+		time.Sleep(1 * time.Second)
 		log.Fatalf("Error in TRAP listen: %s\n", err)
 	}
 }
 
-type valueAndTypeType struct {
-	Value string
-	Type  string
-}
-
 func myTrapHandlerTCP(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
-	log.Printf("SNMP trap received from: %s:%d. Community:%s, SnmpVersion:%s\n", addr.IP, addr.Port, packet.Community, packet.Version)
+	log.Printf("SNMP trap received from: %s:%d. Community:%s, SnmpVersion:%s\n",
+		addr.IP, addr.Port, packet.Community, packet.Version)
 	for i, variable := range packet.Variables {
 		var val string
 		switch variable.Type {
