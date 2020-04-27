@@ -302,7 +302,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			err = fmt.Errorf("recover: stacktrace from panic: \n" + string(debug.Stack()))
+			err = fmt.Errorf("recover: stacktrace from panic")
 		}
 	}()
 
