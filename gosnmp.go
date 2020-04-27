@@ -61,7 +61,7 @@ type GoSNMP struct {
 	// Timeout is the timeout for one SNMP request/response
 	Timeout time.Duration
 
-	// Set the number of retries to attempt within timeout
+	// Set the number of retries to attempt
 	Retries int
 
 	// Double timeout in each retry
