@@ -290,6 +290,7 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte) (result *SnmpPacket) {
 	result = new(SnmpPacket)
 
 	if x.SecurityParameters != nil {
+		x.SecurityParameters.initSecurityKeys()
 		result.SecurityParameters = x.SecurityParameters.Copy()
 	}
 
@@ -307,6 +308,7 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte) (result *SnmpPacket) {
 				return nil
 			}
 		}
+
 		trap, cursor, err = x.decryptPacket(trap, cursor, result)
 		if err != nil {
 			x.logPrintf("UnmarshalTrap v3 decrypt: %s\n", err)

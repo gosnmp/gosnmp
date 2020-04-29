@@ -498,14 +498,7 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   MD5,
-			AuthenticationPassphrase: "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthNoPriv,
 	}
 
@@ -591,14 +584,7 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   SHA,
-			AuthenticationPassphrase: "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthNoPriv,
 	}
 
@@ -685,16 +671,7 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   SHA,
-			AuthenticationPassphrase: "password",
-			PrivacyProtocol:          DES,
-			PrivacyPassphrase:        "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthPriv,
 	}
 
@@ -782,16 +759,7 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   SHA,
-			AuthenticationPassphrase: "password",
-			PrivacyProtocol:          AES,
-			PrivacyPassphrase:        "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthPriv,
 	}
 
@@ -879,16 +847,7 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   SHA,
-			AuthenticationPassphrase: "password",
-			PrivacyProtocol:          AES192,
-			PrivacyPassphrase:        "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthPriv,
 	}
 
@@ -975,16 +934,7 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   SHA,
-			AuthenticationPassphrase: "password",
-			PrivacyProtocol:          AES192C,
-			PrivacyPassphrase:        "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthPriv,
 	}
 
@@ -1070,16 +1020,7 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   SHA,
-			AuthenticationPassphrase: "password",
-			PrivacyProtocol:          AES256,
-			PrivacyPassphrase:        "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthPriv,
 	}
 
@@ -1166,16 +1107,7 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 		Retries:       3,
 		MaxOids:       MaxOids,
 		SecurityModel: UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName:                 "test",
-			AuthenticationProtocol:   SHA,
-			AuthenticationPassphrase: "password",
-			PrivacyProtocol:          AES256C,
-			PrivacyPassphrase:        "password",
-			AuthoritativeEngineBoots: 1,
-			AuthoritativeEngineTime:  1,
-			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05}),
-		},
+		SecurityParameters: sp,
 		MsgFlags: AuthPriv,
 	}
 
