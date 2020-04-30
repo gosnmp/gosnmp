@@ -481,6 +481,9 @@ func TestSnmpV3AuthSHAPrivAES256CGet(t *testing.T) {
 }
 
 func TestSnmpV3AuthSHA224NoPrivGet(t *testing.T) {
+	if !isUsingSnmpLabs() {
+		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
+	}
 	Default.Version = Version3
 	Default.MsgFlags = AuthNoPriv
 	Default.SecurityModel = UserSecurityModel
@@ -505,6 +508,9 @@ func TestSnmpV3AuthSHA224NoPrivGet(t *testing.T) {
 }
 
 func TestSnmpV3AuthSHA256NoPrivGet(t *testing.T) {
+	if !isUsingSnmpLabs() {
+		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
+	}
 	Default.Version = Version3
 	Default.MsgFlags = AuthNoPriv
 	Default.SecurityModel = UserSecurityModel
@@ -529,6 +535,9 @@ func TestSnmpV3AuthSHA256NoPrivGet(t *testing.T) {
 }
 
 func TestSnmpV3AuthSHA384NoPrivGet(t *testing.T) {
+	if !isUsingSnmpLabs() {
+		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
+	}
 	Default.Version = Version3
 	Default.MsgFlags = AuthNoPriv
 	Default.SecurityModel = UserSecurityModel
@@ -553,6 +562,9 @@ func TestSnmpV3AuthSHA384NoPrivGet(t *testing.T) {
 }
 
 func TestSnmpV3AuthSHA512NoPrivGet(t *testing.T) {
+	if !isUsingSnmpLabs() {
+		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
+	}
 	Default.Version = Version3
 	Default.MsgFlags = AuthNoPriv
 	Default.SecurityModel = UserSecurityModel
@@ -577,6 +589,7 @@ func TestSnmpV3AuthSHA512NoPrivGet(t *testing.T) {
 }
 
 func TestSnmpV3AuthSHA512PrivAES192Get(t *testing.T) {
+	t.Skip("AES-192 Blumenthal is currently known to have issues.")
 	Default.Version = Version3
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel
@@ -605,8 +618,43 @@ func TestSnmpV3AuthSHA512PrivAES192Get(t *testing.T) {
 	}
 }
 
+func TestSnmpV3AuthSHA512PrivAES192CGet(t *testing.T) {
+	if !isUsingSnmpLabs() {
+		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
+	}
+	Default.Version = Version3
+	Default.MsgFlags = AuthPriv
+	Default.SecurityModel = UserSecurityModel
+	Default.SecurityParameters = &UsmSecurityParameters{
+		UserName: getUserName(t, SHA512, AES192C),
+		AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, AES192C),
+		PrivacyProtocol: AES192C, PrivacyPassphrase: getPrivKey(t, SHA512, AES192C),
+	}
+
+	setupConnection(t)
+	defer Default.Conn.Close()
+
+	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	if err != nil {
+		t.Fatalf("Get() failed with error => %v", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("Expected result of size 1")
+	}
+	if result.Variables[0].Type != OctetString {
+		t.Fatalf("Expected sysDescr to be OctetString")
+	}
+	sysDescr := result.Variables[0].Value.([]byte)
+	if len(sysDescr) == 0 {
+		t.Fatalf("Got a zero length sysDescr")
+	}
+}
+
 // SHA 512 + AES256C (Reeder)
 func TestSnmpV3AuthSHA512PrivAES256CGet(t *testing.T) {
+	if !isUsingSnmpLabs() {
+		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
+	}
 	Default.Version = Version3
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel

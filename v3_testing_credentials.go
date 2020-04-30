@@ -118,6 +118,11 @@ func isUsingSnmpLabs() bool {
 	return useSnmpLabsCredentials
 }
 
+// conveniently enable demo.snmplabs.com for a one test
+func useSnmpLabs(use bool) {
+	useSnmpLabsCredentials = use
+}
+
 func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) []string {
 	var credentials []string
 	if useSnmpLabsCredentials {
