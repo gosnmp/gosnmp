@@ -108,7 +108,7 @@ var authenticationCredentialsSnmpLabs = map[string][]string{
 	SHA512.String() + AES256C.String(): {"usr-sha512-aes256", "authkey1", "privkey1"},
 }
 
-var useSnmpLabsCredentials = true
+var useSnmpLabsCredentials = false
 
 const cIdxUserName = 0
 const cIdxAuthKey = 1
