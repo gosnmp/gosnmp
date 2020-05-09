@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 //
@@ -130,12 +131,13 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	// allMsgIDs := make([]uint32, 0, x.Retries+1) // unused
 
 	timeout := x.Timeout
+	withContextDeadline := false
 	for retries := 0; ; retries++ {
 		if retries > 0 {
 			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
-			if x.ExponentialTimeout {
-				// https://www.webnms.com/snmp/help/snmpapi/snmpv3/v1/timeout.html
-				timeout *= 2
+			if withContextDeadline && strings.Contains(err.Error(), "timeout") {
+				err = context.DeadlineExceeded
+				break
 			}
 			if retries > x.Retries {
 				if strings.Contains(err.Error(), "timeout") {
@@ -143,6 +145,11 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				}
 				break
 			}
+			if x.ExponentialTimeout {
+				// https://www.webnms.com/snmp/help/snmpapi/snmpv3/v1/timeout.html
+				timeout *= 2
+			}
+			withContextDeadline = false
 		}
 		err = nil
 
@@ -150,10 +157,15 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			return nil, x.Context.Err()
 		}
 
-		ctx, cancel := context.WithTimeout(x.Context, timeout)
-		defer cancel()
-		deadline, _ := ctx.Deadline()
-		err = x.Conn.SetDeadline(deadline)
+		reqDeadline := time.Now().Add(timeout)
+		if contextDeadline, ok := x.Context.Deadline(); ok {
+			if contextDeadline.Before(reqDeadline) {
+				reqDeadline = contextDeadline
+				withContextDeadline = true
+			}
+		}
+
+		err = x.Conn.SetDeadline(reqDeadline)
 		if err != nil {
 			return nil, err
 		}
