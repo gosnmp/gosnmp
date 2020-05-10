@@ -13,7 +13,7 @@ import (
 	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/des"
+	"crypto/des" //nolint:gosec
 	"crypto/hmac"
 	crand "crypto/rand"
 	"encoding/binary"
@@ -653,7 +653,7 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		for i := 0; i < len(iv); i++ {
 			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
-		block, err := des.NewCipher(sp.PrivacyKey[:8])
+		block, err := des.NewCipher(sp.PrivacyKey[:8]) //nolint:gosec
 		if err != nil {
 			return nil, err
 		}
@@ -707,7 +707,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		for i := 0; i < len(iv); i++ {
 			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
-		block, err := des.NewCipher(sp.PrivacyKey[:8])
+		block, err := des.NewCipher(sp.PrivacyKey[:8]) //nolint:gosec
 		if err != nil {
 			return nil, err
 		}

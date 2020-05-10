@@ -233,6 +233,8 @@ Mocks were generated using:
 
 `mockgen -source=interface.go -destination=mocks/gosnmp_mock.go -package=mocks`
 
+However they're currently removed, as they were breaking linting.
+
 To profile cpu usage:
 
 ```shell

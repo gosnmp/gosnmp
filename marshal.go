@@ -542,6 +542,7 @@ func (packet *SnmpPacket) marshalVBL() ([]byte, error) {
 
 	vblBuf := new(bytes.Buffer)
 	for _, pdu := range packet.Variables {
+		pdu := pdu
 		vb, err := marshalVarbind(&pdu)
 		if err != nil {
 			return nil, err
