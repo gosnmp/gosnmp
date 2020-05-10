@@ -265,7 +265,6 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	buf.Write([]byte{byte(Integer), 1, byte(packet.SecurityModel)})
 
 	packet.logPrintf("MarshalV3Header msg security model len=%v", buf.Len()-oldLen)
-	oldLen = buf.Len()
 
 	return buf.Bytes(), nil
 }

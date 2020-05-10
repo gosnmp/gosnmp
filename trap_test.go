@@ -493,13 +493,13 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthNoPriv,
+		MsgFlags:           AuthNoPriv,
 	}
 
 	err := ts.Connect()
@@ -579,13 +579,13 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthNoPriv,
+		MsgFlags:           AuthNoPriv,
 	}
 
 	err := ts.Connect()
@@ -666,13 +666,13 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthPriv,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -754,13 +754,13 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthPriv,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -842,13 +842,13 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthPriv,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -929,13 +929,13 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthPriv,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -1015,13 +1015,13 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthPriv,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()
@@ -1102,13 +1102,13 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 		Target: trapTestAddress,
 		Port:   trapTestPort,
 		//Community: "public",
-		Version:       Version3,
-		Timeout:       time.Duration(2) * time.Second,
-		Retries:       3,
-		MaxOids:       MaxOids,
-		SecurityModel: UserSecurityModel,
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
-		MsgFlags: AuthPriv,
+		MsgFlags:           AuthPriv,
 	}
 
 	err := ts.Connect()

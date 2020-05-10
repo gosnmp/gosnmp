@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"time"
 
 	g "github.com/soniah/gosnmp"
 )
@@ -34,7 +33,6 @@ func main() {
 		Port:      uint16(port),
 		Community: "public",
 		Version:   g.Version2c,
-		Timeout:   time.Duration(2) * time.Second,
 		Logger:    log.New(os.Stdout, "", 0),
 	}
 	err := params.Connect()

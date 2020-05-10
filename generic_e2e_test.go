@@ -328,7 +328,7 @@ func TestSnmpV3NoAuthNoPrivBasicGet(t *testing.T) {
 	Default.Version = Version3
 	Default.MsgFlags = NoAuthNoPriv
 	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{ UserName: getUserName(t, NoAuth, NoPriv)}
+	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, NoAuth, NoPriv)}
 	setupConnection(t)
 	defer Default.Conn.Close()
 
@@ -377,7 +377,7 @@ func TestSnmpV3AuthMD5PrivAES256CGet(t *testing.T) {
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel
 	Default.SecurityParameters = &UsmSecurityParameters{
-		UserName: getUserName(t, MD5, AES256C),
+		UserName:               getUserName(t, MD5, AES256C),
 		AuthenticationProtocol: MD5, AuthenticationPassphrase: getAuthKey(t, MD5, AES256C),
 		PrivacyProtocol: AES256C, PrivacyPassphrase: getPrivKey(t, MD5, AES256C),
 	}
@@ -429,7 +429,7 @@ func TestSnmpV3AuthSHAPrivAESGet(t *testing.T) {
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel
 	Default.SecurityParameters = &UsmSecurityParameters{
-		UserName: getUserName(t, SHA, AES),
+		UserName:               getUserName(t, SHA, AES),
 		AuthenticationProtocol: SHA, AuthenticationPassphrase: getAuthKey(t, SHA, AES),
 		PrivacyProtocol: AES, PrivacyPassphrase: getPrivKey(t, SHA, AES),
 	}
@@ -457,7 +457,7 @@ func TestSnmpV3AuthSHAPrivAES256CGet(t *testing.T) {
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel
 	Default.SecurityParameters = &UsmSecurityParameters{
-		UserName: getUserName(t, SHA, AES256C),
+		UserName:               getUserName(t, SHA, AES256C),
 		AuthenticationProtocol: SHA, AuthenticationPassphrase: getAuthKey(t, SHA, AES256C),
 		PrivacyProtocol: AES256C, PrivacyPassphrase: getPrivKey(t, SHA, AES256C),
 	}
@@ -594,7 +594,7 @@ func TestSnmpV3AuthSHA512PrivAES192Get(t *testing.T) {
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel
 	Default.SecurityParameters = &UsmSecurityParameters{
-		UserName: getUserName(t, SHA512, AES192),
+		UserName:               getUserName(t, SHA512, AES192),
 		AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, AES192),
 		PrivacyProtocol: AES192, PrivacyPassphrase: getPrivKey(t, SHA512, AES192),
 	}
@@ -626,7 +626,7 @@ func TestSnmpV3AuthSHA512PrivAES192CGet(t *testing.T) {
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel
 	Default.SecurityParameters = &UsmSecurityParameters{
-		UserName: getUserName(t, SHA512, AES192C),
+		UserName:               getUserName(t, SHA512, AES192C),
 		AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, AES192C),
 		PrivacyProtocol: AES192C, PrivacyPassphrase: getPrivKey(t, SHA512, AES192C),
 	}
@@ -659,7 +659,7 @@ func TestSnmpV3AuthSHA512PrivAES256CGet(t *testing.T) {
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel
 	Default.SecurityParameters = &UsmSecurityParameters{
-		UserName: getUserName(t, SHA512, AES256C),
+		UserName:               getUserName(t, SHA512, AES256C),
 		AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, AES256C),
 		PrivacyProtocol: AES256C, PrivacyPassphrase: getPrivKey(t, SHA512, AES256C),
 	}

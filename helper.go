@@ -729,6 +729,7 @@ func parseFloat64(bytes []byte) (ret float64, err error) {
 //
 // replace with Uint64ToBigInt or equivalent when using Go 1.1
 
+//nolint:gochecknoglobals
 var uint64ToBigIntDelta big.Int
 
 func init() {

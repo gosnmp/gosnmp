@@ -6,8 +6,8 @@ test:
 # gradually build up amount of linting - there's a lot to do...
 
 lint: lint-examples
-	# lint all base directory commits going forwards from SHA bf84454
-	# golangci-lint run --new-from-rev bf84454 -p bugs -p complexity -p unused -p format -E lll -E interfacer *.go
+	# start increasing linting level..
+	golangci-lint run --disable-all -E goimports
 
 lint-examples:
 	# recursively lint the examples
@@ -15,7 +15,7 @@ lint-examples:
 
 lint-all:
 	# recursively lint all files, all commits - ugh
-	golangci-lint run -p bugs -p complexity -p unused -p format -E lll -E interfacer *.go
+	# golangci-lint run -p bugs -p complexity -p unused -p format -E lll -E interfacer *.go
 
 tools:
 	# install build tools

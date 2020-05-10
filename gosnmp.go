@@ -123,6 +123,7 @@ type GoSNMP struct {
 }
 
 // Default connection settings
+//nolint:gochecknoglobals
 var Default = &GoSNMP{
 	Port:               161,
 	Transport:          "udp",

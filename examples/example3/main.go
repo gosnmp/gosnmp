@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"time"
 
 	g "github.com/soniah/gosnmp"
 )
@@ -19,7 +18,6 @@ func main() {
 		Target:        "192.168.91.20",
 		Port:          161,
 		Version:       g.Version3,
-		Timeout:       time.Duration(30) * time.Second,
 		SecurityModel: g.UserSecurityModel,
 		MsgFlags:      g.AuthPriv,
 		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",

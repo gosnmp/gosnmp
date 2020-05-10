@@ -305,7 +305,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 			var buf = make([]byte, 8192)
 			runtime.Stack(buf, true)
 
-			err = fmt.Errorf("recover: %v\nStack:%v\n", e, string(buf))
+			err = fmt.Errorf("recover: %v\nStack:%v", e, string(buf))
 		}
 	}()
 

@@ -15,11 +15,7 @@ import (
 	"crypto/cipher"
 	"crypto/des"
 	"crypto/hmac"
-	_ "crypto/md5"
 	crand "crypto/rand"
-	_ "crypto/sha1"
-	_ "crypto/sha256"
-	_ "crypto/sha512"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -60,39 +56,40 @@ func (authProtocol SnmpV3AuthProtocol) HashType() crypto.Hash {
 	}
 }
 
+//nolint:gochecknoglobals
 var macVarbinds = [][]byte{
-	[]byte{},
-	[]byte{byte(OctetString), 0},
-	[]byte{byte(OctetString), 12,
+	{},
+	{byte(OctetString), 0},
+	{byte(OctetString), 12,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	[]byte{byte(OctetString), 12,
+	{byte(OctetString), 12,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	[]byte{byte(OctetString), 16,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0},
-	[]byte{byte(OctetString), 24,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
+	{byte(OctetString), 16,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	[]byte{byte(OctetString), 32,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
+	{byte(OctetString), 24,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	[]byte{byte(OctetString), 48,
+	{byte(OctetString), 32,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0},
+	{byte(OctetString), 48,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
@@ -328,8 +325,8 @@ func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameter
 }
 
 var (
-	passwordKeyHashCache = make(map[string][]byte)
-	passwordKeyHashMutex sync.RWMutex
+	passwordKeyHashCache = make(map[string][]byte) //nolint:gochecknoglobals
+	passwordKeyHashMutex sync.RWMutex              //nolint:gochecknoglobals
 )
 
 func hashPassword(hash hash.Hash, password string) ([]byte, error) {
@@ -442,7 +439,7 @@ func extendKeyBlumenthal(authProtocol SnmpV3AuthProtocol, password string, engin
 	}
 
 	newkey := authProtocol.HashType().New()
-	newkey.Write(key)
+	_, _ = newkey.Write(key)
 	return append(key, newkey.Sum(nil)...), err
 }
 
@@ -588,7 +585,7 @@ func (sp *UsmSecurityParameters) calcPacketDigest(packet []byte) []byte {
 		mac = hmac.New(crypto.SHA512.New, sp.SecretKey)
 	}
 
-	mac.Write(packet)
+	_, _ = mac.Write(packet)
 	msgDigest := mac.Sum(nil)
 	return msgDigest
 }

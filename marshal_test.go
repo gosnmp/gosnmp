@@ -1431,7 +1431,7 @@ func TestSendOneRequest_dups(t *testing.T) {
 		}
 	}()
 
-	pdus := []SnmpPDU{SnmpPDU{Name: ".1.2", Type: Null}}
+	pdus := []SnmpPDU{{Name: ".1.2", Type: Null}}
 	reqPkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
 
 	_, err = x.sendOneRequest(reqPkt, true)
@@ -1478,7 +1478,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 		}
 	}()
 
-	pdus := []SnmpPDU{SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}}
+	pdus := []SnmpPDU{{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}}
 	reqPkt := x.mkSnmpPacket(GetRequest, pdus, 0, 0)
 
 	// make sure everything works before starting the test

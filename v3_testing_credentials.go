@@ -3,6 +3,7 @@ package gosnmp
 import "testing"
 
 // GO SNMP credentials table
+//nolint:gochecknoglobals,unused
 var authenticationCredentials = map[string][]string{
 	NoAuth.String() + NoPriv.String(): {"noAuthNoPrivUser", "", ""},
 
@@ -56,6 +57,7 @@ var authenticationCredentials = map[string][]string{
 }
 
 // Credentials table for public demo.snmplabs.org
+//nolint:unused,gochecknoglobals
 var authenticationCredentialsSnmpLabs = map[string][]string{
 	NoAuth.String() + NoPriv.String(): {"usr-none-none", "", ""},
 
@@ -108,21 +110,25 @@ var authenticationCredentialsSnmpLabs = map[string][]string{
 	SHA512.String() + AES256C.String(): {"usr-sha512-aes256", "authkey1", "privkey1"},
 }
 
+//nolint:unused,gochecknoglobals
 var useSnmpLabsCredentials = false
 
 const cIdxUserName = 0
 const cIdxAuthKey = 1
 const cIdxPrivKey = 2
 
+//nolint
 func isUsingSnmpLabs() bool {
 	return useSnmpLabsCredentials
 }
 
 // conveniently enable demo.snmplabs.com for a one test
+//nolint
 func useSnmpLabs(use bool) {
 	useSnmpLabsCredentials = use
 }
 
+//nolint
 func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) []string {
 	var credentials []string
 	if useSnmpLabsCredentials {
@@ -138,14 +144,17 @@ func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol 
 	return credentials
 }
 
+//nolint
 func getUserName(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
 	return getCredentials(t, authProtocol, privProtocol)[cIdxUserName]
 }
 
+//nolint:unused,deadcode
 func getAuthKey(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
 	return getCredentials(t, authProtocol, privProtocol)[cIdxAuthKey]
 }
 
+//nolint:unused,deadcode
 func getPrivKey(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
 	return getCredentials(t, authProtocol, privProtocol)[cIdxPrivKey]
 }
