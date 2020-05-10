@@ -7,7 +7,7 @@ test:
 
 lint: lint-examples
 	# lint all base directory commits going forwards from SHA bf84454
-	golangci-lint run --new-from-rev bf84454 -p bugs -p complexity -p unused -p format -E lll -E interfacer *.go
+	# golangci-lint run --new-from-rev bf84454 -p bugs -p complexity -p unused -p format -E lll -E interfacer *.go
 
 lint-examples:
 	# recursively lint the examples
