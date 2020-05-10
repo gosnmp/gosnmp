@@ -262,9 +262,11 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 	x.msgID = uint32(x.random.Int31())
 	// RequestID is Integer32 from SNMPV2-SMI and uses all 32 bits
 	// TrueSpeed: However, some SNMP devices do not implement the spec properly,
-	// and get confused with negative integers. Our DeepSea Generator just ignores
-	// these requests. So we take care not to allow any numbers that are large enough
-	// to overflow.
+	// and get confused with negative integers. So we take care not to allow any
+	// numbers that are large enough to overflow.
+	// However: https://golang.org/pkg/math/rand/#Rand.Int31 says "Int31 returns a
+	// non-negative pseudo-random 31-bit integer as an int32". Perhaps this fix
+	// should be reworded?
 	x.requestID = uint32(x.random.Int31() / 2)
 
 	x.rxBuf = new([rxBufSize]byte)
