@@ -10,6 +10,8 @@ lint: lint-examples
 	golangci-lint run --disable-all -E goimports
 	golangci-lint run ./...
 	golangci-lint run -p bugs
+	golangci-lint run -p unused
+	golangci-lint run -p format
 
 
 lint-examples:

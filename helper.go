@@ -66,6 +66,10 @@ func Check(err error) {
 func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
 	retVal = new(variable)
 
+	if len(msg) > 0 {
+		x.logPrintf("decodeValue: msg: %s", msg)
+	}
+
 	if len(data) == 0 {
 		return retVal, fmt.Errorf("err: zero byte buffer")
 	}
@@ -114,7 +118,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 	case ObjectIdentifier:
 		// 0x06
 		x.logPrint("decodeValue: type is ObjectIdentifier")
-		rawOid, _, err := parseRawField(data, "OID")
+		rawOid, _, err := parseRawField(x.Logger, data, "OID")
 		if err != nil {
 			return nil, fmt.Errorf("Error parsing OID Value: %s", err.Error())
 		}
@@ -605,10 +609,11 @@ func parseObjectIdentifier(bytes []byte) (s []int, err error) {
 	return
 }
 
-func parseRawField(data []byte, msg string) (interface{}, int, error) {
+func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, error) {
 	if len(data) == 0 {
 		return nil, 0, fmt.Errorf("empty data passed to parseRawField")
 	}
+	logger.Printf("parseRawField: %s", msg)
 	switch Asn1BER(data[0]) {
 	case Integer:
 		length, cursor := parseLength(data)

@@ -17,6 +17,7 @@ import (
 	"crypto/hmac"
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash"
 	"sync"
@@ -330,6 +331,9 @@ var (
 )
 
 func hashPassword(hash hash.Hash, password string) ([]byte, error) {
+	if len(password) == 0 {
+		return []byte{}, errors.New("hashPassword: password is empty")
+	}
 	var pi int // password index
 	for i := 0; i < 1048576; i += 64 {
 		var chunk []byte
@@ -474,6 +478,11 @@ func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthPro
 		return nil, err
 	}
 
+	if len(localPrivKey) < keylen {
+		return []byte{}, fmt.Errorf("genlocalPrivKey: privProtocol: %v len(localPrivKey): %d, keylen: %d",
+			privProtocol, len(localPrivKey), keylen)
+	}
+
 	return localPrivKey[:keylen], nil
 }
 
@@ -492,7 +501,7 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 
 // http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 // localDESSalt needs to be incremented on every packet.
-func (sp *UsmSecurityParameters) usmAllocateNewSalt() (interface{}, error) {
+func (sp *UsmSecurityParameters) usmAllocateNewSalt() interface{} {
 	var newSalt interface{}
 
 	switch sp.PrivacyProtocol {
@@ -501,7 +510,7 @@ func (sp *UsmSecurityParameters) usmAllocateNewSalt() (interface{}, error) {
 	default:
 		newSalt = atomic.AddUint32(&(sp.localDESSalt), 1)
 	}
-	return newSalt, nil
+	return newSalt
 }
 
 func (sp *UsmSecurityParameters) usmSetSalt(newSalt interface{}) error {
@@ -531,18 +540,14 @@ func (sp *UsmSecurityParameters) usmSetSalt(newSalt interface{}) error {
 func (sp *UsmSecurityParameters) initPacket(packet *SnmpPacket) error {
 	// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 	// localDESSalt needs to be incremented on every packet.
-	newSalt, err := sp.usmAllocateNewSalt()
-	if err != nil {
-		return err
-	}
+	newSalt := sp.usmAllocateNewSalt()
 	if packet.MsgFlags&AuthPriv > AuthNoPriv {
-		var s *UsmSecurityParameters
-		if s, err = castUsmSecParams(packet.SecurityParameters); err != nil {
+		s, err := castUsmSecParams(packet.SecurityParameters)
+		if err != nil {
 			return err
 		}
 		return s.usmSetSalt(newSalt)
 	}
-
 	return nil
 }
 
@@ -789,7 +794,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		return 0, fmt.Errorf("error parsing SNMPV3 User Security Model parameters: truncated packet")
 	}
 
-	rawMsgAuthoritativeEngineID, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineID")
+	rawMsgAuthoritativeEngineID, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthoritativeEngineID")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineID: %s", err.Error())
 	}
@@ -828,7 +833,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		}
 	}
 
-	rawMsgAuthoritativeEngineBoots, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineBoots")
+	rawMsgAuthoritativeEngineBoots, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthoritativeEngineBoots")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineBoots: %s", err.Error())
 	}
@@ -838,7 +843,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		sp.Logger.Printf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
 	}
 
-	rawMsgAuthoritativeEngineTime, count, err := parseRawField(packet[cursor:], "msgAuthoritativeEngineTime")
+	rawMsgAuthoritativeEngineTime, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthoritativeEngineTime")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthoritativeEngineTime: %s", err.Error())
 	}
@@ -848,7 +853,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		sp.Logger.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
 	}
 
-	rawMsgUserName, count, err := parseRawField(packet[cursor:], "msgUserName")
+	rawMsgUserName, count, err := parseRawField(sp.Logger, packet[cursor:], "msgUserName")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgUserName: %s", err.Error())
 	}
@@ -858,7 +863,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		sp.Logger.Printf("Parsed userName %s", msgUserName)
 	}
 
-	rawMsgAuthParameters, count, err := parseRawField(packet[cursor:], "msgAuthenticationParameters")
+	rawMsgAuthParameters, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthenticationParameters")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgAuthenticationParameters: %s", err.Error())
 	}
@@ -872,7 +877,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	cursor += count
 
-	rawMsgPrivacyParameters, count, err := parseRawField(packet[cursor:], "msgPrivacyParameters")
+	rawMsgPrivacyParameters, count, err := parseRawField(sp.Logger, packet[cursor:], "msgPrivacyParameters")
 	if err != nil {
 		return 0, fmt.Errorf("Error parsing SNMPV3 User Security Model msgPrivacyParameters: %s", err.Error())
 	}

@@ -138,7 +138,10 @@ func TestSHAHMAC(t *testing.T) {
 		cacheKey = append(cacheKey, 'h'+byte(SHA))
 		cacheKey = append(cacheKey, []byte(test.password)...)
 
-		result, _ := hMAC(crypto.SHA1, string(cacheKey), test.password, test.engineid)
+		result, err := hMAC(crypto.SHA1, string(cacheKey), test.password, test.engineid)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !bytes.Equal(result, test.outKey) {
 			t.Errorf("#%d, got %v expected %v", i, result, test.outKey)
 		}
