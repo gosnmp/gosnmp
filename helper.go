@@ -14,6 +14,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/big"
@@ -41,17 +42,17 @@ func (x *GoSNMP) Check(err error) {
 }
 
 // Check makes checking errors easy, so they actually get a minimal check
-func (p *SnmpPacket) Check(err error) {
+func (packet *SnmpPacket) Check(err error) {
 	if err != nil {
-		p.Logger.Printf("Check: %v\n", err)
+		packet.Logger.Printf("Check: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 // Check makes checking errors easy, so they actually get a minimal check
-func (p *SnmpPDU) Check(err error) {
+func (pdu *SnmpPDU) Check(err error) {
 	if err != nil {
-		p.Logger.Printf("Check: %v\n", err)
+		pdu.Logger.Printf("Check: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -63,40 +64,38 @@ func Check(err error) {
 	}
 }
 
-func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err error) {
-	retVal = new(variable)
+func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
+	retVal := &variable{}
 
 	if len(msg) > 0 {
 		x.logPrintf("decodeValue: msg: %s", msg)
 	}
 
 	if len(data) == 0 {
-		return retVal, fmt.Errorf("err: zero byte buffer")
+		return nil, fmt.Errorf("err: zero byte buffer")
 	}
 
 	// values matching this mask have the type in subsequent byte
 	if data[0]&AsnExtensionID == AsnExtensionID {
 		if len(data) < 2 {
-			return retVal, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), 2)
+			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), 2)
 		}
 		data = data[1:]
 	}
-
 	switch Asn1BER(data[0]) {
-
 	case Integer:
 		// 0x02. signed
 		x.logPrint("decodeValue: type is Integer")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
 		}
 
 		var ret int
-		var err error
-		if ret, err = parseInt(data[cursor:length]); err != nil {
-			x.logPrintf("%v:", err)
-			return retVal, fmt.Errorf("bytes: % x err: %v", data, err)
+		var err2 error
+		if ret, err2 = parseInt(data[cursor:length]); err2 != nil {
+			x.logPrintf("%v:", err2)
+			return nil, fmt.Errorf("bytes: % x err: %v", data, err2)
 		}
 		retVal.Type = Integer
 		retVal.Value = ret
@@ -105,11 +104,11 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is OctetString")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
 		}
 
 		retVal.Type = OctetString
-		retVal.Value = []byte(data[cursor:length])
+		retVal.Value = data[cursor:length]
 	case Null:
 		// 0x05
 		x.logPrint("decodeValue: type is Null")
@@ -118,9 +117,9 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 	case ObjectIdentifier:
 		// 0x06
 		x.logPrint("decodeValue: type is ObjectIdentifier")
-		rawOid, _, err := parseRawField(x.Logger, data, "OID")
-		if err != nil {
-			return nil, fmt.Errorf("Error parsing OID Value: %s", err.Error())
+		rawOid, _, err2 := parseRawField(x.Logger, data, "OID")
+		if err2 != nil {
+			return nil, fmt.Errorf("error parsing OID Value: %s", err2.Error())
 		}
 		var oid []int
 		var ok bool
@@ -134,7 +133,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is IPAddress")
 		retVal.Type = IPAddress
 		if len(data) < 2 {
-			return retVal, fmt.Errorf("not enough data for ipv4 address: %x", data)
+			return nil, fmt.Errorf("not enough data for ipv4 address: %x", data)
 		}
 
 		switch data[1] {
@@ -161,12 +160,12 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is Counter32")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("not enough data for Counter32 %x (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("not enough data for Counter32 %x (data %d length %d)", data, len(data), length)
 		}
 
-		ret, err := parseUint(data[cursor:length])
-		if err != nil {
-			x.logPrintf("decodeValue: err is %v", err)
+		ret, err2 := parseUint(data[cursor:length])
+		if err2 != nil {
+			x.logPrintf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Counter32
@@ -176,12 +175,12 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is Gauge32")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("not enough data for Gauge32 %x (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("not enough data for Gauge32 %x (data %d length %d)", data, len(data), length)
 		}
 
-		ret, err := parseUint(data[cursor:length])
-		if err != nil {
-			x.logPrintf("decodeValue: err is %v", err)
+		ret, err2 := parseUint(data[cursor:length])
+		if err2 != nil {
+			x.logPrintf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Gauge32
@@ -191,12 +190,12 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is TimeTicks")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("not enough data for TimeTicks %x (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("not enough data for TimeTicks %x (data %d length %d)", data, len(data), length)
 		}
 
-		ret, err := parseUint32(data[cursor:length])
-		if err != nil {
-			x.logPrintf("decodeValue: err is %v", err)
+		ret, err2 := parseUint32(data[cursor:length])
+		if err2 != nil {
+			x.logPrintf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = TimeTicks
@@ -206,7 +205,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is Opaque")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("not enough data for Opaque %x (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("not enough data for Opaque %x (data %d length %d)", data, len(data), length)
 		}
 
 		opaqueData := data[cursor:length]
@@ -217,12 +216,12 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is Counter64")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("not enough data for Counter64 %x (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("not enough data for Counter64 %x (data %d length %d)", data, len(data), length)
 		}
 
-		ret, err := parseUint64(data[cursor:length])
-		if err != nil {
-			x.logPrintf("decodeValue: err is %v", err)
+		ret, err2 := parseUint64(data[cursor:length])
+		if err2 != nil {
+			x.logPrintf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Counter64
@@ -232,21 +231,29 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		x.logPrint("decodeValue: type is OpaqueFloat")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
 		}
 
+		var err error
 		retVal.Type = OpaqueFloat
 		retVal.Value, err = parseFloat32(data[cursor:length])
+		if err != nil {
+			return nil, err
+		}
 	case OpaqueDouble:
 		// 0x79
 		x.logPrint("decodeValue: type is OpaqueDouble")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return retVal, fmt.Errorf("not enough data for OpaqueDouble %x (data %d length %d)", data, len(data), length)
+			return nil, fmt.Errorf("not enough data for OpaqueDouble %x (data %d length %d)", data, len(data), length)
 		}
 
+		var err error
 		retVal.Type = OpaqueDouble
 		retVal.Value, err = parseFloat64(data[cursor:length])
+		if err != nil {
+			return nil, err
+		}
 	case NoSuchObject:
 		// 0x80
 		x.logPrint("decodeValue: type is NoSuchObject")
@@ -268,7 +275,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (retVal *variable, err err
 		retVal.Value = nil
 	}
 	x.logPrintf("decodeValue: value is %#v", retVal.Value)
-	return
+	return retVal, nil
 }
 
 func marshalUvarInt(x uint32) []byte {
@@ -288,7 +295,7 @@ func marshalUvarInt(x uint32) []byte {
 	return buf
 }
 
-func marshalBase128Int(out *bytes.Buffer, n int64) (err error) {
+func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
 	if n == 0 {
 		err = out.WriteByte(0)
 		return
@@ -378,7 +385,6 @@ func marshalUint32(v interface{}) ([]byte, error) {
 		return bs[1:], nil
 	}
 	return bs, nil
-
 }
 
 func marshalFloat32(v interface{}) ([]byte, error) {
@@ -502,7 +508,7 @@ func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) 
 	offset = initOffset
 	for shifted := 0; offset < len(bytes); shifted++ {
 		if shifted > 4 {
-			err = fmt.Errorf("Structural Error: base 128 integer too large")
+			err = fmt.Errorf("structural error: base 128 integer too large")
 			return
 		}
 		ret <<= 7
@@ -513,7 +519,7 @@ func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) 
 			return
 		}
 	}
-	err = fmt.Errorf("Syntax Error: truncated base 128 integer")
+	err = fmt.Errorf("syntax error: truncated base 128 integer")
 	return
 }
 
@@ -561,15 +567,16 @@ func parseInt(bytes []byte) (int, error) {
 //   7-1 give the number of additional length octets. Second and following
 //   octets give the length, base 256, most significant digit first.
 func parseLength(bytes []byte) (length int, cursor int) {
-	if len(bytes) <= 2 {
+	switch {
+	case len(bytes) <= 2:
 		// handle null octet strings ie "0x04 0x00"
 		cursor = len(bytes)
 		length = len(bytes)
-	} else if int(bytes[1]) <= 127 {
+	case int(bytes[1]) <= 127:
 		length = int(bytes[1])
 		length += 2
 		cursor += 2
-	} else {
+	default:
 		numOctets := int(bytes[1]) & 127
 		for i := 0; i < numOctets; i++ {
 			length <<= 8
@@ -622,7 +629,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		i, err := parseInt(data[cursor:length])
 		if err != nil {
-			return nil, 0, fmt.Errorf("Unable to parse raw INTEGER: %x err: %v", data, err)
+			return nil, 0, fmt.Errorf("unable to parse raw INTEGER: %x err: %v", data, err)
 		}
 		return i, length, nil
 	case OctetString:
@@ -662,7 +669,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			return nil, 0, fmt.Errorf("Error in parseUint: %s", err)
+			return nil, 0, fmt.Errorf("error in parseUint: %s", err)
 		}
 		return ret, length, nil
 	}

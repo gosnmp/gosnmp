@@ -33,6 +33,9 @@ const (
 
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
+
+	// "udp" is used regularly, prevent 'goconst' complaints
+	udp = "udp"
 )
 
 // GoSNMP represents GoSNMP library state
@@ -126,7 +129,7 @@ type GoSNMP struct {
 //nolint:gochecknoglobals
 var Default = &GoSNMP{
 	Port:               161,
-	Transport:          "udp",
+	Transport:          udp,
 	Community:          "public",
 	Version:            Version2c,
 	Timeout:            time.Duration(2) * time.Second,
@@ -248,7 +251,7 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 		return err
 	}
 
-	x.Transport = x.Transport + networkSuffix
+	x.Transport += networkSuffix
 	err = x.netConnect()
 	if err != nil {
 		return fmt.Errorf("error establishing connection to host: %s", err.Error())
@@ -293,13 +296,13 @@ func (x *GoSNMP) validateParameters() error {
 	}
 
 	if x.Transport == "" {
-		x.Transport = "udp"
+		x.Transport = udp
 	}
 
 	if x.MaxOids == 0 {
 		x.MaxOids = MaxOids
 	} else if x.MaxOids < 0 {
-		return fmt.Errorf("MaxOids cannot be less than 0")
+		return fmt.Errorf("field MaxOids cannot be less than 0")
 	}
 
 	if x.Version == Version3 {
@@ -455,7 +458,7 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	var err error
 
-	result := new(SnmpPacket)
+	result := &SnmpPacket{}
 
 	err = x.validateParameters()
 	if err != nil {
@@ -470,7 +473,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	var cursor int
 	cursor, err = x.unmarshalHeader(resp, result)
 	if err != nil {
-		err = fmt.Errorf("Unable to decode packet header: %s", err.Error())
+		err = fmt.Errorf("unable to decode packet header: %s", err.Error())
 		return result, err
 	}
 
@@ -483,14 +486,14 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 
 	err = x.unmarshalPayload(resp, cursor, result)
 	if err != nil {
-		err = fmt.Errorf("Unable to decode packet body: %s", err.Error())
+		err = fmt.Errorf("unable to decode packet body: %s", err.Error())
 		return result, err
 	}
 
-	if result == nil {
-		err = fmt.Errorf("Unable to decode packet: no variables")
-		return result, err
-	}
+	// if result == nil {
+	// 	err = fmt.Errorf("Unable to decode packet: no variables")
+	// 	return result, err
+	// }
 	return result, nil
 }
 
@@ -595,7 +598,7 @@ func ToBigInt(value interface{}) *big.Int {
 	case int32:
 		val = int64(value)
 	case int64:
-		val = int64(value)
+		val = value
 	case uint:
 		val = int64(value)
 	case uint8:

@@ -1383,7 +1383,7 @@ func TestSendOneRequest_dups(t *testing.T) {
 		Retries: 2,
 	}
 	if err := x.Connect(); err != nil {
-		t.Fatalf("Error connecting: %s", err)
+		t.Fatalf("error connecting: %s", err)
 	}
 
 	go func() {
@@ -1399,17 +1399,17 @@ func TestSendOneRequest_dups(t *testing.T) {
 			var cursor int
 			cursor, err = x.unmarshalHeader(buf, &reqPkt)
 			if err != nil {
-				t.Errorf("Error: %s", err)
+				t.Errorf("error: %s", err)
 			}
 			// if x.Version == Version3 {
 			//	buf, cursor, err = x.decryptPacket(buf, cursor, &reqPkt)
 			//	if err != nil {
-			//		t.Errorf("Error: %s", err)
+			//		t.Errorf("error: %s", err)
 			//	}
 			//}
 			err = x.unmarshalPayload(buf, cursor, &reqPkt)
 			if err != nil {
-				t.Errorf("Error: %s", err)
+				t.Errorf("error: %s", err)
 			}
 
 			rspPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{
@@ -1436,13 +1436,13 @@ func TestSendOneRequest_dups(t *testing.T) {
 
 	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
-		t.Errorf("Error: %s", err)
+		t.Errorf("error: %s", err)
 		return
 	}
 
 	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
-		t.Errorf("Error: %s", err)
+		t.Errorf("error: %s", err)
 		return
 	}
 }
@@ -1461,7 +1461,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 		Retries: 2,
 	}
 	if err := x.Connect(); err != nil {
-		b.Fatalf("Error connecting: %s", err)
+		b.Fatalf("error connecting: %s", err)
 	}
 
 	go func() {
@@ -1492,7 +1492,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		_, err = x.sendOneRequest(reqPkt, true)
 		if err != nil {
-			b.Fatalf("Error: %s", err)
+			b.Fatalf("error: %s", err)
 			return
 		}
 	}

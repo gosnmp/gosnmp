@@ -35,13 +35,13 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 	var pdutype PDUType
 
 	if len(trap.Variables) == 0 {
-		return nil, fmt.Errorf("SendTrap requires at least 1 PDU")
+		return nil, fmt.Errorf("function SendTrap requires at least 1 PDU")
 	}
 
 	if trap.Variables[0].Type == TimeTicks {
 		// check is uint32
 		if _, ok := trap.Variables[0].Value.(uint32); !ok {
-			return nil, fmt.Errorf("SendTrap TimeTick must be uint32")
+			return nil, fmt.Errorf("function SendTrap TimeTick must be uint32")
 		}
 	}
 
@@ -59,14 +59,14 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 	case Version1:
 		pdutype = Trap
 		if len(trap.Enterprise) == 0 {
-			return nil, fmt.Errorf("SendTrap for SNMPV1 requires an Enterprise OID")
+			return nil, fmt.Errorf("function SendTrap for SNMPV1 requires an Enterprise OID")
 		}
 		if len(trap.AgentAddress) == 0 {
-			return nil, fmt.Errorf("SendTrap for SNMPV1 requires an Agent Address")
+			return nil, fmt.Errorf("function SendTrap for SNMPV1 requires an Agent Address")
 		}
 
 	default:
-		err = fmt.Errorf("SendTrap doesn't support %s", x.Version)
+		err = fmt.Errorf("function SendTrap doesn't support %s", x.Version)
 		return nil, err
 	}
 
@@ -140,7 +140,7 @@ func (t *TrapListener) Close() {
 		if t.conn == nil {
 			return
 		}
-		if t.conn.LocalAddr().Network() == "udp" {
+		if t.conn.LocalAddr().Network() == udp {
 			t.conn.Close()
 		}
 		<-t.done
@@ -154,7 +154,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 	if err != nil {
 		return err
 	}
-	t.conn, err = net.ListenUDP("udp", udpAddr)
+	t.conn, err = net.ListenUDP(udp, udpAddr)
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 	traps := t.Params.UnmarshalTrap(msg)
 
 	if traps != nil {
-		// TODO: lieing for backward compatibility reason - create UDP Address ... not nice
+		// TODO: lying for backward compatibility reason - create UDP Address ... not nice
 		r, _ := net.ResolveUDPAddr("", conn.RemoteAddr().String())
 		t.OnNewTrap(traps, r)
 	}
@@ -216,8 +216,6 @@ func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 }
 
 func (t *TrapListener) listenTCP(addr string) error {
-	// udp
-
 	tcpAddr, err := net.ResolveTCPAddr(t.proto, addr)
 	if err != nil {
 		return err
@@ -234,7 +232,6 @@ func (t *TrapListener) listenTCP(addr string) error {
 	t.listening <- true
 
 	for {
-
 		switch {
 		case atomic.LoadInt32(&t.finish) == 1:
 			t.done <- true
@@ -245,7 +242,7 @@ func (t *TrapListener) listenTCP(addr string) error {
 			conn, err := l.Accept()
 			fmt.Printf("ACCEPT: %s", conn)
 			if err != nil {
-				fmt.Println("Error accepting: ", err.Error())
+				fmt.Println("error accepting: ", err.Error())
 				os.Exit(1)
 			}
 			// Handle connections in a new goroutine.
@@ -274,21 +271,19 @@ func (t *TrapListener) Listen(addr string) error {
 	}
 
 	splitted := strings.SplitN(addr, "://", 2)
-	t.proto = "udp"
+	t.proto = udp
 	if len(splitted) > 1 {
 		t.proto = splitted[0]
 		addr = splitted[1]
 	}
 
-	//fmt.Printf("TEST: Adress:%s, %s", t.proto, addr)
-
 	if t.proto == "tcp" {
 		return t.listenTCP(addr)
-	} else if t.proto == "udp" {
+	} else if t.proto == udp {
 		return t.listenUDP(addr)
 	}
 
-	return fmt.Errorf("Not implemented network protocol: %s [use: tcp/udp]", t.proto)
+	return fmt.Errorf("not implemented network protocol: %s [use: tcp/udp]", t.proto)
 }
 
 // Default trap handler

@@ -37,7 +37,6 @@ func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) e
 
 RequestLoop:
 	for {
-
 		requests++
 
 		var response *SnmpPacket
@@ -45,13 +44,13 @@ RequestLoop:
 
 		switch getRequestType {
 		case GetBulkRequest:
-			response, err = x.GetBulk([]string{oid}, uint8(x.NonRepeaters), uint8(maxReps))
+			response, err = x.GetBulk([]string{oid}, uint8(x.NonRepeaters), maxReps)
 		case GetNextRequest:
 			response, err = x.GetNext([]string{oid})
 		case GetRequest:
 			response, err = x.Get([]string{oid})
 		default:
-			response, err = nil, fmt.Errorf("Unsupported request type: %d", getRequestType)
+			response, err = nil, fmt.Errorf("unsupported request type: %d", getRequestType)
 		}
 
 		if err != nil {
@@ -102,7 +101,6 @@ RequestLoop:
 		}
 		// Save last oid for next request
 		oid = response.Variables[len(response.Variables)-1].Name
-
 	}
 	x.Logger.Printf("BulkWalk completed in %d requests", requests)
 	return nil
