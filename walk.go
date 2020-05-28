@@ -72,21 +72,26 @@ RequestLoop:
 			}
 			if !strings.HasPrefix(pdu.Name, rootOid+".") {
 				// Not in the requested root range.
-				// if this is the first request, and the first variable in that request
-				// and this condition is triggered - the first result is out of range
-				// need to perform a regular get request
-				// this request has been too narrowly defined to be found with a getNext
-				// Issue #78 #93
-				if requests == 1 && i == 0 {
-					getRequestType = GetRequest
-					continue RequestLoop
-				} else if pdu.Name == rootOid && pdu.Type != NoSuchInstance {
-					// Call walk function if the pdu instance is found
-					// considering that the rootOid is a leafOid
+				// If we use GetNext or GetBulk with rootOid that is a leafOid, then the pdu oid will not be a prefix
+				// of rootOid, but it will be equal to it. Therefore we call the walk function and return.
+				// If this is the first request, and the first variable in that request and this condition is
+				// triggered, then the first result is out of range. We need to perform a regular Get request as this
+				// request has been too narrowly defined to be found with a GetNext. If rootOid is truly a leafOid,
+				// it will be processed during that second request.
+				// Issue #78 #93 #170
+				if i == 0 && pdu.Name == rootOid {
 					if err := walkFn(pdu); err != nil {
 						return err
 					}
+
+					break RequestLoop
 				}
+
+				if requests == 1 && i == 0 {
+					getRequestType = GetRequest
+					continue RequestLoop
+				}
+
 				break RequestLoop
 			}
 
