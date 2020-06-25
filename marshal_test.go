@@ -417,7 +417,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.1.3.0",
 					Type:  TimeTicks,
-					Value: 318870100,
+					Value: uint32(318870100),
 				},
 			},
 		},
@@ -454,7 +454,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.2.2.1.9.3",
 					Type:  TimeTicks,
-					Value: 2970,
+					Value: uint32(2970),
 				},
 				{
 					Name:  ".1.3.6.1.2.1.3.1.1.2.10.1.10.11.0.17",
@@ -644,7 +644,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.31.1.1.1.10.1",
 					Type:  Counter64,
-					Value: 1527943,
+					Value: uint64(1527943),
 				},
 			},
 		},
