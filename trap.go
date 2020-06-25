@@ -6,7 +6,6 @@ package gosnmp
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -189,22 +188,21 @@ func (t *TrapListener) listenUDP(addr string) error {
 			}
 			if traps.PDUType == InformRequest {
 				traps.PDUType = GetResponse
-				log.Printf("sending INFORM response: %+v\n", traps)
 
 				ob, err := traps.marshalMsg()
 				if err != nil {
-					return fmt.Errorf("Error marshaling INFORM response: %v\n", err)
+					return fmt.Errorf("error marshaling INFORM response: %v", err)
 				}
 
 				// Send the return packet back.
 				count, err := t.conn.WriteTo(ob, remote)
 				if err != nil {
-					return fmt.Errorf("Error sending INFORM response: %v\n", err)
+					return fmt.Errorf("error sending INFORM response: %v", err)
 				}
 
 				// This isn't fatal, but should be logged.
 				if count != len(ob) {
-					log.Printf("Failed to send all bytes of INFORM response!\n")
+					t.Params.logPrintf("Failed to send all bytes of INFORM response!\n")
 				}
 			}
 		}
@@ -287,7 +285,7 @@ func (t *TrapListener) Listen(addr string) error {
 	_ = t.Params.validateParameters()
 
 	if t.OnNewTrap == nil {
-		t.OnNewTrap = debugTrapHandler
+		t.OnNewTrap = t.debugTrapHandler
 	}
 
 	splitted := strings.SplitN(addr, "://", 2)
@@ -307,8 +305,8 @@ func (t *TrapListener) Listen(addr string) error {
 }
 
 // Default trap handler
-func debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
-	log.Printf("got trapdata from %+v: %+v\n", u, s)
+func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
+	t.Params.logPrintf("got trapdata from %+v: %+v\n", u, s)
 }
 
 // UnmarshalTrap unpacks the SNMP Trap.
