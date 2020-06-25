@@ -129,11 +129,13 @@ type TrapHandlerFunc func(s *SnmpPacket, u *net.UDPAddr)
 //
 // NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
 func NewTrapListener() *TrapListener {
-	tl := &TrapListener{}
-	tl.finish = 0
-	tl.done = make(chan bool)
-	// Buffered because one doesn't have to block on it.
-	tl.listening = make(chan bool, 1)
+	tl := &TrapListener{
+		finish: 0,
+		done:   make(chan bool),
+		// Buffered because one doesn't have to block on it.
+		listening: make(chan bool, 1),
+	}
+
 	return tl
 }
 
