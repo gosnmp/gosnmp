@@ -94,8 +94,12 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 // nil values will be replaced by default values.
 type TrapListener struct {
 	sync.Mutex
-	OnNewTrap func(s *SnmpPacket, u *net.UDPAddr)
-	Params    *GoSNMP
+
+	// Params is a reference to the TrapListener's "parent" GoSNMP instance.
+	Params *GoSNMP
+
+	// OnNewTrap handles incoming Trap and Inform PDUs.
+	OnNewTrap TrapHandlerFunc
 
 	// These unexported fields are for letting test cases
 	// know we are ready.
@@ -106,6 +110,20 @@ type TrapListener struct {
 	done      chan bool
 	listening chan bool
 }
+
+// TrapHandlerFunc is a callback function type which receives SNMP Trap and
+// Inform packets when they are received.  If this callback is null, Trap and
+// Inform PDUs will not be received (Inform responses will still be sent,
+// however).  This callback should not modify the contents of the SnmpPacket
+// nor the UDPAddr passed to it, and it should copy out any values it wishes to
+// use instead of retaining references in order to avoid memory fragmentation.
+//
+// The general effect of received Trap and Inform packets do not differ for the
+// receiver, and the response is handled by the caller of the handler, so there
+// is no need for the application to handle Informs any different than Traps.
+// Nonetheless, the packet's Type field can be examined to determine what type
+// of event this is for e.g. statistics gathering functions, etc.
+type TrapHandlerFunc func(s *SnmpPacket, u *net.UDPAddr)
 
 // NewTrapListener returns an initialized TrapListener.
 //
@@ -183,11 +201,17 @@ func (t *TrapListener) listenUDP(addr string) error {
 
 			msg := buf[:rlen]
 			traps := t.Params.UnmarshalTrap(msg)
+
 			if traps != nil {
 				// Here we assume that t.OnNewTrap will not alter the contents
-				// of the PDU.
+				// of the PDU (per documentation, because Go does not have
+				// compile-time const checking).  We don't pass a copy because
+				// the SnmpPacket type is somewhat large, but we could without
+				// violating any implicit or explicit spec.
 				t.OnNewTrap(traps, remote)
 			}
+
+			// If it was an Inform request, we need to send a response.
 			if traps.PDUType == InformRequest {
 				// Reuse the packet, since we're supposed to send it back with
 				// the exact same variables unless there's an error. Change the
