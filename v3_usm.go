@@ -40,6 +40,7 @@ const (
 
 //go:generate stringer -type=SnmpV3AuthProtocol
 
+// HashType maps the AuthProtocol's hash type to an actual crypto.Hash object.
 func (authProtocol SnmpV3AuthProtocol) HashType() crypto.Hash {
 	switch authProtocol {
 	default:
