@@ -1,4 +1,4 @@
-// Copyright 2012-2018 The GoSNMP Authors. All rights reserved.  Use of this
+// Copyright 2012-2020 The GoSNMP Authors. All rights reserved.  Use of this
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
 
@@ -13,9 +13,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"reflect"
+	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Tests in alphabetical order of function being tested
@@ -339,6 +344,23 @@ func TestEnmarshalMsg(t *testing.T) {
 			t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
 		}
 		checkByteEquality(t, test, testBytes, 0, test.finish)
+		t.Run(fmt.Sprintf("TestEnmarshalMsgUnmarshal/PDU[%v]/RequestID[%v]", test.requestType, test.requestid), func(t *testing.T) {
+			vhandle := GoSNMP{}
+			vhandle.Logger = Default.Logger
+			result, err := vhandle.SnmpDecodePacket(testBytes)
+			if err != nil {
+				t.Errorf("#%s: SnmpDecodePacket() err returned: %v", test.funcName, err)
+			}
+			newResultTestBytes, err := result.marshalMsg()
+			if err != nil {
+				t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
+			}
+			if len(newResultTestBytes) == 0 {
+				t.Errorf("#%s: marshal() length of result is 0 : %v", test.funcName, (newResultTestBytes))
+				return
+			}
+			checkByteEquality(t, test, newResultTestBytes, 0, test.finish)
+		})
 	}
 }
 
@@ -661,105 +683,134 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
+	{snmpv3HelloRequest,
+		&SnmpPacket{
+			Version:    Version3,
+			PDUType:    GetRequest,
+			MsgID:      91040642,
+			RequestID:  1157240545,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables:  []SnmpPDU{},
+		},
+	},
+	{snmpv3HelloResponse,
+		&SnmpPacket{
+			Version:    Version3,
+			PDUType:    Report,
+			MsgID:      91040642,
+			RequestID:  1157240545,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables: []SnmpPDU{
+				{
+					Name:  ".1.3.6.1.6.3.15.1.1.4.0",
+					Type:  Counter32,
+					Value: 21,
+				},
+			},
+		},
+	},
 }
 
 func TestUnmarshal(t *testing.T) {
 	Default.Logger = log.New(ioutil.Discard, "", 0)
 
-SANITY:
 	for i, test := range testsUnmarshal {
-		var err error
-		var res = new(SnmpPacket)
-		var cursor int
-
-		var buf = test.in()
-		cursor, err = Default.unmarshalHeader(buf, res)
-		if err != nil {
-			t.Errorf("#%d, UnmarshalHeader returned err: %v", i, err)
-			continue SANITY
-		}
-		if res.Version == Version3 {
-			buf, cursor, err = Default.decryptPacket(buf, cursor, res)
+		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
+		splitedFuncName := strings.Split(funcName, ".")
+		funcName = splitedFuncName[len(splitedFuncName)-1]
+		t.Run(fmt.Sprintf("%v-%v", i, funcName), func(t *testing.T) {
+			vhandle := GoSNMP{}
+			vhandle.Logger = Default.Logger
+			testBytes := test.in()
+			res, err := vhandle.SnmpDecodePacket(testBytes)
 			if err != nil {
-				t.Errorf("#%d, decryptPacket returned err: %v", i, err)
+				t.Errorf("#%s: SnmpDecodePacket() err returned: %v", funcName, err)
 			}
-		}
-		err = Default.unmarshalPayload(test.in(), cursor, res)
-		if err != nil {
-			t.Errorf("#%d, UnmarshalPayload returned err: %v", i, err)
-		}
-		if res == nil {
-			t.Errorf("#%d, Unmarshal returned nil", i)
-			continue SANITY
-		}
+			t.Run("unmarshal", func(t *testing.T) {
+				// test "header" fields
+				if res.Version != test.out.Version {
+					t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
+				}
+				if res.Community != test.out.Community {
+					t.Errorf("#%d Community result: %v, test: %v", i, res.Community, test.out.Community)
+				}
+				if res.PDUType != test.out.PDUType {
+					t.Errorf("#%d PDUType result: %v, test: %v", i, res.PDUType, test.out.PDUType)
+				}
+				if res.RequestID != test.out.RequestID {
+					t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
+				}
+				if res.Error != test.out.Error {
+					t.Errorf("#%d Error result: %v, test: %v", i, res.Error, test.out.Error)
+				}
+				if res.ErrorIndex != test.out.ErrorIndex {
+					t.Errorf("#%d ErrorIndex result: %v, test: %v", i, res.ErrorIndex, test.out.ErrorIndex)
+				}
 
-		// test "header" fields
-		if res.Version != test.out.Version {
-			t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
-		}
-		if res.Community != test.out.Community {
-			t.Errorf("#%d Community result: %v, test: %v", i, res.Community, test.out.Community)
-		}
-		if res.PDUType != test.out.PDUType {
-			t.Errorf("#%d PDUType result: %v, test: %v", i, res.PDUType, test.out.PDUType)
-		}
-		if res.RequestID != test.out.RequestID {
-			t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
-		}
-		if res.Error != test.out.Error {
-			t.Errorf("#%d Error result: %v, test: %v", i, res.Error, test.out.Error)
-		}
-		if res.ErrorIndex != test.out.ErrorIndex {
-			t.Errorf("#%d ErrorIndex result: %v, test: %v", i, res.ErrorIndex, test.out.ErrorIndex)
-		}
+				// test varbind values
+				for n, vb := range test.out.Variables {
+					if len(res.Variables) < n {
+						t.Errorf("#%d:%d ran out of varbind results", i, n)
+						return
+					}
+					vbr := res.Variables[n]
 
-		// test varbind values
-		for n, vb := range test.out.Variables {
-			if len(res.Variables) < n {
-				t.Errorf("#%d:%d ran out of varbind results", i, n)
-				continue SANITY
-			}
-			vbr := res.Variables[n]
+					if vbr.Name != vb.Name {
+						t.Errorf("#%d:%d Name result: %v, test: %v", i, n, vbr.Name, vb.Name)
+					}
+					if vbr.Type != vb.Type {
+						t.Errorf("#%d:%d Type result: %v, test: %v", i, n, vbr.Type, vb.Type)
+					}
 
-			if vbr.Name != vb.Name {
-				t.Errorf("#%d:%d Name result: %v, test: %v", i, n, vbr.Name, vb.Name)
-			}
-			if vbr.Type != vb.Type {
-				t.Errorf("#%d:%d Type result: %v, test: %v", i, n, vbr.Type, vb.Type)
-			}
+					switch vb.Type {
+					case Integer, Gauge32, Counter32, TimeTicks, Counter64:
+						vbval := ToBigInt(vb.Value)
+						vbrval := ToBigInt(vbr.Value)
+						if vbval.Cmp(vbrval) != 0 {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case OctetString:
+						if !bytes.Equal(vb.Value.([]byte), vbr.Value.([]byte)) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case IPAddress, ObjectIdentifier:
+						if vb.Value != vbr.Value {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case Null, NoSuchObject, NoSuchInstance:
+						if (vb.Value != nil) || (vbr.Value != nil) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case OpaqueFloat:
+						if vb.Value.(float32) != vbr.Value.(float32) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					case OpaqueDouble:
+						if vb.Value.(float64) != vbr.Value.(float64) {
+							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+						}
+					default:
+						t.Errorf("#%d:%d Unhandled case result: %v, test: %v", i, n, vbr.Value, vb.Value)
+					}
 
-			switch vb.Type {
-			case Integer, Gauge32, Counter32, TimeTicks, Counter64:
-				vbval := ToBigInt(vb.Value)
-				vbrval := ToBigInt(vbr.Value)
-				if vbval.Cmp(vbrval) != 0 {
-					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 				}
-			case OctetString:
-				if !bytes.Equal(vb.Value.([]byte), vbr.Value.([]byte)) {
-					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+			})
+			t.Run("remarshal", func(t *testing.T) {
+				result, err := res.marshalMsg()
+				if err != nil {
+					t.Fatalf("#%s: marshalMsg() err returned: %v", funcName, err)
 				}
-			case IPAddress, ObjectIdentifier:
-				if vb.Value != vbr.Value {
-					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
+				resNew, err := vhandle.SnmpDecodePacket(result)
+				if err != nil {
+					t.Fatalf("#%s: SnmpDecodePacket() err returned: %v", funcName, err)
 				}
-			case Null, NoSuchObject, NoSuchInstance:
-				if (vb.Value != nil) || (vbr.Value != nil) {
-					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-				}
-			case OpaqueFloat:
-				if vb.Value.(float32) != vbr.Value.(float32) {
-					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-				}
-			case OpaqueDouble:
-				if vb.Value.(float64) != vbr.Value.(float64) {
-					t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
-				}
-			default:
-				t.Errorf("#%d:%d Unhandled case result: %v, test: %v", i, n, vbr.Value, vb.Value)
-			}
+				assert.EqualValues(t, res, resNew)
 
-		}
+			})
+		})
+
 	}
 }
 
@@ -1293,6 +1344,33 @@ func TestUnmarshalEmptyPanic(t *testing.T) {
 	}
 }
 
+func TestV3USMInitialPacket(t *testing.T) {
+	logger := log.New(ioutil.Discard, "", 0)
+	var emptyPdus []SnmpPDU
+	blankPacket := &SnmpPacket{
+		Version:            Version3,
+		MsgFlags:           Reportable | NoAuthNoPriv,
+		SecurityModel:      UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{Logger: logger},
+		PDUType:            GetRequest,
+		Logger:             logger,
+		Variables:          emptyPdus,
+	}
+	iBytes, err := blankPacket.marshalMsg()
+	if err != nil {
+		t.Errorf("#TestV3USMInitialPacket: marshalMsg() err returned: %v", err)
+	}
+	engine := GoSNMP{Logger: logger}
+	pktNew, errDecode := engine.SnmpDecodePacket(iBytes)
+	if errDecode != nil {
+		t.Logf("-->Bytes=%v", iBytes)
+		t.Logf("-->Expect=%v", blankPacket)
+		t.Logf("-->got=%v", pktNew)
+		t.Errorf("#TestV3USMInitialPacket: SnmpDecodePacket() err returned: %v. ", errDecode)
+	}
+
+}
+
 func TestSendOneRequest_dups(t *testing.T) {
 	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
 	defer srvr.Close()
@@ -1305,7 +1383,7 @@ func TestSendOneRequest_dups(t *testing.T) {
 		Retries: 2,
 	}
 	if err := x.Connect(); err != nil {
-		t.Fatalf("Error connecting: %s", err)
+		t.Fatalf("error connecting: %s", err)
 	}
 
 	go func() {
@@ -1321,17 +1399,17 @@ func TestSendOneRequest_dups(t *testing.T) {
 			var cursor int
 			cursor, err = x.unmarshalHeader(buf, &reqPkt)
 			if err != nil {
-				t.Errorf("Error: %s", err)
+				t.Errorf("error: %s", err)
 			}
 			// if x.Version == Version3 {
 			//	buf, cursor, err = x.decryptPacket(buf, cursor, &reqPkt)
 			//	if err != nil {
-			//		t.Errorf("Error: %s", err)
+			//		t.Errorf("error: %s", err)
 			//	}
 			//}
 			err = x.unmarshalPayload(buf, cursor, &reqPkt)
 			if err != nil {
-				t.Errorf("Error: %s", err)
+				t.Errorf("error: %s", err)
 			}
 
 			rspPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{
@@ -1353,18 +1431,18 @@ func TestSendOneRequest_dups(t *testing.T) {
 		}
 	}()
 
-	pdus := []SnmpPDU{SnmpPDU{Name: ".1.2", Type: Null}}
+	pdus := []SnmpPDU{{Name: ".1.2", Type: Null}}
 	reqPkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
 
 	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
-		t.Errorf("Error: %s", err)
+		t.Errorf("error: %s", err)
 		return
 	}
 
 	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
-		t.Errorf("Error: %s", err)
+		t.Errorf("error: %s", err)
 		return
 	}
 }
@@ -1383,7 +1461,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 		Retries: 2,
 	}
 	if err := x.Connect(); err != nil {
-		b.Fatalf("Error connecting: %s", err)
+		b.Fatalf("error connecting: %s", err)
 	}
 
 	go func() {
@@ -1400,7 +1478,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 		}
 	}()
 
-	pdus := []SnmpPDU{SnmpPDU{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}}
+	pdus := []SnmpPDU{{Name: ".1.3.6.1.2.1.31.1.1.1.10.1", Type: Null}}
 	reqPkt := x.mkSnmpPacket(GetRequest, pdus, 0, 0)
 
 	// make sure everything works before starting the test
@@ -1414,7 +1492,7 @@ func BenchmarkSendOneRequest(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		_, err = x.sendOneRequest(reqPkt, true)
 		if err != nil {
-			b.Fatalf("Error: %s", err)
+			b.Fatalf("error: %s", err)
 			return
 		}
 	}
@@ -1474,6 +1552,78 @@ func trap1() []byte {
 		0x27, 0x0c, 0x03, 0x00, 0x08, 0x00, 0x74, 0x3a, 0x05, 0x00, 0x18, 0x94, 0x67, 0x0c, 0x04, 0x00,
 		0x08, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6c, 0x00, 0x00, 0x00}
+}
+
+// Simple Network Management Protocol
+//     msgVersion: snmpv3 (3)
+//     msgGlobalData
+//         msgID: 91040642
+//         msgMaxSize: 65507
+//         msgFlags: 04
+//         msgSecurityModel: USM (3)
+//     msgAuthoritativeEngineID: <MISSING>
+//     msgAuthoritativeEngineBoots: 0
+//     msgAuthoritativeEngineTime: 0
+//     msgUserName:
+//     msgAuthenticationParameters: <MISSING>
+//     msgPrivacyParameters: <MISSING>
+//     msgData: plaintext (0)
+//         plaintext
+
+func snmpv3HelloRequest() []byte {
+	return []byte{0x30, 0x52, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02,
+		0x04, 0x05, 0x6d, 0x2b, 0x82, 0x02, 0x03, 0x00,
+		0xff, 0xe3, 0x04, 0x01, 0x04, 0x02, 0x01, 0x03,
+		0x04, 0x10, 0x30, 0x0e, 0x04, 0x00, 0x02, 0x01,
+		0x00, 0x02, 0x01, 0x00, 0x04, 0x00, 0x04, 0x00,
+		0x04, 0x00, 0x30, 0x28, 0x04, 0x00, 0x04, 0x14,
+		0x66, 0x6f, 0x72, 0x65, 0x69, 0x67, 0x6e, 0x66,
+		0x6f, 0x72, 0x6d, 0x61, 0x74, 0x73, 0x2f, 0x6c,
+		0x69, 0x6e, 0x75, 0x78, 0xa0, 0x0e, 0x02, 0x04,
+		0x44, 0xfa, 0x16, 0xe1, 0x02, 0x01, 0x00, 0x02,
+		0x01, 0x00, 0x30, 0x00}
+}
+
+// msgData: plaintext (0)
+//     plaintext
+//         contextEngineID: 80004fb8054445534b544f502d4a3732533245343ab63bc8
+//             1... .... = Engine ID Conformance: RFC3411 (SNMPv3)
+//             Engine Enterprise ID: pysnmp (20408)
+//             Engine ID Format: Octets, administratively assigned (5)
+//             Engine ID Data: 4445534b544f502d4a3732533245343ab63bc8
+//         contextName: foreignformats/linux
+//         data: report (8)
+//             report
+//                 request-id: 1157240545
+//                 error-status: noError (0)
+//                 error-index: 0
+//                 variable-bindings: 1 item
+//                     1.3.6.1.6.3.15.1.1.4.0: 21
+//                         Object Name: 1.3.6.1.6.3.15.1.1.4.0 (iso.3.6.1.6.3.15.1.1.4.0)
+//                         Value (Counter32): 21
+
+func snmpv3HelloResponse() []byte {
+	return []byte{
+		0x30, 0x81, 0x95, 0x02, 0x01, 0x03, 0x30, 0x11,
+		0x02, 0x04, 0x05, 0x6d, 0x2b, 0x82, 0x02, 0x03,
+		0x00, 0xff, 0xe3, 0x04, 0x01, 0x00, 0x02, 0x01,
+		0x03, 0x04, 0x2a, 0x30, 0x28, 0x04, 0x18, 0x80,
+		0x00, 0x4f, 0xb8, 0x05, 0x44, 0x45, 0x53, 0x4b,
+		0x54, 0x4f, 0x50, 0x2d, 0x4a, 0x37, 0x32, 0x53,
+		0x32, 0x45, 0x34, 0x3a, 0xb6, 0x3b, 0xc8, 0x02,
+		0x01, 0x02, 0x02, 0x03, 0x00, 0xc4, 0x7a, 0x04,
+		0x00, 0x04, 0x00, 0x04, 0x00, 0x30, 0x51, 0x04,
+		0x18, 0x80, 0x00, 0x4f, 0xb8, 0x05, 0x44, 0x45,
+		0x53, 0x4b, 0x54, 0x4f, 0x50, 0x2d, 0x4a, 0x37,
+		0x32, 0x53, 0x32, 0x45, 0x34, 0x3a, 0xb6, 0x3b,
+		0xc8, 0x04, 0x14, 0x66, 0x6f, 0x72, 0x65, 0x69,
+		0x67, 0x6e, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74,
+		0x73, 0x2f, 0x6c, 0x69, 0x6e, 0x75, 0x78, 0xa8,
+		0x1f, 0x02, 0x04, 0x44, 0xfa, 0x16, 0xe1, 0x02,
+		0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x11, 0x30,
+		0x0f, 0x06, 0x0a, 0x2b, 0x06, 0x01, 0x06, 0x03,
+		0x0f, 0x01, 0x01, 0x04, 0x00, 0x41, 0x01, 0x15,
+	}
 }
 
 // dump bytes in a format similar to Wireshark

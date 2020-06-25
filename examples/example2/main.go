@@ -7,27 +7,33 @@ package main
 import (
 	"fmt"
 	"log"
-	"time"
+	"os"
+	"strconv"
 
 	g "github.com/soniah/gosnmp"
 )
 
 func main() {
 
-	// build our own GoSNMP struct, rather than using g.Default
+	// get Target and Port from environment
+	envTarget := os.Getenv("GOSNMP_TARGET")
+	envPort := os.Getenv("GOSNMP_PORT")
+	if len(envTarget) <= 0 {
+		log.Fatalf("environment variable not set: GOSNMP_TARGET")
+	}
+	if len(envPort) <= 0 {
+		log.Fatalf("environment variable not set: GOSNMP_PORT")
+	}
+	port, _ := strconv.ParseUint(envPort, 10, 16)
+
+	// Build our own GoSNMP struct, rather than using g.Default.
+	// Do verbose logging of packets.
 	params := &g.GoSNMP{
-		Target:        "192.168.91.20",
-		Port:          161,
-		Version:       g.Version3,
-		Timeout:       time.Duration(30) * time.Second,
-		SecurityModel: g.UserSecurityModel,
-		MsgFlags:      g.AuthPriv,
-		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",
-			AuthenticationProtocol:   g.SHA,
-			AuthenticationPassphrase: "password",
-			PrivacyProtocol:          g.DES,
-			PrivacyPassphrase:        "password",
-		},
+		Target:    envTarget,
+		Port:      uint16(port),
+		Community: "public",
+		Version:   g.Version2c,
+		Logger:    log.New(os.Stdout, "", 0),
 	}
 	err := params.Connect()
 	if err != nil {
