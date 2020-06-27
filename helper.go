@@ -486,15 +486,17 @@ func marshalOID(oid string) ([]byte, error) {
 }
 
 func oidToString(oid []int) (ret string) {
-	oidAsString := make([]string, len(oid)+1)
-
+	
 	// used for appending of the first dot
-	oidAsString[0] = ""
+	var oidAsString strings.Builder
+	oidAsString.WriteString(".")
 	for i := range oid {
-		oidAsString[i+1] = strconv.Itoa(oid[i])
+		a := strconv.Itoa(oid[i])
+		oidAsString.WriteString(a)
+		oidAsString.WriteString(".")
 	}
 
-	return strings.Join(oidAsString, ".")
+	return oidAsString.String()
 }
 
 // TODO no tests
