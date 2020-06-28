@@ -50,14 +50,6 @@ func (packet *SnmpPacket) Check(err error) {
 }
 
 // Check makes checking errors easy, so they actually get a minimal check
-func (pdu *SnmpPDU) Check(err error) {
-	if err != nil {
-		pdu.Logger.Printf("Check: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-// Check makes checking errors easy, so they actually get a minimal check
 func Check(err error) {
 	if err != nil {
 		log.Fatalf("Check: %v\n", err)
