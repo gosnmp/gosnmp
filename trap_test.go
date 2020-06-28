@@ -131,7 +131,7 @@ func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(
 		for _, v := range packet.Variables {
 			switch v.Type {
 			case OctetString:
-				b := v.Value.([]byte)
+				b := v.Value.(string)
 				// log.Printf("OID: %s, string: %x\n", v.Name, b)
 
 				// Only one OctetString in the payload, so it must be the expected one
