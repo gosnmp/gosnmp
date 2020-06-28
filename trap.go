@@ -217,40 +217,41 @@ func (t *TrapListener) listenUDP(addr string) error {
 				// the SnmpPacket type is somewhat large, but we could without
 				// violating any implicit or explicit spec.
 				t.OnNewTrap(traps, remote)
-			}
 
-			// If it was an Inform request, we need to send a response.
-			if traps.PDUType == InformRequest {
-				// Reuse the packet, since we're supposed to send it back with
-				// the exact same variables unless there's an error. Change the
-				// PDUType to the response, though.
-				traps.PDUType = GetResponse
+				// If it was an Inform request, we need to send a response.
+				if traps.PDUType == InformRequest {
 
-				// If the response can be sent, the error-status is supposed to
-				// be set to noError and the error-index set to zero.
-				traps.Error = NoError
-				traps.ErrorIndex = 0
+					// Reuse the packet, since we're supposed to send it back with
+					// the exact same variables unless there's an error. Change the
+					// PDUType to the response, though.
+					traps.PDUType = GetResponse
 
-				// TODO: Check that the message marshalled is not too large for
-				// the originator to accept and if so, send a tooBig error PDU
-				// per RFC3416 section 4.2.7.  This maximum size, however, does
-				// not have a well-defined mechanism in the RFC other than using
-				// the path MTU (which is difficult to determine), so it's left
-				// to future implementations.
-				ob, err := traps.marshalMsg()
-				if err != nil {
-					return fmt.Errorf("error marshaling INFORM response: %v", err)
-				}
+					// If the response can be sent, the error-status is supposed to
+					// be set to noError and the error-index set to zero.
+					traps.Error = NoError
+					traps.ErrorIndex = 0
 
-				// Send the return packet back.
-				count, err := t.conn.WriteTo(ob, remote)
-				if err != nil {
-					return fmt.Errorf("error sending INFORM response: %v", err)
-				}
+					// TODO: Check that the message marshalled is not too large for
+					// the originator to accept and if so, send a tooBig error PDU
+					// per RFC3416 section 4.2.7.  This maximum size, however, does
+					// not have a well-defined mechanism in the RFC other than using
+					// the path MTU (which is difficult to determine), so it's left
+					// to future implementations.
+					ob, err := traps.marshalMsg()
+					if err != nil {
+						return fmt.Errorf("error marshaling INFORM response: %v", err)
+					}
 
-				// This isn't fatal, but should be logged.
-				if count != len(ob) {
-					t.Params.logPrintf("Failed to send all bytes of INFORM response!\n")
+					// Send the return packet back.
+					count, err := t.conn.WriteTo(ob, remote)
+					if err != nil {
+						return fmt.Errorf("error sending INFORM response: %v", err)
+					}
+
+					// This isn't fatal, but should be logged.
+					if count != len(ob) {
+						t.Params.logPrintf("Failed to send all bytes of INFORM response!\n")
+					}
 				}
 			}
 		}
