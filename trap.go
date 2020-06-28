@@ -46,7 +46,13 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 
 	switch x.Version {
 	case Version2c, Version3:
+		// Default to a v2 trap.
 		pdutype = SNMPv2Trap
+
+		// If it's an inform, do that instead.
+		if trap.IsInform {
+			pdutype = InformRequest
+		}
 
 		if trap.Variables[0].Type != TimeTicks {
 			now := uint32(time.Now().Unix())
@@ -79,8 +85,8 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 	}
 
 	// all sends wait for the return packet, except for SNMPv2Trap
-	// -> wait is false
-	return x.send(packetOut, false)
+	// -> wait is only for informs
+	return x.send(packetOut, trap.IsInform)
 }
 
 //

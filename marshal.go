@@ -65,6 +65,10 @@ type SnmpPacket struct {
 type SnmpTrap struct {
 	Variables []SnmpPDU
 
+	// If true, the trap is an InformRequest, not a trap. This has no effect on
+	// v1 traps, as Inform is not part of the v1 protocol.
+	IsInform bool
+
 	// These fields are required for SNMPV1 Trap Headers
 	Enterprise   string
 	AgentAddress string
@@ -861,6 +865,8 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 		if err != nil {
 			return fmt.Errorf("error in unmarshalResponse: %s", err.Error())
 		}
+		// If it's an InformRequest, mark the trap.
+		response.IsInform = (requestType == InformRequest)
 	case Trap:
 		response.PDUType = requestType
 		err = x.unmarshalTrapV1(packet[cursor:], response)
