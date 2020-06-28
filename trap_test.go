@@ -144,6 +144,16 @@ func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(
 	}
 }
 
+// TODO: This restores global state set by other tests so that these tests can
+// run. Tests should be avoiding use of global state where possible (and, if
+// possible, use of global state other than possibly loggers should be
+// eliminated entirely).
+func TestRestoreGlobals(t *testing.T) {
+	Default.Version = Version2c
+	Default.SecurityModel = 0
+	Default.SecurityParameters = nil
+}
+
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendTrapBasic(t *testing.T) {
 	done := make(chan int)
