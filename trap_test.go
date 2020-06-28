@@ -146,7 +146,6 @@ func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(
 
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendTrapBasic(t *testing.T) {
-	t.Skip("failing: due to changes in genlocalPrivKey")
 	done := make(chan int)
 
 	tl := NewTrapListener()
@@ -293,7 +292,6 @@ func TestSendInformBasic(t *testing.T) {
 
 // test the listener is not blocked if Listening is not used
 func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
-	t.Skip("failing: due to changes in genlocalPrivKey")
 	done := make(chan int)
 
 	tl := NewTrapListener()
@@ -373,7 +371,6 @@ func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendV1Trap(t *testing.T) {
-	t.Skip("failing: due to changes in genlocalPrivKey")
 	done := make(chan int)
 
 	tl := NewTrapListener()
