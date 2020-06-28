@@ -211,6 +211,86 @@ func TestSendTrapBasic(t *testing.T) {
 	}
 }
 
+// test sending a basic SNMP inform and receiving the response
+func TestSendInformBasic(t *testing.T) {
+	done := make(chan int)
+
+	tl := NewTrapListener()
+	defer tl.Close()
+
+	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
+	tl.Params = Default
+
+	// listener goroutine
+	errch := make(chan error)
+	go func() {
+		// defer close(errch)
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		if err != nil {
+			errch <- err
+		}
+	}()
+
+	// Wait until the listener is ready.
+	select {
+	case <-tl.Listening():
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
+	}
+
+	ts := &GoSNMP{
+		Target:    trapTestAddress,
+		Port:      trapTestPort,
+		Community: "public",
+		Version:   Version2c,
+		Timeout:   time.Duration(2) * time.Second,
+		Retries:   3,
+		MaxOids:   MaxOids,
+	}
+
+	err := ts.Connect()
+	if err != nil {
+		t.Fatalf("Connect() err: %v", err)
+	}
+	defer ts.Conn.Close()
+
+	pdu := SnmpPDU{
+		Name:  trapTestOid,
+		Type:  OctetString,
+		Value: trapTestPayload,
+	}
+
+	// Make it an inform.
+	trap := SnmpTrap{
+		Variables: []SnmpPDU{pdu},
+		IsInform:  true,
+	}
+
+	var resp *SnmpPacket
+	resp, err = ts.SendTrap(trap)
+	if err != nil {
+		t.Fatalf("SendTrap() err: %v", err)
+	}
+
+	// wait for response from handler
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
+	}
+
+	if resp.PDUType != GetResponse {
+		t.Fatal("Inform response is not a response PDU")
+	}
+
+	for i, tv := range trap.Variables {
+		rv := resp.Variables[i+1]
+		if tv != rv {
+			t.Fatalf("Expected variable %d = %#v, got %#v", i, tv, rv)
+		}
+	}
+}
+
 // test the listener is not blocked if Listening is not used
 func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 	t.Skip("failing: due to changes in genlocalPrivKey")
