@@ -103,28 +103,24 @@ func genericV3Trap() []byte {
 
 func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
 	return func(packet *SnmpPacket, addr *net.UDPAddr) {
-		// log.Printf("got trapdata from %s\n", addr.IP)
+		//log.Printf("got trapdata from %s\n", addr.IP)
+		defer close(done)
 
 		if version == Version1 {
 			if packet.Enterprise != trapTestEnterpriseOid {
 				t.Fatalf("incorrect trap Enterprise OID received, expected %s got %s", trapTestEnterpriseOid, packet.Enterprise)
-				done <- 0
 			}
 			if packet.AgentAddress != trapTestAgentAddress {
 				t.Fatalf("incorrect trap Agent Address received, expected %s got %s", trapTestAgentAddress, packet.AgentAddress)
-				done <- 0
 			}
 			if packet.GenericTrap != trapTestGenericTrap {
 				t.Fatalf("incorrect trap Generic Trap identifier received, expected %v got %v", trapTestGenericTrap, packet.GenericTrap)
-				done <- 0
 			}
 			if packet.SpecificTrap != trapTestSpecificTrap {
 				t.Fatalf("incorrect trap Specific Trap identifier received, expected %v got %v", trapTestSpecificTrap, packet.SpecificTrap)
-				done <- 0
 			}
 			if packet.Timestamp != trapTestTimestamp {
 				t.Fatalf("incorrect trap Timestamp received, expected %v got %v", trapTestTimestamp, packet.Timestamp)
-				done <- 0
 			}
 		}
 
@@ -137,17 +133,14 @@ func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(
 				// Only one OctetString in the payload, so it must be the expected one
 				if v.Name != trapTestOid {
 					t.Fatalf("incorrect trap OID received, expected %s got %s", trapTestOid, v.Name)
-					done <- 0
 				}
 				if string(b) != trapTestPayload {
 					t.Fatalf("incorrect trap payload received, expected %s got %x", trapTestPayload, b)
-					done <- 0
 				}
 			default:
 				// log.Printf("trap: %+v\n", v)
 			}
 		}
-		done <- 0
 	}
 }
 
