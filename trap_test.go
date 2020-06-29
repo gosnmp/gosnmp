@@ -103,57 +103,59 @@ func genericV3Trap() []byte {
 
 func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
 	return func(packet *SnmpPacket, addr *net.UDPAddr) {
-		// log.Printf("got trapdata from %s\n", addr.IP)
+		//log.Printf("got trapdata from %s\n", addr.IP)
+		defer close(done)
 
 		if version == Version1 {
 			if packet.Enterprise != trapTestEnterpriseOid {
 				t.Fatalf("incorrect trap Enterprise OID received, expected %s got %s", trapTestEnterpriseOid, packet.Enterprise)
-				done <- 0
 			}
 			if packet.AgentAddress != trapTestAgentAddress {
 				t.Fatalf("incorrect trap Agent Address received, expected %s got %s", trapTestAgentAddress, packet.AgentAddress)
-				done <- 0
 			}
 			if packet.GenericTrap != trapTestGenericTrap {
 				t.Fatalf("incorrect trap Generic Trap identifier received, expected %v got %v", trapTestGenericTrap, packet.GenericTrap)
-				done <- 0
 			}
 			if packet.SpecificTrap != trapTestSpecificTrap {
 				t.Fatalf("incorrect trap Specific Trap identifier received, expected %v got %v", trapTestSpecificTrap, packet.SpecificTrap)
-				done <- 0
 			}
 			if packet.Timestamp != trapTestTimestamp {
 				t.Fatalf("incorrect trap Timestamp received, expected %v got %v", trapTestTimestamp, packet.Timestamp)
-				done <- 0
 			}
 		}
 
 		for _, v := range packet.Variables {
 			switch v.Type {
 			case OctetString:
-				b := v.Value.([]byte)
+				b := v.Value.(string)
 				// log.Printf("OID: %s, string: %x\n", v.Name, b)
 
 				// Only one OctetString in the payload, so it must be the expected one
 				if v.Name != trapTestOid {
 					t.Fatalf("incorrect trap OID received, expected %s got %s", trapTestOid, v.Name)
-					done <- 0
 				}
 				if string(b) != trapTestPayload {
 					t.Fatalf("incorrect trap payload received, expected %s got %x", trapTestPayload, b)
-					done <- 0
 				}
 			default:
 				// log.Printf("trap: %+v\n", v)
 			}
 		}
-		done <- 0
 	}
+}
+
+// TODO: This restores global state set by other tests so that these tests can
+// run. Tests should be avoiding use of global state where possible (and, if
+// possible, use of global state other than possibly loggers should be
+// eliminated entirely).
+func TestRestoreGlobals(t *testing.T) {
+	Default.Version = Version2c
+	Default.SecurityModel = 0
+	Default.SecurityParameters = nil
 }
 
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendTrapBasic(t *testing.T) {
-	t.Skip("failing: due to changes in genlocalPrivKey")
 	done := make(chan int)
 
 	tl := NewTrapListener()
@@ -218,9 +220,88 @@ func TestSendTrapBasic(t *testing.T) {
 	}
 }
 
+// test sending a basic SNMP inform and receiving the response
+func TestSendInformBasic(t *testing.T) {
+	done := make(chan int)
+
+	tl := NewTrapListener()
+	defer tl.Close()
+
+	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
+	tl.Params = Default
+
+	// listener goroutine
+	errch := make(chan error)
+	go func() {
+		// defer close(errch)
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		if err != nil {
+			errch <- err
+		}
+	}()
+
+	// Wait until the listener is ready.
+	select {
+	case <-tl.Listening():
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
+	}
+
+	ts := &GoSNMP{
+		Target:    trapTestAddress,
+		Port:      trapTestPort,
+		Community: "public",
+		Version:   Version2c,
+		Timeout:   time.Duration(2) * time.Second,
+		Retries:   3,
+		MaxOids:   MaxOids,
+	}
+
+	err := ts.Connect()
+	if err != nil {
+		t.Fatalf("Connect() err: %v", err)
+	}
+	defer ts.Conn.Close()
+
+	pdu := SnmpPDU{
+		Name:  trapTestOid,
+		Type:  OctetString,
+		Value: trapTestPayload,
+	}
+
+	// Make it an inform.
+	trap := SnmpTrap{
+		Variables: []SnmpPDU{pdu},
+		IsInform:  true,
+	}
+
+	var resp *SnmpPacket
+	resp, err = ts.SendTrap(trap)
+	if err != nil {
+		t.Fatalf("SendTrap() err: %v", err)
+	}
+
+	// wait for response from handler
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
+	}
+
+	if resp.PDUType != GetResponse {
+		t.Fatal("Inform response is not a response PDU")
+	}
+
+	for i, tv := range trap.Variables {
+		rv := resp.Variables[i+1]
+		if tv != rv {
+			t.Fatalf("Expected variable %d = %#v, got %#v", i, tv, rv)
+		}
+	}
+}
+
 // test the listener is not blocked if Listening is not used
 func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
-	t.Skip("failing: due to changes in genlocalPrivKey")
 	done := make(chan int)
 
 	tl := NewTrapListener()
@@ -300,7 +381,6 @@ func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendV1Trap(t *testing.T) {
-	t.Skip("failing: due to changes in genlocalPrivKey")
 	done := make(chan int)
 
 	tl := NewTrapListener()

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -65,6 +64,10 @@ type SnmpPacket struct {
 // SnmpTrap is used to define a SNMP trap, and is passed into SendTrap
 type SnmpTrap struct {
 	Variables []SnmpPDU
+
+	// If true, the trap is an InformRequest, not a trap. This has no effect on
+	// v1 traps, as Inform is not part of the v1 protocol.
+	IsInform bool
 
 	// These fields are required for SNMPV1 Trap Headers
 	Enterprise   string
@@ -614,8 +617,9 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		case byte:
 			intBytes = []byte{byte(pdu.Value.(int))}
 		case int:
-			intBytes, err = marshalInt32(value)
-			pdu.Check(err)
+			if intBytes, err = marshalInt32(value); err != nil {
+				return nil, fmt.Errorf("error mashalling PDU Integer: %w", err)
+			}
 		default:
 			return nil, fmt.Errorf("unable to marshal PDU Integer; not byte or int")
 		}
@@ -636,13 +640,15 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		var intBytes []byte
 		switch value := pdu.Value.(type) {
 		case uint32:
-			intBytes, err = marshalUint32(value)
-			pdu.Check(err)
+			if intBytes, err = marshalUint32(value); err != nil {
+				return nil, fmt.Errorf("error marshalling PDU Uinteger32 type from uint32: %w", err)
+			}
 		case uint:
-			intBytes, err = marshalUint32(uint32(value))
-			pdu.Check(err)
+			if intBytes, err = marshalUint32(uint32(value)); err != nil {
+				return nil, fmt.Errorf("error marshalling PDU Uinteger32 type from uint: %w", err)
+			}
 		default:
-			return nil, fmt.Errorf("unable to marshal pdu.Type %v; unknown pdu.Value %v[type=%v]", pdu.Type, pdu.Value, reflect.TypeOf(pdu.Value))
+			return nil, fmt.Errorf("unable to marshal pdu.Type %v; unknown pdu.Value %v[type=%T]", pdu.Type, pdu.Value, pdu.Value)
 		}
 		tmpBuf.Write([]byte{byte(pdu.Type), byte(len(intBytes))})
 		tmpBuf.Write(intBytes)
@@ -665,13 +671,13 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		case string:
 			octetStringBytes = []byte(value)
 		default:
-			return nil, fmt.Errorf("unable to marshal PDU OctetString; not []byte or String")
+			return nil, fmt.Errorf("unable to marshal PDU OctetString; not []byte or string")
 		}
 
 		var length []byte
 		length, err = marshalLength(len(octetStringBytes))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to marshal PDU length: %w", err)
 		}
 		tmpBuf.WriteByte(byte(pdu.Type))
 		tmpBuf.Write(length)
@@ -681,7 +687,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 
 		length, err = marshalLength(len(tmpBytes))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to marshal PDU data length: %w", err)
 		}
 		// Sequence, length of oid + octetstring, then oid/octetstring data
 		pduBuf.WriteByte(byte(Sequence))
@@ -695,13 +701,15 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBuf.Write(oid)
 		value := pdu.Value.(string)
 		oidBytes, err := marshalOID(value)
-		pdu.Check(err)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling ObjectIdentifier: %w", err)
+		}
 
 		//Oid data
 		var length []byte
 		length, err = marshalLength(len(oidBytes))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error marshalling ObjectIdentifier length: %w", err)
 		}
 		tmpBuf.WriteByte(byte(pdu.Type))
 		tmpBuf.Write(length)
@@ -710,7 +718,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBytes := tmpBuf.Bytes()
 		length, err = marshalLength(len(tmpBytes))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error marshalling ObjectIdentifier data length: %w", err)
 		}
 		// Sequence, length of oid + oid, then oid/oid data
 		pduBuf.WriteByte(byte(Sequence))
@@ -730,7 +738,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 			ip := net.ParseIP(value)
 			ipAddressBytes = ipv4toBytes(ip)
 		default:
-			return nil, fmt.Errorf("unable to marshal PDU IPAddress; not []byte or String")
+			return nil, fmt.Errorf("unable to marshal PDU IPAddress; not []byte or string")
 		}
 		tmpBuf.Write([]byte{byte(IPAddress), byte(len(ipAddressBytes))})
 		tmpBuf.Write(ipAddressBytes)
@@ -748,13 +756,16 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBuf.Write(oid)
 		tmpBuf.WriteByte(byte(pdu.Type))
 		intBytes, err := converters[pdu.Type](pdu.Value)
-		pdu.Check(err)
+		if err != nil {
+			return nil, fmt.Errorf("error converting PDU value type %v to %v: %w", pdu.Value, pdu.Type, err)
+		}
+
 		tmpBuf.WriteByte(byte(len(intBytes)))
 		tmpBuf.Write(intBytes)
 		tmpBytes := tmpBuf.Bytes()
 		length, err := marshalLength(len(tmpBytes))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error marshalling Float type length: %w", err)
 		}
 		// Sequence, length of oid + oid, then oid/oid data
 		pduBuf.WriteByte(byte(Sequence))
@@ -768,7 +779,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBytes := tmpBuf.Bytes()
 		length, err := marshalLength(len(tmpBytes))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error marshalling Null type data length: %w", err)
 		}
 		// Sequence, length of oid + oid, then oid/oid data
 		pduBuf.WriteByte(byte(Sequence))
@@ -862,6 +873,8 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 		if err != nil {
 			return fmt.Errorf("error in unmarshalResponse: %s", err.Error())
 		}
+		// If it's an InformRequest, mark the trap.
+		response.IsInform = (requestType == InformRequest)
 	case Trap:
 		response.PDUType = requestType
 		err = x.unmarshalTrapV1(packet[cursor:], response)
@@ -1120,7 +1133,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
 
-		response.Variables = append(response.Variables, SnmpPDU{oidStr, v.Type, v.Value, x.Logger})
+		response.Variables = append(response.Variables, SnmpPDU{oidStr, v.Type, v.Value})
 	}
 	return nil
 }

@@ -6,7 +6,6 @@ package gosnmp
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -47,11 +46,17 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 
 	switch x.Version {
 	case Version2c, Version3:
+		// Default to a v2 trap.
 		pdutype = SNMPv2Trap
+
+		// If it's an inform, do that instead.
+		if trap.IsInform {
+			pdutype = InformRequest
+		}
 
 		if trap.Variables[0].Type != TimeTicks {
 			now := uint32(time.Now().Unix())
-			timetickPDU := SnmpPDU{"1.3.6.1.2.1.1.3.0", TimeTicks, now, x.Logger}
+			timetickPDU := SnmpPDU{"1.3.6.1.2.1.1.3.0", TimeTicks, now}
 			// prepend timetickPDU
 			trap.Variables = append([]SnmpPDU{timetickPDU}, trap.Variables...)
 		}
@@ -80,8 +85,8 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 	}
 
 	// all sends wait for the return packet, except for SNMPv2Trap
-	// -> wait is false
-	return x.send(packetOut, false)
+	// -> wait is only for informs
+	return x.send(packetOut, trap.IsInform)
 }
 
 //
@@ -95,8 +100,12 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 // nil values will be replaced by default values.
 type TrapListener struct {
 	sync.Mutex
-	OnNewTrap func(s *SnmpPacket, u *net.UDPAddr)
-	Params    *GoSNMP
+
+	// Params is a reference to the TrapListener's "parent" GoSNMP instance.
+	Params *GoSNMP
+
+	// OnNewTrap handles incoming Trap and Inform PDUs.
+	OnNewTrap TrapHandlerFunc
 
 	// These unexported fields are for letting test cases
 	// know we are ready.
@@ -108,15 +117,31 @@ type TrapListener struct {
 	listening chan bool
 }
 
+// TrapHandlerFunc is a callback function type which receives SNMP Trap and
+// Inform packets when they are received.  If this callback is null, Trap and
+// Inform PDUs will not be received (Inform responses will still be sent,
+// however).  This callback should not modify the contents of the SnmpPacket
+// nor the UDPAddr passed to it, and it should copy out any values it wishes to
+// use instead of retaining references in order to avoid memory fragmentation.
+//
+// The general effect of received Trap and Inform packets do not differ for the
+// receiver, and the response is handled by the caller of the handler, so there
+// is no need for the application to handle Informs any different than Traps.
+// Nonetheless, the packet's Type field can be examined to determine what type
+// of event this is for e.g. statistics gathering functions, etc.
+type TrapHandlerFunc func(s *SnmpPacket, u *net.UDPAddr)
+
 // NewTrapListener returns an initialized TrapListener.
 //
 // NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
 func NewTrapListener() *TrapListener {
-	tl := &TrapListener{}
-	tl.finish = 0
-	tl.done = make(chan bool)
-	// Buffered because one doesn't have to block on it.
-	tl.listening = make(chan bool, 1)
+	tl := &TrapListener{
+		finish: 0,
+		done:   make(chan bool),
+		// Buffered because one doesn't have to block on it.
+		listening: make(chan bool, 1),
+	}
+
 	return tl
 }
 
@@ -184,8 +209,51 @@ func (t *TrapListener) listenUDP(addr string) error {
 
 			msg := buf[:rlen]
 			traps := t.Params.UnmarshalTrap(msg)
+
 			if traps != nil {
+				// Here we assume that t.OnNewTrap will not alter the contents
+				// of the PDU (per documentation, because Go does not have
+				// compile-time const checking).  We don't pass a copy because
+				// the SnmpPacket type is somewhat large, but we could without
+				// violating any implicit or explicit spec.
 				t.OnNewTrap(traps, remote)
+
+				// If it was an Inform request, we need to send a response.
+				if traps.PDUType == InformRequest { //nolint:whitespace
+
+					// Reuse the packet, since we're supposed to send it back
+					// with the exact same variables unless there's an error.
+					// Change the PDUType to the response, though.
+					traps.PDUType = GetResponse
+
+					// If the response can be sent, the error-status is
+					// supposed to be set to noError and the error-index set to
+					// zero.
+					traps.Error = NoError
+					traps.ErrorIndex = 0
+
+					// TODO: Check that the message marshalled is not too large
+					// for the originator to accept and if so, send a tooBig
+					// error PDU per RFC3416 section 4.2.7.  This maximum size,
+					// however, does not have a well-defined mechanism in the
+					// RFC other than using the path MTU (which is difficult to
+					// determine), so it's left to future implementations.
+					ob, err := traps.marshalMsg()
+					if err != nil {
+						return fmt.Errorf("error marshaling INFORM response: %v", err)
+					}
+
+					// Send the return packet back.
+					count, err := t.conn.WriteTo(ob, remote)
+					if err != nil {
+						return fmt.Errorf("error sending INFORM response: %v", err)
+					}
+
+					// This isn't fatal, but should be logged.
+					if count != len(ob) {
+						t.Params.logPrintf("Failed to send all bytes of INFORM response!\n")
+					}
+				}
 			}
 		}
 	}
@@ -267,7 +335,7 @@ func (t *TrapListener) Listen(addr string) error {
 	_ = t.Params.validateParameters()
 
 	if t.OnNewTrap == nil {
-		t.OnNewTrap = debugTrapHandler
+		t.OnNewTrap = t.debugTrapHandler
 	}
 
 	splitted := strings.SplitN(addr, "://", 2)
@@ -287,8 +355,8 @@ func (t *TrapListener) Listen(addr string) error {
 }
 
 // Default trap handler
-func debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
-	log.Printf("got trapdata from %+v: %+v\n", u, s)
+func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
+	t.Params.logPrintf("got trapdata from %+v: %+v\n", u, s)
 }
 
 // UnmarshalTrap unpacks the SNMP Trap.
