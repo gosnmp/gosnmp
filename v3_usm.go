@@ -123,6 +123,7 @@ const (
 
 // UsmSecurityParameters is an implementation of SnmpV3SecurityParameters for the UserSecurityModel
 type UsmSecurityParameters struct {
+	mu sync.Mutex
 	// localAESSalt must be 64bit aligned to use with atomic operations.
 	localAESSalt uint64
 	localDESSalt uint32
@@ -148,11 +149,15 @@ type UsmSecurityParameters struct {
 
 // Log logs security paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Log() {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
 	sp.Logger.Printf("SECURITY PARAMETERS:%+v", sp)
 }
 
 // Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
 func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
 	return &UsmSecurityParameters{AuthoritativeEngineID: sp.AuthoritativeEngineID,
 		AuthoritativeEngineBoots: sp.AuthoritativeEngineBoots,
 		AuthoritativeEngineTime:  sp.AuthoritativeEngineTime,
@@ -177,6 +182,8 @@ func (sp *UsmSecurityParameters) getDefaultContextEngineID() string {
 func (sp *UsmSecurityParameters) initSecurityKeys() error {
 	var err error
 
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
 	if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
 		sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
 			sp.AuthenticationPassphrase,
@@ -211,6 +218,9 @@ func (sp *UsmSecurityParameters) initSecurityKeys() error {
 func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParameters) error {
 	var insp *UsmSecurityParameters
 	var err error
+
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
 
 	if insp, err = castUsmSecParams(in); err != nil {
 		return err
@@ -497,6 +507,9 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 // http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 // localDESSalt needs to be incremented on every packet.
 func (sp *UsmSecurityParameters) usmAllocateNewSalt() interface{} {
+
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
 	var newSalt interface{}
 
 	switch sp.PrivacyProtocol {
@@ -509,6 +522,8 @@ func (sp *UsmSecurityParameters) usmAllocateNewSalt() interface{} {
 }
 
 func (sp *UsmSecurityParameters) usmSetSalt(newSalt interface{}) error {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
 	switch sp.PrivacyProtocol {
 	case AES, AES192, AES256, AES192C, AES256C:
 		aesSalt, ok := newSalt.(uint64)
