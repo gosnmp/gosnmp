@@ -17,6 +17,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -40,6 +41,8 @@ const (
 
 // GoSNMP represents GoSNMP library state
 type GoSNMP struct {
+	mu sync.Mutex
+
 	// Conn is net connection to use, typically established using GoSNMP.Connect()
 	Conn net.Conn
 
@@ -287,6 +290,8 @@ func (x *GoSNMP) netConnect() error {
 
 func (x *GoSNMP) validateParameters() error {
 	if x.Logger == nil {
+		x.mu.Lock()
+		defer x.mu.Unlock()
 		x.Logger = log.New(ioutil.Discard, "", 0)
 	} else {
 		x.loggingEnabled = true
@@ -318,7 +323,6 @@ func (x *GoSNMP) validateParameters() error {
 	if x.Context == nil {
 		x.Context = context.Background()
 	}
-
 	return nil
 }
 
