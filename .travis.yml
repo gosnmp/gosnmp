@@ -36,3 +36,6 @@ script:
  - go test -v -tags api
  - go test -v -tags end2end
  - go test -v -tags trap
+
+# TODO: only run this on TRAVIS_GOARCH=amd64
+# - go test -v -tags all -race

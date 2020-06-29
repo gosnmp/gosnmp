@@ -508,7 +508,6 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 // http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 // localDESSalt needs to be incremented on every packet.
 func (sp *UsmSecurityParameters) usmAllocateNewSalt() interface{} {
-
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 	var newSalt interface{}
