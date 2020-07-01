@@ -1,3 +1,9 @@
+## v1.27.0
+
+* fix a race condition - logger
+* INFORM responses
+* linting
+
 ## v1.26.0
 
 * more SNMPv3
