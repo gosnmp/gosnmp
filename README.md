@@ -207,6 +207,14 @@ The following BER types have been implemented:
 Running the Tests
 -----------------
 
+Local testing in Docker
+```shell
+docker build -t soniah/gosnmp:latest .
+docker run -it soniah/gosnmp:latest
+```
+
+or
+
 ```shell
 export GOSNMP_TARGET=1.2.3.4
 export GOSNMP_PORT=161
@@ -260,6 +268,7 @@ go get github.com/axw/gocov/gocov
 go get github.com/matm/gocov-html
 gocov test github.com/soniah/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
 ```
+
 
 License
 -------
