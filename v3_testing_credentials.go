@@ -113,6 +113,8 @@ var authenticationCredentialsSnmpLabs = map[string][]string{
 //nolint:unused,gochecknoglobals
 var useSnmpLabsCredentials = false
 
+// TODO get above credentials into snmpsimd, so *all* tests can be run. Combine with settings in `snmp_users.sh`
+
 const cIdxUserName = 0
 const cIdxAuthKey = 1
 const cIdxPrivKey = 2
