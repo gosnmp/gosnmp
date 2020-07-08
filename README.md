@@ -1,3 +1,7 @@
+8 July 2020 - I'm archiving gosnmp, as maintaining it requires too much of my
+personal time. The project has been mine since March 2013, and now it's time
+for someone else to pick up the load.
+
 gosnmp
 ======
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#networking)
