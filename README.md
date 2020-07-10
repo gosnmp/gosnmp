@@ -1,6 +1,20 @@
-8 July 2020 - I'm archiving gosnmp, as maintaining it requires too much of my
-personal time. The project has been mine since March 2013, and now it's time
-for someone else to pick up the load.
+**11 July 2020** - I'm planning on archiving **gosnmp**, as maintaining it is
+having too much of an effect on my work and personal life. I started the fork
+in March 2013 and I've been working on it ever since.
+
+At the moment I'm keeping it open so it can act as a central clearing house for
+issues and discussions around who is going fork and maintain gosnmp - maybe one
+person, maybe a team. Here are some suggestions around short term goals:
+
+- more tests, both unit and integration
+- Docker infrastructure, so developers can locally troubleshoot their changes
+  before submitting (broken) PRs
+- fix snmpv3, INFORM responses, traps
+
+Thanks to Tim Rots for reaching out to me, to the many people who have submitted
+PRs, and of course Andreas Louca, who started the project in 2012.
+
+Sonia Hamilton, sonia@snowfrog.net, Australia.
 
 gosnmp
 ======
