@@ -3,7 +3,7 @@ having too much of an effect on my work and personal life. I started the fork
 in March 2013 and I've been working on it ever since.
 
 At the moment I'm keeping it open so it can act as a central clearing house for
-issues and discussions around who is going fork and maintain gosnmp - maybe one
+issues and discussions around who is going to fork and maintain gosnmp - maybe one
 person, maybe a team. Here are some suggestions around short term goals:
 
 - more tests, both unit and integration
@@ -13,6 +13,9 @@ person, maybe a team. Here are some suggestions around short term goals:
 
 Thanks to Tim Rots for reaching out to me, to the many people who have submitted
 PRs, and of course Andreas Louca, who started the project in 2012.
+
+Tim has raised issue [Searching for collaboration to fork gosnmp](https://github.com/soniah/gosnmp/issues/247)
+to help coordinate replacement maintainers.
 
 Sonia Hamilton, sonia@snowfrog.net, Australia.
 
