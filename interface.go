@@ -78,7 +78,7 @@ type Handler interface {
 	SendTrap(trap SnmpTrap) (result *SnmpPacket, err error)
 
 	// UnmarshalTrap unpacks the SNMP Trap.
-	UnmarshalTrap(trap []byte) (result *SnmpPacket)
+	UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) (result *SnmpPacket)
 
 	// Set sends an SNMP SET request
 	Set(pdus []SnmpPDU) (result *SnmpPacket, err error)
