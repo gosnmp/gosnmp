@@ -87,13 +87,19 @@ func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 	return msg, nil
 }
 
-func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket) error {
+func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useResponseSecurityParameters bool) error {
 	if x.Version != Version3 {
 		return fmt.Errorf("testAuthentication called with non Version3 connection")
 	}
 
 	if x.MsgFlags&AuthNoPriv > 0 {
-		authentic, err := x.SecurityParameters.isAuthentic(packet, result)
+		var authentic bool
+		var err error
+		if useResponseSecurityParameters {
+			authentic, err = result.SecurityParameters.isAuthentic(packet, result)
+		} else {
+			authentic, err = x.SecurityParameters.isAuthentic(packet, result)
+		}
 		if err != nil {
 			return err
 		}

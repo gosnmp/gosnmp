@@ -5,6 +5,8 @@
 package main
 
 import (
+	_ "crypto/md5"
+	_ "crypto/sha1"
 	"log"
 	"os"
 	"time"

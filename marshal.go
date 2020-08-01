@@ -252,7 +252,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 
 			if x.Version == Version3 {
-				err = x.testAuthentication(resp, result)
+				err = x.testAuthentication(resp, result, false)
 				if err != nil {
 					x.logPrintf("ERROR on Test Authentication on v3: %s", err)
 					break
