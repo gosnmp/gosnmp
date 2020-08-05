@@ -17,9 +17,11 @@ import (
 	"crypto/hmac"
 	crand "crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -146,6 +148,58 @@ type UsmSecurityParameters struct {
 	PrivacyKey []byte
 
 	Logger Logger
+}
+
+// Log logs security paramater information to the provided GoSNMP Logger
+func (sp *UsmSecurityParameters) Description() string {
+	var sb strings.Builder
+	sb.WriteString("user=")
+	sb.WriteString(sp.UserName)
+
+	sb.WriteString(",engine=(")
+	sb.WriteString(hex.EncodeToString([]byte(sp.AuthoritativeEngineID)))
+	// sb.WriteString(sp.AuthoritativeEngineID)
+	sb.WriteString(")")
+
+	switch sp.AuthenticationProtocol {
+	case NoAuth:
+		sb.WriteString(",auth=noauth")
+	case MD5:
+		sb.WriteString(",auth=md5")
+	case SHA:
+		sb.WriteString(",auth=sha")
+	case SHA224:
+		sb.WriteString(",auth=sha224")
+	case SHA256:
+		sb.WriteString(",auth=sha256")
+	case SHA384:
+		sb.WriteString(",auth=sha384")
+	case SHA512:
+		sb.WriteString(",auth=sha512")
+	}
+	sb.WriteString(",authPass=")
+	sb.WriteString(sp.AuthenticationPassphrase)
+
+	switch sp.PrivacyProtocol {
+	case NoPriv:
+		sb.WriteString(",priv=NoPriv")
+	case DES:
+		sb.WriteString(",priv=DES")
+	case AES:
+		sb.WriteString(",priv=AES")
+	case AES192:
+		sb.WriteString(",priv=AES192")
+	case AES256:
+		sb.WriteString(",priv=AES256")
+	case AES192C:
+		sb.WriteString(",priv=AES192C")
+	case AES256C:
+		sb.WriteString(",priv=AES256C")
+	}
+	sb.WriteString(",privPass=")
+	sb.WriteString(sp.PrivacyPassphrase)
+
+	return sb.String()
 }
 
 // Log logs security paramater information to the provided GoSNMP Logger
@@ -607,7 +661,6 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 		return false, err
 	}
 	// TODO: investigate call chain to determine if this is really the best spot for this
-
 	msgDigest := sp.calcPacketDigest(packetBytes)
 
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
@@ -793,7 +846,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 			sp.SecretKey = nil
 			sp.PrivacyKey = nil
 
-			sp.Logger.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
+			sp.Logger.Printf("Parsed authoritativeEngineID %0x", []byte(AuthoritativeEngineID))
 			err = sp.initSecurityKeysNoLock()
 			if err != nil {
 				return 0, err

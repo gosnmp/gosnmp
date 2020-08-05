@@ -38,6 +38,7 @@ const (
 type SnmpV3SecurityParameters interface {
 	Log()
 	Copy() SnmpV3SecurityParameters
+	Description() string
 	validate(flags SnmpV3MsgFlags) error
 	init(log Logger) error
 	initPacket(packet *SnmpPacket) error
@@ -91,8 +92,12 @@ func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useRespon
 	if x.Version != Version3 {
 		return fmt.Errorf("testAuthentication called with non Version3 connection")
 	}
+	msgFlags := x.MsgFlags
+	if useResponseSecurityParameters {
+		msgFlags = result.MsgFlags
+	}
 
-	if x.MsgFlags&AuthNoPriv > 0 {
+	if msgFlags&AuthNoPriv > 0 {
 		var authentic bool
 		var err error
 		if useResponseSecurityParameters {
