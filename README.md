@@ -1,3 +1,13 @@
+gosnmp for TWSNMP
+======
+
+**18 Aug 2020**
+I start the fork for TWSNMP Manager(**twsnmp/twsnmp**). 
+I wold like to add snmp agent functions.
+
+Original message from Sonia Hamilton
+======
+
 **11 July 2020** - I'm planning on archiving **gosnmp**, as maintaining it is
 having too much of an effect on my work and personal life. I started the fork
 in March 2013 and I've been working on it ever since.
@@ -21,11 +31,10 @@ Sonia Hamilton, sonia@snowfrog.net, Australia.
 
 gosnmp
 ======
-[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#networking)
 
-[![Build Status](https://travis-ci.org/soniah/gosnmp.svg?branch=master)](https://travis-ci.org/soniah/gosnmp)
-[![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
-https://github.com/soniah/gosnmp
+[![Build Status](https://travis-ci.org/twsnmp/gosnmp.svg?branch=master)](https://travis-ci.org/twsnmp/gosnmp)
+[![GoDoc](https://godoc.org/github.com/twsnmp/gosnmp?status.png)](http://godoc.org/github.com/twsnmp/gosnmp)
+https://github.com/twsnmp/gosnmp
 
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
 GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
@@ -62,7 +71,7 @@ GoSNMP has the following **helper** functions:
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
-**soniah/gosnmp** has completely diverged from **alouca/gosnmp**, your code
+**twsnmp/gosnmp** has completely diverged from **soniah/gosnmp**, your code
 will require modification in these (and other) locations:
 
 * the **Get** function has a different method signature
@@ -84,13 +93,13 @@ Installation
 ------------
 
 ```shell
-go get github.com/soniah/gosnmp
+go get github.com/twsnmp/gosnmp
 ```
 
 Documentation
 -------------
 
-http://godoc.org/github.com/soniah/gosnmp
+http://godoc.org/github.com/twsnmp/gosnmp
 
 Usage
 -----
@@ -159,9 +168,9 @@ below).
 
 If you've never contributed to a Go project before, here is an example workflow.
 
-1. [fork this repo on the GitHub webpage](https://github.com/soniah/gosnmp/fork)
-1. `go get github.com/soniah/gosnmp`
-1. `cd $GOPATH/src/github.com/soniah/gosnmp`
+1. [fork this repo on the GitHub webpage](https://github.com/twsnmp/gosnmp/fork)
+1. `go get github.com/twsnmp/gosnmp`
+1. `cd $GOPATH/src/github.com/twsnmp/gosnmp`
 1. `git remote rename origin upstream`
 1. `git remote add origin git@github.com:<your-github-username>/gosnmp.git`
 1. `git checkout -b development`
@@ -230,8 +239,8 @@ Running the Tests
 
 Local testing in Docker
 ```shell
-docker build -t soniah/gosnmp:latest .
-docker run -it soniah/gosnmp:latest
+docker build -t twsnmp/gosnmp:latest .
+docker run -it twsnmp/gosnmp:latest
 ```
 
 or
@@ -287,7 +296,7 @@ To check test coverage:
 ```shell
 go get github.com/axw/gocov/gocov
 go get github.com/matm/gocov-html
-gocov test github.com/soniah/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
+gocov test github.com/twsnmp/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
 ```
 
 

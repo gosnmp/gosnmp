@@ -1,6 +1,6 @@
-module github.com/soniah/gosnmp
+module github.com/twsnmp/gosnmp
 
-go 1.13
+go 1.14
 
 require (
 	github.com/golang/mock v1.4.3

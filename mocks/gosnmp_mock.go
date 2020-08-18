@@ -9,7 +9,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	gosnmp "github.com/soniah/gosnmp"
+	gosnmp "github.com/twsnmp/gosnmp"
 )
 
 // MockHandler is a mock of Handler interface

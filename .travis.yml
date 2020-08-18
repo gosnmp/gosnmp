@@ -22,7 +22,7 @@ before_install:
  - export GOARCH=$TRAVIS_GOARCH
 
 install:
- - go get github.com/soniah/gosnmp
+ - go get github.com/twsnmp/gosnmp
  - go get github.com/stretchr/testify/assert
  - sudo ./snmp_users.sh
  - sudo /etc/init.d/snmpd restart
