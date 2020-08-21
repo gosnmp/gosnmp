@@ -82,7 +82,15 @@ func (a *GoSNMPAgent) AddMibList(oid string, vbType Asn1BER, get func(string) in
 		objType: vbType,
 		oid:     toNumOid(oid),
 	}
-	a.mibList = append(a.mibList, mib)
+	pos := sort.Search(len(a.mibList), func(i int) bool {
+		return cmpOid(mib.oid, a.mibList[i].oid) <= 0
+	})
+	if pos >= len(a.mibList) {
+		a.mibList = append(a.mibList, mib)
+		return
+	}
+	a.mibList = append(a.mibList[:pos+1], a.mibList[pos:]...)
+	a.mibList[pos] = mib
 }
 
 func (a *GoSNMPAgent) findMib(oid string, bNext bool) (string, Asn1BER, interface{}, error) {
