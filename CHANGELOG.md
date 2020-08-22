@@ -1,3 +1,7 @@
+## v1.28.2
+ 
+ * fix findMib for getnext
+
 ## v1.28.1
  
  * fix MIB List order
