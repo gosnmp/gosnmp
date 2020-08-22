@@ -35,7 +35,9 @@ func TestSnmpAgent(t *testing.T) {
 		Snmp:   g,
 	}
 	initMib(a)
-	a.Logger.Printf("%v", a.mibList[6])
+	if a.mibList[6].strOid != ".1.3.6.1.2.1.1.7.0" {
+		t.Error("AddMibList sort error")
+	}
 	if err := a.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -99,8 +101,8 @@ func initMib(a *GoSNMPAgent) {
 	a.AddMibList(".1.3.6.1.2.1.1.1.0", OctetString, getSysDescr)
 	a.AddMibList(".1.3.6.1.2.1.1.2.0", ObjectIdentifier, getSysObjectID)
 	a.AddMibList(".1.3.6.1.2.1.1.3.0", TimeTicks, getSysUpTime)
+	a.AddMibList(".1.3.6.1.2.1.1.7.0", Integer, getSysServices)
 	a.AddMibList(".1.3.6.1.2.1.1.4.0", OctetString, getSysContact)
 	a.AddMibList(".1.3.6.1.2.1.1.5.0", OctetString, getSysName)
-	a.AddMibList(".1.3.6.1.2.1.1.7.0", Integer, getSysServices)
 	a.AddMibList(".1.3.6.1.2.1.1.6.0", OctetString, getSysLocation)
 }

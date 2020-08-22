@@ -89,6 +89,11 @@ func (a *GoSNMPAgent) AddMibList(oid string, vbType Asn1BER, get func(string) in
 		a.mibList = append(a.mibList, mib)
 		return
 	}
+	if cmpOid(mib.oid, a.mibList[pos].oid) == 0 {
+		a.Logger.Printf("AddMibList replace OID=%s", oid)
+		a.mibList[pos] = mib
+		return
+	}
 	a.mibList = append(a.mibList[:pos+1], a.mibList[pos:]...)
 	a.mibList[pos] = mib
 }

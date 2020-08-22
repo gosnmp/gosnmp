@@ -1,3 +1,8 @@
+## v1.28.0
+ 
+ * Fork from soniah/gosnmp
+ * Add SNMP agent function
+
 ## v1.27.0
 
 * fix a race condition - logger

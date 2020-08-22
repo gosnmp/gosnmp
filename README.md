@@ -1,11 +1,16 @@
 gosnmp for TWSNMP
-======
+===
 
 **18 Aug 2020**
-I start the fork for TWSNMP Manager(**twsnmp/twsnmp**). 
-I wold like to add snmp agent functions.
 
-Original message from Sonia Hamilton
+I start the fork for TWSNMP Manager(**twsnmp/twsnmp**). 
+
+**18 Aug 2020**
+
+I added snmp agent functions.
+
+
+Original note
 ======
 
 **11 July 2020** - I'm planning on archiving **gosnmp**, as maintaining it is
@@ -32,7 +37,6 @@ Sonia Hamilton, sonia@snowfrog.net, Australia.
 gosnmp
 ======
 
-[![Build Status](https://travis-ci.org/twsnmp/gosnmp.svg?branch=master)](https://travis-ci.org/twsnmp/gosnmp)
 [![GoDoc](https://godoc.org/github.com/twsnmp/gosnmp?status.png)](http://godoc.org/github.com/twsnmp/gosnmp)
 https://github.com/twsnmp/gosnmp
 
@@ -65,6 +69,7 @@ GoSNMP has the following SNMP functions:
 * **Set** - supports Integers and OctetStrings.
 * **SendTrap** - send SNMP TRAPs.
 * **Listen** - act as an NMS for receiving TRAPs.
+* **SNMP Agent** - act as SNMP agent.
 
 GoSNMP has the following **helper** functions:
 
@@ -153,6 +158,46 @@ Running this example gives the following output (from my printer):
 * `examples/walkexample.go` demonstrates using `BulkWalk`
 * `examples/example3.go` demonstrates `SNMPv3`
 * `examples/trapserver.go` demonstrates writing an SNMP v2c trap server
+
+SNMP Agent
+----------
+
+1. Make SNMP agent struct
+
+```go
+	g := &gosnmp.GoSNMP{}
+	g.Port = 161
+	g.Community = "public"
+	g.Version = gosnmp.Version2c
+	a := &gosnmp.GoSNMPAgent{
+		Port:   161,
+		IPAddr: "0.0.0.0",
+		Logger: log.New(os.Stdout, "", 0),
+		Snmp:   g,
+  }
+```
+
+2. Make MIB get function
+
+```go
+func getSysDescr(oid string) interface{} {
+	return "test"
+}
+```
+
+3. Add MIB to MIB Database
+
+```go
+	a.AddMibList(".1.3.6.1.2.1.1.1.0", gosnmp.OctetString, getSysDescr)
+```
+
+4. Start SNMP agent
+
+```go
+	if err := a.Start(); err != nil {
+		log.Fatal(err)
+	}
+```
 
 MIB Parser
 ----------
