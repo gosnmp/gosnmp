@@ -1,3 +1,7 @@
+## v1.28.1
+ 
+ * fix MIB List order
+
 ## v1.28.0
  
  * Fork from soniah/gosnmp
