@@ -115,7 +115,8 @@ func (a *GoSNMPAgent) findMib(oid string, bNext bool) (string, Asn1BER, interfac
 			return "", Integer, nil, fmt.Errorf("Not found")
 		}
 	}
-	return a.mibList[i].strOid, a.mibList[i].objType, a.mibList[i].getFunc(oid), nil
+	oid = a.mibList[i].strOid
+	return oid, a.mibList[i].objType, a.mibList[i].getFunc(oid), nil
 }
 
 // Start : start snmp agent
