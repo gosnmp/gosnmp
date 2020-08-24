@@ -265,7 +265,7 @@ func (a *GoSNMPAgent) getCounter32(oid string) interface{} {
 }
 
 func (a *GoSNMPAgent) getSnmpEnableAuthenTraps(oid string) interface{} {
-	return uint32(2)
+	return 2
 }
 
 func (a *GoSNMPAgent) AddSnmpMib() {
@@ -293,7 +293,10 @@ func (a *GoSNMPAgent) AddSnmpMib() {
 	a.snmpCounters[".1.3.6.1.2.1.11.28.0"] = &snmpOutGetResponses
 	snmpOutTraps = 0
 	a.snmpCounters[".1.3.6.1.2.1.11.29.0"] = &snmpOutTraps
-	for i := 1; i < 29; i++ {
+	for i := 1; i < 30; i++ {
+		if i == 7 || i == 23 {
+			continue
+		}
 		a.AddMibList(fmt.Sprintf(".1.3.6.1.2.1.11.%d.0", i), Counter32, a.getCounter32)
 	}
 	a.AddMibList(".1.3.6.1.2.1.11.30.0", Integer, a.getSnmpEnableAuthenTraps)
