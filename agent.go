@@ -31,10 +31,40 @@ type GoSNMPAgent struct {
 	// Port is a port
 	Port int
 
+	// ACL
+	Acl string
+
 	// Logger is error logger for snmp agent
 	Logger  Logger
 	mibList []*mibEnt
+
+	// SNMP MIB
+	SupportSnmpMIB bool
+	snmpCounters   map[string]*uint32
 }
+
+var (
+	//.1.3.6.1.2.1.11.1,0
+	snmpInPkts uint32
+	//.1.3.6.1.2.1.11.2.0
+	snmpOutPkts uint32
+	//.1.3.6.1.2.1.11.3.0
+	snmpInBadVersions uint32
+	//.1.3.6.1.2.1.11.4.0
+	snmpInBadCommunityNames uint32
+	//.1.3.6.1.2.1.11.6.0
+	snmpInASNParseErrs uint32
+	//.1.3.6.1.2.1.11.15.0
+	snmpInGetRequests uint32
+	//.1.3.6.1.2.1.11.16.0
+	snmpInGetNexts uint32
+	//.1.3.6.1.2.1.11.21.0
+	snmpOutNoSuchNames uint32
+	//.1.3.6.1.2.1.11.28.0
+	snmpOutGetResponses uint32
+	//.1.3.6.1.2.1.11.29
+	snmpOutTraps uint32
+)
 
 type mibEnt struct {
 	strOid  string
@@ -134,6 +164,7 @@ func (a *GoSNMPAgent) Start() error {
 	if err != nil {
 		return err
 	}
+	a.AddSnmpMib()
 	go a.process()
 	return nil
 }
@@ -155,20 +186,47 @@ func (a *GoSNMPAgent) process() {
 			a.Logger.Printf("ReadFromUDP err=%v", err)
 			return
 		}
+		if a.Acl != "" {
+			bOK := false
+			from := addr.IP.String()
+			for _, acl := range strings.Split(a.Acl, ",") {
+				if from == strings.TrimSpace(acl) {
+					bOK = true
+				}
+			}
+			if !bOK {
+				a.Logger.Printf("Drop SNMP Pkt from %s by ACL", from)
+				continue
+			}
+		}
+		snmpInPkts++
 		p, err := a.Snmp.SnmpDecodePacket(buf[:n])
 		if err != nil {
+			snmpInASNParseErrs++
 			a.Logger.Printf("SnmpDecodePacket err=%v", err)
 			continue
 		}
 		if p.Version == Version3 {
+			snmpInBadVersions++
 			a.Logger.Print("Drop SNMP v3 request")
 			continue
 		}
 		if p.Community != a.Snmp.Community {
+			snmpInBadCommunityNames++
 			a.Logger.Print("Drop Invalid Community request")
 			continue
 		}
+		if p.PDUType != GetRequest && p.PDUType != GetNextRequest {
+			snmpInBadCommunityNames++
+			a.Logger.Printf("Drop Bad PDU Type=%v", p.PDUType)
+			continue
+		}
 		bNext := p.PDUType == GetNextRequest
+		if !bNext {
+			snmpInGetRequests++
+		} else {
+			snmpInGetNexts++
+		}
 		pdus := []SnmpPDU{}
 		errIndex := -1
 		for i, vb := range p.Variables {
@@ -187,9 +245,56 @@ func (a *GoSNMPAgent) process() {
 			a.Logger.Printf("SnmpEncodeGetResponsePacket err=%v", err)
 			continue
 		}
+		if errIndex != -1 {
+			snmpOutNoSuchNames++
+		}
 		if a.conn == nil {
 			return
 		}
+		snmpOutGetResponses++
+		snmpOutPkts++
 		a.conn.WriteTo(out, addr)
 	}
+}
+
+func (a *GoSNMPAgent) getCounter32(oid string) interface{} {
+	if p, ok := a.snmpCounters[oid]; ok {
+		return *p
+	}
+	return uint32(0)
+}
+
+func (a *GoSNMPAgent) getSnmpEnableAuthenTraps(oid string) interface{} {
+	return uint32(2)
+}
+
+func (a *GoSNMPAgent) AddSnmpMib() {
+	if !a.SupportSnmpMIB {
+		return
+	}
+	a.snmpCounters = make(map[string]*uint32)
+	snmpInPkts = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.1.0"] = &snmpInPkts
+	snmpOutPkts = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.2.0"] = &snmpOutPkts
+	snmpInBadVersions = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.3.0"] = &snmpInBadVersions
+	snmpInBadCommunityNames = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.4.0"] = &snmpInBadCommunityNames
+	snmpInASNParseErrs = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.6.0"] = &snmpInASNParseErrs
+	snmpInGetRequests = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.15.0"] = &snmpInGetRequests
+	snmpInGetNexts = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.16.0"] = &snmpInGetNexts
+	snmpOutNoSuchNames = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.21.0"] = &snmpOutNoSuchNames
+	snmpOutGetResponses = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.28.0"] = &snmpOutGetResponses
+	snmpOutTraps = 0
+	a.snmpCounters[".1.3.6.1.2.1.11.29.0"] = &snmpOutTraps
+	for i := 1; i < 29; i++ {
+		a.AddMibList(fmt.Sprintf(".1.3.6.1.2.1.11.%d.0", i), Counter32, a.getCounter32)
+	}
+	a.AddMibList(".1.3.6.1.2.1.11.30.0", Integer, a.getSnmpEnableAuthenTraps)
 }

@@ -29,10 +29,11 @@ func TestSnmpAgent(t *testing.T) {
 	g.Retries = 0
 	g.Logger = log.New(os.Stdout, "", 0)
 	a := &GoSNMPAgent{
-		Port:   161,
-		IPAddr: "0.0.0.0",
-		Logger: log.New(os.Stdout, "", 0),
-		Snmp:   g,
+		Port:           161,
+		IPAddr:         "0.0.0.0",
+		Logger:         log.New(os.Stdout, "", 0),
+		Snmp:           g,
+		SupportSnmpMIB: true,
 	}
 	initMib(a)
 	if a.mibList[6].strOid != ".1.3.6.1.2.1.1.7.0" {
@@ -40,6 +41,9 @@ func TestSnmpAgent(t *testing.T) {
 	}
 	if err := a.Start(); err != nil {
 		t.Fatal(err)
+	}
+	if a.mibList[6].strOid != ".1.3.6.1.2.1.1.7.0" {
+		t.Error("Support SNMP MIB error")
 	}
 	time.Sleep(time.Second * 2)
 
@@ -49,7 +53,7 @@ func TestSnmpAgent(t *testing.T) {
 	}
 	defer g.Conn.Close()
 
-	oids := []string{"1.3.6.1.2.1.1.4.0", "1.3.6.1.2.1.1.7.0"}
+	oids := []string{"1.3.6.1.2.1.1.4.0", "1.3.6.1.2.1.1.7.0", ".1.3.6.1.2.1.11.1.0"}
 	result, err2 := g.Get(oids)
 	if err2 != nil {
 		t.Fatalf("Get() err: %v", err2)
@@ -65,6 +69,17 @@ func TestSnmpAgent(t *testing.T) {
 		default:
 			t.Logf("number: %d\n", ToBigInt(variable.Value))
 		}
+	}
+	a.Acl = "127.0.0.2"
+	result, err2 = g.Get(oids)
+	if err2 == nil {
+		t.Fatal("Deny ACL err=nil")
+	}
+	t.Logf("ACL err=%v", err2)
+	a.Acl = "127.0.0.2,127.0.0.1"
+	result, err2 = g.Get(oids)
+	if err2 != nil {
+		t.Fatalf("Allow ACL err=%v", err)
 	}
 	a.Stop()
 }

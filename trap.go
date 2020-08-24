@@ -83,7 +83,8 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 		packetOut.SpecificTrap = trap.SpecificTrap
 		packetOut.Timestamp = trap.Timestamp
 	}
-
+	snmpOutPkts++
+	snmpOutTraps++
 	// all sends wait for the return packet, except for SNMPv2Trap
 	// -> wait is only for informs
 	return x.send(packetOut, trap.IsInform)
