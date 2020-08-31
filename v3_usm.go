@@ -17,9 +17,11 @@ import (
 	"crypto/hmac"
 	crand "crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -149,6 +151,58 @@ type UsmSecurityParameters struct {
 }
 
 // Log logs security paramater information to the provided GoSNMP Logger
+func (sp *UsmSecurityParameters) Description() string {
+	var sb strings.Builder
+	sb.WriteString("user=")
+	sb.WriteString(sp.UserName)
+
+	sb.WriteString(",engine=(")
+	sb.WriteString(hex.EncodeToString([]byte(sp.AuthoritativeEngineID)))
+	// sb.WriteString(sp.AuthoritativeEngineID)
+	sb.WriteString(")")
+
+	switch sp.AuthenticationProtocol {
+	case NoAuth:
+		sb.WriteString(",auth=noauth")
+	case MD5:
+		sb.WriteString(",auth=md5")
+	case SHA:
+		sb.WriteString(",auth=sha")
+	case SHA224:
+		sb.WriteString(",auth=sha224")
+	case SHA256:
+		sb.WriteString(",auth=sha256")
+	case SHA384:
+		sb.WriteString(",auth=sha384")
+	case SHA512:
+		sb.WriteString(",auth=sha512")
+	}
+	sb.WriteString(",authPass=")
+	sb.WriteString(sp.AuthenticationPassphrase)
+
+	switch sp.PrivacyProtocol {
+	case NoPriv:
+		sb.WriteString(",priv=NoPriv")
+	case DES:
+		sb.WriteString(",priv=DES")
+	case AES:
+		sb.WriteString(",priv=AES")
+	case AES192:
+		sb.WriteString(",priv=AES192")
+	case AES256:
+		sb.WriteString(",priv=AES256")
+	case AES192C:
+		sb.WriteString(",priv=AES192C")
+	case AES256C:
+		sb.WriteString(",priv=AES256C")
+	}
+	sb.WriteString(",privPass=")
+	sb.WriteString(sp.PrivacyPassphrase)
+
+	return sb.String()
+}
+
+// Log logs security paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Log() {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
@@ -181,10 +235,15 @@ func (sp *UsmSecurityParameters) getDefaultContextEngineID() string {
 	return sp.AuthoritativeEngineID
 }
 func (sp *UsmSecurityParameters) initSecurityKeys() error {
-	var err error
-
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
+
+	return sp.initSecurityKeysNoLock()
+}
+
+func (sp *UsmSecurityParameters) initSecurityKeysNoLock() error {
+	var err error
+
 	if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
 		sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
 			sp.AuthenticationPassphrase,
@@ -229,34 +288,12 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 
 	if sp.AuthoritativeEngineID != insp.AuthoritativeEngineID {
 		sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
+		sp.SecretKey = nil
+		sp.PrivacyKey = nil
 
-		if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
-			sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
-				sp.AuthenticationPassphrase,
-				sp.AuthoritativeEngineID)
-			if err != nil {
-				return err
-			}
-		}
-		if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
-			switch sp.PrivacyProtocol {
-			// Changed: The Output of SHA1 is a 20 octets array, therefore for AES128 (16 octets) either key extension algorithm can be used.
-			case AES, AES192, AES256, AES192C, AES256C:
-				//Use abstract AES key localization algorithms
-				sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol, sp.AuthenticationProtocol,
-					sp.PrivacyPassphrase,
-					sp.AuthoritativeEngineID)
-				if err != nil {
-					return err
-				}
-			default:
-				sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
-					sp.PrivacyPassphrase,
-					sp.AuthoritativeEngineID)
-				if err != nil {
-					return err
-				}
-			}
+		err = sp.initSecurityKeysNoLock()
+		if err != nil {
+			return err
 		}
 	}
 	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
@@ -624,7 +661,6 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 		return false, err
 	}
 	// TODO: investigate call chain to determine if this is really the best spot for this
-
 	msgDigest := sp.calcPacketDigest(packetBytes)
 
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
@@ -807,32 +843,13 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
 		if sp.AuthoritativeEngineID != AuthoritativeEngineID {
 			sp.AuthoritativeEngineID = AuthoritativeEngineID
-			sp.Logger.Printf("Parsed authoritativeEngineID %s", AuthoritativeEngineID)
-			if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
-				sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
-					sp.AuthenticationPassphrase,
-					sp.AuthoritativeEngineID)
-				if err != nil {
-					return 0, err
-				}
-			}
-			if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
-				switch sp.PrivacyProtocol {
-				case AES, AES192, AES256, AES192C, AES256C:
-					sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol, sp.AuthenticationProtocol,
-						sp.PrivacyPassphrase,
-						sp.AuthoritativeEngineID)
-					if err != nil {
-						return 0, err
-					}
-				default:
-					sp.PrivacyKey, err = genlocalkey(sp.AuthenticationProtocol,
-						sp.PrivacyPassphrase,
-						sp.AuthoritativeEngineID)
-					if err != nil {
-						return 0, err
-					}
-				}
+			sp.SecretKey = nil
+			sp.PrivacyKey = nil
+
+			sp.Logger.Printf("Parsed authoritativeEngineID %0x", []byte(AuthoritativeEngineID))
+			err = sp.initSecurityKeysNoLock()
+			if err != nil {
+				return 0, err
 			}
 		}
 	}

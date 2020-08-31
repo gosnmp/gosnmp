@@ -209,7 +209,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 			}
 
 			msg := buf[:rlen]
-			traps := t.Params.UnmarshalTrap(msg)
+			traps := t.Params.UnmarshalTrap(msg, false)
 
 			if traps != nil {
 				// Here we assume that t.OnNewTrap will not alter the contents
@@ -273,7 +273,7 @@ func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 	//fmt.Printf("TEST: handleTCPRequest:%s, %s", t.proto, conn.RemoteAddr())
 
 	msg := buf[:reqLen]
-	traps := t.Params.UnmarshalTrap(msg)
+	traps := t.Params.UnmarshalTrap(msg, false)
 
 	if traps != nil {
 		// TODO: lying for backward compatibility reason - create UDP Address ... not nice
@@ -363,7 +363,7 @@ func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 // UnmarshalTrap unpacks the SNMP Trap.
 //
 // NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
-func (x *GoSNMP) UnmarshalTrap(trap []byte) (result *SnmpPacket) {
+func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) (result *SnmpPacket) {
 	result = new(SnmpPacket)
 
 	if x.SecurityParameters != nil {
@@ -382,7 +382,7 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte) (result *SnmpPacket) {
 
 	if result.Version == Version3 {
 		if result.SecurityModel == UserSecurityModel {
-			err = x.testAuthentication(trap, result)
+			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
 				x.logPrintf("UnmarshalTrap v3 auth: %s\n", err)
 				return nil

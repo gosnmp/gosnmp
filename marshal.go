@@ -252,7 +252,13 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 
 			if x.Version == Version3 {
-				err = x.testAuthentication(resp, result)
+				useResponseSecurityParameters := false
+				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok {
+					if usp.AuthoritativeEngineID == "" {
+						useResponseSecurityParameters = true
+					}
+				}
+				err = x.testAuthentication(resp, result, useResponseSecurityParameters)
 				if err != nil {
 					x.logPrintf("ERROR on Test Authentication on v3: %s", err)
 					break
