@@ -164,7 +164,7 @@ sudo tcpdump -s 0 -i eth0 -w foo.pcap host 203.50.251.17 and port 161
 # Bugs
 
 Rane's document [SNMP: Simple? Network Management
-Protocol](http://www.rane.com/note161.html) was useful when learning the SNMP
+Protocol](https://www.ranecommercial.com/legacy/note161.html) was useful when learning the SNMP
 protocol.
 
 Please create an [issue](https://github.com/gosnmp/gosnmp/issues) on
