@@ -1,3 +1,9 @@
+**9 Oct 2020** - I've transferred ownership of **gosnmp** to https://github.com/gosnmp,
+so _team gosnmp_ can maintain the project! Hopefully this will allow **gosnmp**
+to progress, with new features and bug fixes.
+
+Sonia Hamilton, sonia@snowfrog.net, Australia.
+
 **11 July 2020** - I'm planning on archiving **gosnmp**, as maintaining it is
 having too much of an effect on my work and personal life. I started the fork
 in March 2013 and I've been working on it ever since.
