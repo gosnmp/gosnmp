@@ -29,7 +29,7 @@
 
 ## v1.23.0
 
-* BREAKING CHANGE: The mocks have been moved to `github.com/soniah/gosnmp/mocks`.
+* BREAKING CHANGE: The mocks have been moved to `github.com/gosnmp/gosnmp/mocks`.
   If you use them, you will need to adjust your imports.
 * bug fix: issue 170: No results when performing a walk starting on a leaf OID
 * bug fix: issue 210: Set function fails if value is an Integer

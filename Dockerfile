@@ -22,7 +22,7 @@ RUN pip install snmpsim
 
 # Copy local branch into container
 USER gosnmp
-WORKDIR /go/src/github.com/soniah/gosnmp
+WORKDIR /go/src/github.com/gosnmp/gosnmp
 COPY --chown=gosnmp . .
 
 RUN go get github.com/stretchr/testify/assert && \
@@ -36,4 +36,4 @@ ENV GOSNMP_PORT_IPV4=1024
 ENV GOSNMP_TARGET_IPV6='::1'
 ENV GOSNMP_PORT_IPV6=1024
 
-ENTRYPOINT ["/go/src/github.com/soniah/gosnmp/build_tests.sh"]
+ENTRYPOINT ["/go/src/github.com/gosnmp/gosnmp/build_tests.sh"]

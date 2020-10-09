@@ -1,56 +1,29 @@
-**9 Oct 2020** - I've transferred ownership of **gosnmp** to https://github.com/gosnmp,
-so _team gosnmp_ can maintain the project! Hopefully this will allow **gosnmp**
-to progress, with new features and bug fixes.
-
-Sonia Hamilton, sonia@snowfrog.net, Australia.
-
-**11 July 2020** - I'm planning on archiving **gosnmp**, as maintaining it is
-having too much of an effect on my work and personal life. I started the fork
-in March 2013 and I've been working on it ever since.
-
-At the moment I'm keeping it open so it can act as a central clearing house for
-issues and discussions around who is going to fork and maintain gosnmp - maybe one
-person, maybe a team. Here are some suggestions around short term goals:
-
-- more tests, both unit and integration
-- Docker infrastructure, so developers can locally troubleshoot their changes
-  before submitting (broken) PRs
-- fix snmpv3, INFORM responses, traps
-
-Thanks to Tim Rots for reaching out to me, to the many people who have submitted
-PRs, and of course Andreas Louca, who started the project in 2012.
-
-Tim has raised issue [Searching for collaboration to fork gosnmp](https://github.com/soniah/gosnmp/issues/247)
-to help coordinate replacement maintainers.
-
-Sonia Hamilton, sonia@snowfrog.net, Australia.
-
 gosnmp
 ======
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#networking)
 
-[![Build Status](https://travis-ci.org/soniah/gosnmp.svg?branch=master)](https://travis-ci.org/soniah/gosnmp)
-[![GoDoc](https://godoc.org/github.com/soniah/gosnmp?status.png)](http://godoc.org/github.com/soniah/gosnmp)
-https://github.com/soniah/gosnmp
+[![Build Status](https://travis-ci.org/gosnmp/gosnmp.svg?branch=master)](https://travis-ci.org/gosnmp/gosnmp)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/gosnmp/gosnmp)](https://pkg.go.dev/github.com/gosnmp/gosnmp)
 
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
 GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
 IPv6, using __SNMPv2c__ or __SNMPv3__. Builds are tested against
 linux/amd64 and linux/386.
 
-About
------
+# About
 
-**soniah/gosnmp** was originally based on **alouca/gosnmp**, but has been
+**gosnmp/gosnmp** was originally based on **alouca/gosnmp**, but has been
 completely rewritten. Many thanks to Andreas Louca, other contributors
 (AUTHORS.md) and these project collaborators:
 
 * Whitham Reeve ([@wdreeveii](https://github.com/wdreeveii/))
 
-Sonia Hamilton, sonia@snowfrog.net
+Original fork by Sonia Hamilton, sonia@snowfrog.net
 
-Overview
---------
+For support and help, join us in the #snmp channel of
+[Gophers Slack](https://invite.slack.golangbridge.org/).
+
+# Overview
 
 GoSNMP has the following SNMP functions:
 
@@ -68,7 +41,7 @@ GoSNMP has the following **helper** functions:
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
-**soniah/gosnmp** has completely diverged from **alouca/gosnmp**, your code
+**gosnmp/gosnmp** has completely diverged from **alouca/gosnmp**, your code
 will require modification in these (and other) locations:
 
 * the **Get** function has a different method signature
@@ -86,20 +59,17 @@ type Logger interface {
 }
 ```
 
-Installation
-------------
+# Installation
 
 ```shell
-go get github.com/soniah/gosnmp
+go get github.com/gosnmp/gosnmp
 ```
 
-Documentation
--------------
+# Documentation
 
-http://godoc.org/github.com/soniah/gosnmp
+http://godoc.org/github.com/gosnmp/gosnmp
 
-Usage
------
+# Usage
 
 Here is `examples/example.go`, demonstrating how to use GoSNMP:
 
@@ -151,30 +121,27 @@ Running this example gives the following output (from my printer):
 * `examples/example3.go` demonstrates `SNMPv3`
 * `examples/trapserver.go` demonstrates writing an SNMP v2c trap server
 
-MIB Parser
-----------
+# MIB Parser
 
 I don't have any plans to write a mib parser. Others have suggested
 https://github.com/sleepinggenius2/gosmi
 
-Contributions
--------------
+# Contributions
 
 Contributions are welcome, especially ones that have packet captures (see
 below).
 
 If you've never contributed to a Go project before, here is an example workflow.
 
-1. [fork this repo on the GitHub webpage](https://github.com/soniah/gosnmp/fork)
-1. `go get github.com/soniah/gosnmp`
-1. `cd $GOPATH/src/github.com/soniah/gosnmp`
+1. [fork this repo on the GitHub webpage](https://github.com/gosnmp/gosnmp/fork)
+1. `go get github.com/gosnmp/gosnmp`
+1. `cd $GOPATH/src/github.com/gosnmp/gosnmp`
 1. `git remote rename origin upstream`
 1. `git remote add origin git@github.com:<your-github-username>/gosnmp.git`
 1. `git checkout -b development`
 1. `git push -u origin development` (setup where you push to, check it works)
 
-Packet Captures
----------------
+# Packet Captures
 
 Create your packet captures in the following way:
 
@@ -194,14 +161,13 @@ A packet capture, obtained while running the snmpget. For example:
 sudo tcpdump -s 0 -i eth0 -w foo.pcap host 203.50.251.17 and port 161
 ```
 
-Bugs
-----
+# Bugs
 
 Rane's document [SNMP: Simple? Network Management
 Protocol](http://www.rane.com/note161.html) was useful when learning the SNMP
 protocol.
 
-Please create an [issue](https://github.com/soniah/gosnmp/issues) on
+Please create an [issue](https://github.com/gosnmp/gosnmp/issues) on
 Github with packet captures (upload capture to Google Drive, Dropbox, or
 similar) containing samples of missing BER types, or of any other bugs
 you find. If possible, please include 2 or 3 examples of the
@@ -231,13 +197,12 @@ The following BER types have been implemented:
 * 0x81 NoSuchInstance
 * 0x82 EndOfMibView
 
-Running the Tests
------------------
+# Running the Tests
 
 Local testing in Docker
 ```shell
-docker build -t soniah/gosnmp:latest .
-docker run -it soniah/gosnmp:latest
+docker build -t gosnmp/gosnmp:latest .
+docker run -it gosnmp/gosnmp:latest
 ```
 
 or
@@ -293,12 +258,11 @@ To check test coverage:
 ```shell
 go get github.com/axw/gocov/gocov
 go get github.com/matm/gocov-html
-gocov test github.com/soniah/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
+gocov test github.com/gosnmp/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
 ```
 
 
-License
--------
+# License
 
 Parts of the code are taken from the Golang project (specifically some
 functions for unmarshaling BER responses), which are under the same terms
