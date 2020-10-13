@@ -1,3 +1,11 @@
+## v1.28.0
+
+This release updates the Go import path from `github.com/soniah/gosnmp`
+to `github.com/gosnmp/gosnmp`.
+
+* [CHANGE] Update project path #257
+* [ENHANCEMENT] Improve SNMPv3 trap support #253
+
 ## v1.27.0
 
 * fix a race condition - logger
