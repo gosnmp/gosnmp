@@ -93,8 +93,9 @@ for i, variable := range result.Variables {
     // interface{}. You could do a type switch...
     switch variable.Type {
     case g.OctetString:
-        bytes := variable.Value.([]byte)
-        fmt.Printf("string: %s\n", string(bytes))
+        // Earlier versions (<=1.26.0) return []byte value.
+        // Recent versions (>=1.27.0) return string value.
+        fmt.Printf("string: %s\n", variable.Value)
     default:
         // ... or often you're just interested in numeric values.
         // ToBigInt() will return the Value as a BigInt, for plugging
