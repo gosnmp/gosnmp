@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os" //"io/ioutil"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -127,7 +128,7 @@ func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(
 		for _, v := range packet.Variables {
 			switch v.Type {
 			case OctetString:
-				b := v.Value.(string)
+				b := v.Value.([]byte)
 				// log.Printf("OID: %s, string: %x\n", v.Name, b)
 
 				// Only one OctetString in the payload, so it must be the expected one
@@ -294,7 +295,7 @@ func TestSendInformBasic(t *testing.T) {
 
 	for i, tv := range trap.Variables {
 		rv := resp.Variables[i+1]
-		if tv != rv {
+		if reflect.DeepEqual(tv, rv) {
 			t.Fatalf("Expected variable %d = %#v, got %#v", i, tv, rv)
 		}
 	}

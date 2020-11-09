@@ -150,7 +150,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x32, // finish
 		[]testsEnmarshalVarbindPosition{
 			{".1.3.6.1.4.1.2863.205.1.1.75.1.0",
-				0x1e, 0x32, OctetString, "\x80"},
+				0x1e, 0x32, OctetString, []byte{0x80}},
 		},
 	},
 	{
@@ -166,7 +166,7 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x37, // finish
 		[]testsEnmarshalVarbindPosition{
 			{".1.3.6.1.4.1.2863.205.1.1.75.2.0",
-				0x1e, 0x36, OctetString, "telnet"},
+				0x1e, 0x36, OctetString, []byte("telnet")},
 		},
 	},
 	// MrSpock Set stuff
@@ -397,7 +397,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.1.4.0",
 					Type:  OctetString,
-					Value: "Administrator",
+					Value: []byte("Administrator"),
 				},
 				{
 					Name:  ".1.3.6.1.2.1.43.5.1.1.15.1",
@@ -412,7 +412,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.4.1.23.2.5.1.1.1.4.2",
 					Type:  OctetString,
-					Value: "\x00\x15\x99\x37\x76\x2b",
+					Value: []byte{0x00, 0x15, 0x99, 0x37, 0x76, 0x2b},
 				},
 				{
 					Name:  ".1.3.6.1.2.1.1.3.0",
@@ -439,7 +439,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.2.2.1.2.6",
 					Type:  OctetString,
-					Value: "GigabitEthernet0",
+					Value: []byte("GigabitEthernet0"),
 				},
 				{
 					Name:  ".1.3.6.1.2.1.2.2.1.5.3",
@@ -459,7 +459,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.3.1.1.2.10.1.10.11.0.17",
 					Type:  OctetString,
-					Value: "\x00\x07\x7d\x4d\x09\x00",
+					Value: []byte{0x00, 0x07, 0x7d, 0x4d, 0x09, 0x00},
 				},
 				{
 					Name:  ".1.3.6.1.2.1.3.1.1.3.10.1.10.11.0.2",
@@ -540,7 +540,7 @@ var testsUnmarshal = []struct {
 				{
 					Name:  ".1.3.6.1.2.1.1.9.1.3.3",
 					Type:  OctetString,
-					Value: "The MIB module for managing IP and ICMP implementations",
+					Value: []byte("The MIB module for managing IP and ICMP implementations"),
 				},
 				{
 					Name:  ".1.3.6.1.2.1.1.9.1.4.2",
@@ -772,7 +772,7 @@ func TestUnmarshal(t *testing.T) {
 							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 						}
 					case OctetString:
-						if vb.Value.(string) != vbr.Value.(string) {
+						if !bytes.Equal(vb.Value.([]byte), vbr.Value.([]byte)) {
 							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 						}
 					case IPAddress, ObjectIdentifier:
