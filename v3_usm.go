@@ -14,6 +14,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des" //nolint:gosec
+	_ "crypto/md5"
+	_ "crypto/sha1"
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"crypto/hmac"
 	crand "crypto/rand"
 	"encoding/binary"
