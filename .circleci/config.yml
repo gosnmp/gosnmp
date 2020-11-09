@@ -35,6 +35,12 @@ jobs:
     - run: go test -v -tags api
     - run: go test -v -tags end2end
     - run: go test -v -tags trap
+    - run: |
+       if [[ "${GOARCH}" == "amd64" ]]; then
+         go test -v -tags all -race
+       else
+         echo "Not running -race"
+       fi
 
 workflows:
   version: 2
