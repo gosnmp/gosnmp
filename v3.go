@@ -305,7 +305,7 @@ func (packet *SnmpPacket) marshalV3ScopedPDU() ([]byte, error) {
 func (packet *SnmpPacket) prepareV3ScopedPDU() ([]byte, error) {
 	var buf bytes.Buffer
 
-	//ContextEngineID
+	// ContextEngineID
 	idlen, err := marshalLength(len(packet.ContextEngineID))
 	if err != nil {
 		return nil, err
@@ -313,7 +313,7 @@ func (packet *SnmpPacket) prepareV3ScopedPDU() ([]byte, error) {
 	buf.Write(append([]byte{byte(OctetString)}, idlen...))
 	buf.WriteString(packet.ContextEngineID)
 
-	//ContextName
+	// ContextName
 	namelen, err := marshalLength(len(packet.ContextName))
 	if err != nil {
 		return nil, err
