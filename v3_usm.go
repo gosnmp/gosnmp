@@ -260,7 +260,7 @@ func (sp *UsmSecurityParameters) initSecurityKeysNoLock() error {
 		switch sp.PrivacyProtocol {
 		// Changed: The Output of SHA1 is a 20 octets array, therefore for AES128 (16 octets) either key extension algorithm can be used.
 		case AES, AES192, AES256, AES192C, AES256C:
-			//Use abstract AES key localization algorithms
+			// Use abstract AES key localization algorithms.
 			sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol, sp.AuthenticationProtocol,
 				sp.PrivacyPassphrase,
 				sp.AuthoritativeEngineID)

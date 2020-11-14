@@ -258,7 +258,8 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 	}
 
 	if x.random == nil {
-		x.random = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+		// TODO: https://github.com/gosnmp/gosnmp/issues/267
+		x.random = rand.New(rand.NewSource(time.Now().UTC().UnixNano())) //nolint:gosec
 	}
 	// http://tools.ietf.org/html/rfc3412#section-6 - msgID only
 	// uses the first 31 bits

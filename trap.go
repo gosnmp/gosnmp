@@ -7,7 +7,6 @@ package gosnmp
 import (
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -269,8 +268,6 @@ func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 		return
 	}
 
-	//fmt.Printf("TEST: handleTCPRequest:%s, %s", t.proto, conn.RemoteAddr())
-
 	msg := buf[:reqLen]
 	traps := t.Params.UnmarshalTrap(msg, false)
 
@@ -311,7 +308,7 @@ func (t *TrapListener) listenTCP(addr string) error {
 			fmt.Printf("ACCEPT: %s", conn)
 			if err != nil {
 				fmt.Println("error accepting: ", err.Error())
-				os.Exit(1)
+				return err
 			}
 			// Handle connections in a new goroutine.
 			go t.handleTCPRequest(conn)
