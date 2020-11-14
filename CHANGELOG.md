@@ -1,3 +1,7 @@
+## unreleased
+
+* [CHANGE] Return OctetString as []byte #264
+
 ## v1.28.0
 
 This release updates the Go import path from `github.com/soniah/gosnmp`

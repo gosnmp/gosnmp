@@ -100,7 +100,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		}
 
 		retVal.Type = OctetString
-		retVal.Value = string(data[cursor:length])
+		retVal.Value = data[cursor:length]
 	case Null:
 		// 0x05
 		x.logPrint("decodeValue: type is Null")
