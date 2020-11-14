@@ -2,8 +2,18 @@
 version: 2.1
 
 executors:
+  golang:
+    docker:
+    - image: cimg/go:1.15
 
 jobs:
+  lint:
+    executor: golang
+    steps:
+    - checkout
+    - run: make tools
+    - run: make lint
+
   test:
     parameters:
       goarch:
@@ -27,8 +37,6 @@ jobs:
     - run: sudo apt-get -y install snmpd
     - run: sudo ./snmp_users.sh
     - run: sudo /etc/init.d/snmpd restart
-    - run: make tools
-    - run: make lint
     - run: go test -v -tags helper
     - run: go test -v -tags marshal
     - run: go test -v -tags misc
@@ -46,6 +54,7 @@ workflows:
   version: 2
   test:
     jobs:
+    - lint
     - test:
         matrix:
           parameters:
