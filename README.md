@@ -2,7 +2,7 @@ gosnmp
 ======
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#networking)
 
-[![Build Status](https://travis-ci.org/gosnmp/gosnmp.svg?branch=master)](https://travis-ci.org/gosnmp/gosnmp)
+![Build Status](https://circleci.com/gh/gosnmp/gosnmp.svg?style=shield)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/gosnmp/gosnmp)](https://pkg.go.dev/github.com/gosnmp/gosnmp)
 
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
