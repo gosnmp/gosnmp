@@ -428,19 +428,13 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 
 	pkt := x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
 
-	// Request ID is an atomic counter (started at a random value)
-	reqID := atomic.AddUint32(&(x.requestID), 1)
-	if reqID > math.MaxInt32 {
-		return []byte{}, fmt.Errorf("reqID out of range: %v", reqID)
-	}
+	// Request ID is an atomic counter that wraps to 0 at max int32.
+	reqID := (atomic.AddUint32(&(x.requestID), 1) & 0x7FFFFFFF)
 
 	pkt.RequestID = reqID
 
 	if x.Version == Version3 {
-		msgID := atomic.AddUint32(&(x.msgID), 1)
-		if msgID > math.MaxInt32 {
-			return []byte{}, fmt.Errorf("msgID out of range: %v", reqID)
-		}
+		msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
 
 		pkt.MsgID = msgID
 

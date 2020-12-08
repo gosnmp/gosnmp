@@ -1,5 +1,16 @@
 ## unreleased
 
+* [CHANGE]
+* [FEATURE]
+* [ENHANCEMENT]
+* [BUGFIX]
+
+* [BUGFIX] Add bounds checking for reqID and msgID #273
+
+## v1.29.0
+
+NOTE: This release returns the OctetString []byte behavior for v1.26.0 and earlier.
+
 * [CHANGE] Return OctetString as []byte #264
 
 ## v1.28.0

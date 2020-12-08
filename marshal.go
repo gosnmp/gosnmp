@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"runtime"
 	"strings"
@@ -174,21 +173,15 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			return nil, err
 		}
 
-		// reqID will be x.requestID+1 with a maximum of math.MaxInt32
-		reqID := atomic.AddUint32(&(x.requestID), 1)
-		if reqID > math.MaxInt32 {
-			return nil, fmt.Errorf("reqID out of range: %v", reqID)
-		}
+		// Request ID is an atomic counter that wraps to 0 at max int32.
+		reqID := (atomic.AddUint32(&(x.requestID), 1) & 0x7FFFFFFF)
 		allReqIDs = append(allReqIDs, reqID)
 
 		packetOut.RequestID = reqID
 
 		if x.Version == Version3 {
-			// msgID will be x.msgID+1 with a maximum of math.MaxInt32
-			msgID := atomic.AddUint32(&(x.msgID), 1)
-			if msgID > math.MaxInt32 {
-				return nil, fmt.Errorf("msgID out of range: %v", reqID)
-			}
+			msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
+
 			// allMsgIDs = append(allMsgIDs, msgID) // unused
 
 			packetOut.MsgID = msgID
