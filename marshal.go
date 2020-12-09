@@ -173,14 +173,15 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			return nil, err
 		}
 
-		// Request ID is an atomic counter (started at a random value)
-		reqID := atomic.AddUint32(&(x.requestID), 1) // TODO: fix overflows
+		// Request ID is an atomic counter that wraps to 0 at max int32.
+		reqID := (atomic.AddUint32(&(x.requestID), 1) & 0x7FFFFFFF)
 		allReqIDs = append(allReqIDs, reqID)
 
 		packetOut.RequestID = reqID
 
 		if x.Version == Version3 {
-			msgID := atomic.AddUint32(&(x.msgID), 1) // TODO: fix overflows
+			msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
+
 			// allMsgIDs = append(allMsgIDs, msgID) // unused
 
 			packetOut.MsgID = msgID
