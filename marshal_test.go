@@ -1373,6 +1373,9 @@ func TestV3USMInitialPacket(t *testing.T) {
 
 func TestSendOneRequest_dups(t *testing.T) {
 	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	if err != nil {
+		t.Fatalf("udp4 error listening: %s", err)
+	}
 	defer srvr.Close()
 
 	x := &GoSNMP{
@@ -1451,6 +1454,9 @@ func BenchmarkSendOneRequest(b *testing.B) {
 	b.StopTimer()
 
 	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	if err != nil {
+		b.Fatalf("udp4 error listening: %s", err)
+	}
 	defer srvr.Close()
 
 	x := &GoSNMP{
