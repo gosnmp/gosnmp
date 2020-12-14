@@ -54,6 +54,7 @@ type SnmpPacket struct {
 	MaxRepetitions     uint8
 	Variables          []SnmpPDU
 	Logger             Logger // interface
+	Latency            time.Duration
 
 	// v1 traps have a very different format from v2c and v3 traps.
 	//
@@ -204,6 +205,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		}
 
 		x.logPrintf("SENDING PACKET: %#+v", *packetOut)
+		sent := time.Now()
 		_, err = x.Conn.Write(outBuf)
 		if err != nil {
 			continue
@@ -238,6 +240,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			}
 			x.logPrintf("GET RESPONSE OK: %+v", resp)
 			result = new(SnmpPacket)
+			result.Latency = time.Since(sent)
 			result.Logger = x.Logger
 
 			result.MsgFlags = packetOut.MsgFlags
