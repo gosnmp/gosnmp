@@ -54,7 +54,6 @@ type SnmpPacket struct {
 	MaxRepetitions     uint8
 	Variables          []SnmpPDU
 	Logger             Logger // interface
-	Latency            time.Duration
 
 	// v1 traps have a very different format from v2c and v3 traps.
 	//
@@ -128,6 +127,25 @@ func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 	}
 }
 
+// Observer is a blocking interface used for collecting connection metrics
+// and/or sleeping a thread to synchronize actions
+func (x *GoSNMP) observer(mark EventType) {
+	if x.Observer != nil {
+		x.Observer(mark)
+	}
+}
+
+// EventType describes the event that is marked
+type EventType byte
+
+// List of events currently available for observing
+const (
+	PreSend EventType = 0x01
+	Sent    EventType = 0x02
+	Reply   EventType = 0x03
+	Retry   EventType = 0x10
+)
+
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	wait bool) (result *SnmpPacket, err error) {
@@ -139,6 +157,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	for retries := 0; ; retries++ {
 		if retries > 0 {
 			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
+			x.observer(Retry)
 			if withContextDeadline && strings.Contains(err.Error(), "timeout") {
 				err = context.DeadlineExceeded
 				break
@@ -204,12 +223,13 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			break
 		}
 
+		x.observer(PreSend)
 		x.logPrintf("SENDING PACKET: %#+v", *packetOut)
-		sent := time.Now()
 		_, err = x.Conn.Write(outBuf)
 		if err != nil {
 			continue
 		}
+		x.observer(Sent)
 
 		// all sends wait for the return packet, except for SNMPv2Trap
 		if !wait {
@@ -239,8 +259,8 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				break
 			}
 			x.logPrintf("GET RESPONSE OK: %+v", resp)
+			x.observer(Reply)
 			result = new(SnmpPacket)
-			result.Latency = time.Since(sent)
 			result.Logger = x.Logger
 
 			result.MsgFlags = packetOut.MsgFlags
