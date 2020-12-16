@@ -156,8 +156,8 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	withContextDeadline := false
 	for retries := 0; ; retries++ {
 		if retries > 0 {
-			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
 			x.timekeeper(Retry)
+			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
 			if withContextDeadline && strings.Contains(err.Error(), "timeout") {
 				err = context.DeadlineExceeded
 				break
@@ -258,8 +258,8 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				// receive error. retrying won't help. abort
 				break
 			}
-			x.logPrintf("GET RESPONSE OK: %+v", resp)
 			x.timekeeper(Reply)
+			x.logPrintf("GET RESPONSE OK: %+v", resp)
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
 
