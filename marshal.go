@@ -127,18 +127,18 @@ func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 	}
 }
 
-// Observer is a blocking interface used for collecting connection metrics
+// Timekeeper is a blocking interface used for collecting connection metrics
 // and/or sleeping a thread to synchronize actions
-func (x *GoSNMP) observer(mark EventType) {
-	if x.Observer != nil {
-		x.Observer(mark)
+func (x *GoSNMP) timekeeper(mark EventType) {
+	if x.Timekeeper != nil {
+		x.Timekeeper(mark)
 	}
 }
 
 // EventType describes the event that is marked
 type EventType byte
 
-// List of events currently available for observing
+// List of events currently available for timekeeping
 const (
 	PreSend EventType = 0x01
 	Sent    EventType = 0x02
@@ -157,7 +157,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	for retries := 0; ; retries++ {
 		if retries > 0 {
 			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
-			x.observer(Retry)
+			x.timekeeper(Retry)
 			if withContextDeadline && strings.Contains(err.Error(), "timeout") {
 				err = context.DeadlineExceeded
 				break
@@ -223,13 +223,13 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			break
 		}
 
-		x.observer(PreSend)
+		x.timekeeper(PreSend)
 		x.logPrintf("SENDING PACKET: %#+v", *packetOut)
 		_, err = x.Conn.Write(outBuf)
 		if err != nil {
 			continue
 		}
-		x.observer(Sent)
+		x.timekeeper(Sent)
 
 		// all sends wait for the return packet, except for SNMPv2Trap
 		if !wait {
@@ -259,7 +259,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				break
 			}
 			x.logPrintf("GET RESPONSE OK: %+v", resp)
-			x.observer(Reply)
+			x.timekeeper(Reply)
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
 
