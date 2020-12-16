@@ -83,7 +83,7 @@ type GoSNMP struct {
 	// are ignored via shortcircuit
 	loggingEnabled bool
 
-	// Observer allows one to pass in a method to use for timing.
+	// Observer allows one to pass in an observer function to use for timing.
 	// var sent time.Time
 	// var latency time.Duration
 	// x.Observer = func(e g.EventType) {
@@ -93,6 +93,7 @@ type GoSNMP struct {
 	//     latency = time.Since(sent)
 	//   }
 	// }
+	// x.Observer = nil  // unset the observer
 	Observer func(EventType)
 
 	// MaxOids is the maximum number of oids allowed in a Get()
