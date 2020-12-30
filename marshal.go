@@ -127,25 +127,6 @@ func (x *GoSNMP) logPrintf(format string, v ...interface{}) {
 	}
 }
 
-// Timekeeper is a blocking interface used for collecting connection metrics
-// and/or sleeping a thread to synchronize actions
-func (x *GoSNMP) timekeeper(mark EventType) {
-	if x.Timekeeper != nil {
-		x.Timekeeper(mark)
-	}
-}
-
-// EventType describes the event that is marked
-type EventType byte
-
-// List of events currently available for timekeeping
-const (
-	PreSend EventType = 0x01
-	Sent    EventType = 0x02
-	Reply   EventType = 0x03
-	Retry   EventType = 0x10
-)
-
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	wait bool) (result *SnmpPacket, err error) {
@@ -156,7 +137,10 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	withContextDeadline := false
 	for retries := 0; ; retries++ {
 		if retries > 0 {
-			x.timekeeper(Retry)
+			if x.OnRetry != nil {
+				x.OnRetry(x)
+			}
+
 			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
 			if withContextDeadline && strings.Contains(err.Error(), "timeout") {
 				err = context.DeadlineExceeded
@@ -223,13 +207,17 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			break
 		}
 
-		x.timekeeper(PreSend)
+		if x.PreSend != nil {
+			x.PreSend(x)
+		}
 		x.logPrintf("SENDING PACKET: %#+v", *packetOut)
 		_, err = x.Conn.Write(outBuf)
 		if err != nil {
 			continue
 		}
-		x.timekeeper(Sent)
+		if x.OnSent != nil {
+			x.OnSent(x)
+		}
 
 		// all sends wait for the return packet, except for SNMPv2Trap
 		if !wait {
@@ -258,7 +246,9 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				// receive error. retrying won't help. abort
 				break
 			}
-			x.timekeeper(Reply)
+			if x.OnRecv != nil {
+				x.OnRecv(x)
+			}
 			x.logPrintf("GET RESPONSE OK: %+v", resp)
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
@@ -332,6 +322,9 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			continue
 		}
 
+		if x.OnFinish != nil {
+			x.OnFinish(x)
+		}
 		// Success!
 		return result, nil
 	}

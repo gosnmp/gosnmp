@@ -83,21 +83,21 @@ type GoSNMP struct {
 	// are ignored via shortcircuit
 	loggingEnabled bool
 
-	// Timekeeper allows one to pass in a function to use for timing.
-	// var sent time.Time
-	// var latency time.Duration
-	// x.Timekeeper = func(e g.EventType) {
-	//   if e == g.Sent {
-	//     sent = time.Now()
-	//   } else if e == g.Reply {
-	//     latency = time.Since(sent)
-	//   } else if e == g.PreSend {
-	//     // delay sending for a time
-	//     time.Sleep(2 * time.Second)
-	//   }
-	// }
-	// x.Timekeeper = nil  // unset the timekeeper
-	Timekeeper func(EventType)
+	// Time keeping function handles allows one to pass in a function to use for timing.
+	// PreSend is called before a packet is sent
+	PreSend func(*GoSNMP)
+
+	// OnSent is called when a packet is sent
+	OnSent func(*GoSNMP)
+
+	// OnRecv is called when a packet is received
+	OnRecv func(*GoSNMP)
+
+	// OnRetry is called when a retry attempt is done
+	OnRetry func(*GoSNMP)
+
+	// OnFinish is called when the request completed
+	OnFinish func(*GoSNMP)
 
 	// MaxOids is the maximum number of oids allowed in a Get()
 	// (default: MaxOids)
