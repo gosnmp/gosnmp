@@ -35,6 +35,15 @@ func main() {
 		Version:   g.Version2c,
 		Logger:    log.New(os.Stdout, "", 0),
 	}
+
+	// Function handles for collecting metrics on query latencies.
+	params.OnSent = func(x *g.GoSNMP) {
+		sent = time.Now()
+	}
+	params.OnRecv = func(x *g.GoSNMP) {
+		log.Println("Query latency in nanoseconds:", time.Since(sent).Nanoseconds())
+	}
+
 	err := params.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)
