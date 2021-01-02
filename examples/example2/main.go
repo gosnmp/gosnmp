@@ -37,6 +37,7 @@ func main() {
 	}
 
 	// Function handles for collecting metrics on query latencies.
+	var sent time.Time
 	params.OnSent = func(x *g.GoSNMP) {
 		sent = time.Now()
 	}
