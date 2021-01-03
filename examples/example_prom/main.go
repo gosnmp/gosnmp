@@ -4,10 +4,12 @@
 
 /*
 
-This is an example of a Prometheus endpoint to query SNMP.  We provide prometheus
-a cached version of the values so that our SNMP endpoint is not hit should there be
-multiple queries over a short period of time.  Too many SNMP queries to older (and
-some newer routers) will cause the control plane to stop responding.
+This is an example of a Prometheus endpoint to query SNMP.  Key points this example
+exemplifies are:
+
+- Latency durations binned into buckets to make a histogram
+- Prometheus gauge with a timestamp containing latency
+- Setting dynamic label values from the output of a SNMP query
 
 To run this, first edit the source to have the correct IP address,
 
@@ -18,29 +20,29 @@ then curl the http address like this:
 $ curl localhost:8436/metrics
 # HELP snmp_about_info SNMP narrative metric with a default value of 1
 # TYPE snmp_about_info gauge
-snmp_about_info{contact="contact",site="hq",sysServices="1001110",target="10.12.0.1"} 1
+snmp_about_info{contact="contact",sysServices="1001110\n"} 1
 # HELP snmp_build_info A metric with a constant '1' value labeled by version, revision, branch, and goversion from which snmp was built.
 # TYPE snmp_build_info gauge
 snmp_build_info{branch="",goversion="go1.15.2",revision="",version=""} 1
 # HELP snmp_response_duration_seconds SNMP packet response latency
 # TYPE snmp_response_duration_seconds histogram
 snmp_response_duration_seconds_bucket{le="0.0005"} 0
-snmp_response_duration_seconds_bucket{le="0.001"} 9
-snmp_response_duration_seconds_bucket{le="0.0025"} 10
-snmp_response_duration_seconds_bucket{le="0.005"} 10
-snmp_response_duration_seconds_bucket{le="0.01"} 10
-snmp_response_duration_seconds_bucket{le="0.025"} 10
-snmp_response_duration_seconds_bucket{le="0.05"} 10
-snmp_response_duration_seconds_bucket{le="0.1"} 10
-snmp_response_duration_seconds_bucket{le="0.25"} 10
-snmp_response_duration_seconds_bucket{le="0.5"} 10
-snmp_response_duration_seconds_bucket{le="1"} 10
-snmp_response_duration_seconds_bucket{le="+Inf"} 10
-snmp_response_duration_seconds_sum 0.007858001
-snmp_response_duration_seconds_count 10
+snmp_response_duration_seconds_bucket{le="0.001"} 0
+snmp_response_duration_seconds_bucket{le="0.0025"} 1
+snmp_response_duration_seconds_bucket{le="0.005"} 1
+snmp_response_duration_seconds_bucket{le="0.01"} 1
+snmp_response_duration_seconds_bucket{le="0.025"} 1
+snmp_response_duration_seconds_bucket{le="0.05"} 1
+snmp_response_duration_seconds_bucket{le="0.1"} 1
+snmp_response_duration_seconds_bucket{le="0.25"} 1
+snmp_response_duration_seconds_bucket{le="0.5"} 1
+snmp_response_duration_seconds_bucket{le="1"} 1
+snmp_response_duration_seconds_bucket{le="+Inf"} 1
+snmp_response_duration_seconds_sum 0.001263483
+snmp_response_duration_seconds_count 1
 # HELP snmp_response_latency_seconds SNMP packet response latency
 # TYPE snmp_response_latency_seconds gauge
-snmp_response_latency_seconds 0.000714456 1609641200001
+snmp_response_latency_seconds 0.001263483 1609697880001
 
 */
 
@@ -50,7 +52,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	g "github.com/gosnmp/gosnmp"
@@ -63,7 +64,7 @@ import (
 func main() {
 	// Default is a pointer to a GoSNMP struct that contains sensible defaults.
 	// eg port 161, community public, etc...
-	g.Default.Target = "10.12.0.1"
+	g.Default.Target = "10.12.0.1" // Change this to be your device's address
 	err := g.Default.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)
@@ -114,7 +115,7 @@ func main() {
 				snmpInfoLabels["contact"] = string(variable.Value.([]byte))
 			case ".1.3.6.1.2.1.1.7.0":
 				// Store the sysServices as binary bits into our about labels for parsing.
-				snmpInfoLabels["sysServices"] = strconv.FormatInt(g.ToBigInt(variable.Value).Int64(), 2)
+				snmpInfoLabels["sysServices"] = fmt.Sprintf("%07b\n", g.ToBigInt(variable.Value).Int64())
 			default:
 				// ... or you've specified an OID but haven't caught it here.
 				fmt.Printf("%d: unmatched oid: %s  value: %v\n", i, variable.Name, variable.Value)
@@ -128,7 +129,7 @@ func main() {
 				"snmp_about_info",
 				"SNMP narrative metric with a default value of 1",
 				variableLabels, nil),
-			prometheus.GaugeValue, 1, labelValues...,
+			prometheus.GaugeValue, 1, labelValues..., // The 1 here is the gauge value.
 		)
 	}
 }
