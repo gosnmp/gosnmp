@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	g "github.com/gosnmp/gosnmp"
 )
