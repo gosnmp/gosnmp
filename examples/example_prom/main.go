@@ -61,8 +61,8 @@ import (
 )
 
 func main() {
-	// Default is a pointer to a GoSNMP struct that contains sensible defaults
-	// eg port 161, community public, etc
+	// Default is a pointer to a GoSNMP struct that contains sensible defaults.
+	// eg port 161, community public, etc...
 	g.Default.Target = "10.12.0.1"
 	err := g.Default.Connect()
 	if err != nil {
@@ -79,14 +79,10 @@ func main() {
 		ObserveLatency(time.Since(sent).Seconds())
 	}
 
-	// Set constant prometheus labels
-	snmpLabels["target"] = g.Default.Target
-	snmpLabels["site"] = "hq"
-
-	// Configure the prometheus collector
+	// Configure the prometheus collector.
 	promInit()
 
-	// Setup http listener to serve prometheus metrics
+	// Setup http listener to serve prometheus metrics.
 	http.Handle("/metrics", promhttp.HandlerFor(snmpRegistry, promhttp.HandlerOpts{}))
 	go func() {
 		if err := http.ListenAndServe(":8436", nil); err != nil {
@@ -95,11 +91,14 @@ func main() {
 	}()
 
 	for {
-		// We don't want prometheus to query our SNMP endpoints too quickly,
-		// so instead we will do our own queries at a defined interval and
-		// provide the latest cached value in the collection.  This also helps
-		// with making sure that the evaluations have temporal consistency.
-		SleepDuration("120s")
+		// We don't want this metrics tool to query our SNMP endpoints too quickly,
+		// as queries (ie those faster than 60s) to older (and some newer routers)
+		// will cause the control plane to stop responding.  Instead we will do our
+		// own queries at a defined interval and provide the latest cached value in
+		// the collection.  This also helps with making sure that the evaluations
+		// have temporal consistency in the latency bins as counts would not be evenly
+		// spaced in time.
+		backoffDuration("120s")
 
 		oids := []string{"1.3.6.1.2.1.1.4.0", "1.3.6.1.2.1.1.7.0"}
 		result, err2 := g.Default.Get(oids) // Get() accepts up to g.MAX_OIDS
@@ -114,7 +113,7 @@ func main() {
 				// Store the contact string into our about labels for parsing.
 				snmpInfoLabels["contact"] = string(variable.Value.([]byte))
 			case ".1.3.6.1.2.1.1.7.0":
-				// Store the sysServices into our about labels for parsing.
+				// Store the sysServices as binary bits into our about labels for parsing.
 				snmpInfoLabels["sysServices"] = strconv.FormatInt(g.ToBigInt(variable.Value).Int64(), 2)
 			default:
 				// ... or you've specified an OID but haven't caught it here.
@@ -123,18 +122,19 @@ func main() {
 
 		}
 
-		variableLabels, labelValues := promMap(snmpInfoLabels)
+		variableLabels, labelValues := promMapToSlice(snmpInfoLabels)
 		snmpInfo = prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				"snmp_about_info",
 				"SNMP narrative metric with a default value of 1",
-				variableLabels, snmpLabels),
+				variableLabels, nil),
 			prometheus.GaugeValue, 1, labelValues...,
 		)
 	}
 }
 
-func promMap(inVarLbl map[string]string) (varLbl []string, varVal []string) {
+func promMapToSlice(inVarLbl map[string]string) (varLbl []string, varVal []string) {
+	// Simple function to break apart a map into key value pair slices before sending to Prometheus.
 	for k, v := range inVarLbl {
 		varLbl = append(varLbl, k)
 		varVal = append(varVal, v)
@@ -142,8 +142,9 @@ func promMap(inVarLbl map[string]string) (varLbl []string, varVal []string) {
 	return
 }
 
-func SleepDuration(d string) (next time.Time) {
-	// Sleep until the 0 mark on the minute, or interval since epoch
+func backoffDuration(d string) (next time.Time) {
+	// Sleep until the next mark on the minute, or interval since epoch.  This ensures we don't hit
+	// the endpoint too often and also the metrics align between devices.
 	duration, err := time.ParseDuration(d)
 	if err != nil {
 		log.Fatalf("Invalid duration: %v", err)
@@ -158,41 +159,40 @@ var snmpLatency prometheus.Metric
 var snmpInfo prometheus.Metric
 var snmpDurationHist prometheus.Histogram
 var snmpRegistry = prometheus.NewRegistry()
-var snmpLabels = make(map[string]string)
 
 func ObserveLatency(latency float64) {
-	// Send latency value to our auto histogram function
+	// Send latency value to our auto histogram function.
 	snmpDurationHist.Observe(latency)
 
-	// Record latency value into a gauge metric with timestamp
+	// Record latency value into a gauge metric with timestamp.
 	snmpLatency = prometheus.NewMetricWithTimestamp(
 		time.Now(), prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				"snmp_response_latency_seconds",
 				"SNMP packet response latency",
-				nil, snmpLabels),
+				nil, nil),
 			prometheus.GaugeValue, latency,
 		),
 	)
 }
 
 func promInit() {
-	// Create snmp_response_latency_seconds metric for gauge with timestamp
+	// Create snmp_response_latency_seconds metric for gauge with timestamp.
 	snmpRegistry.MustRegister(snmpCollectorInterface)
 
-	// Create snmp_response_duration_seconds for a histogram buckets of durations
+	// Create snmp_response_duration_seconds for a histogram buckets of durations.
 	snmpDurationHist = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:        "snmp_response_duration_seconds",
 			Help:        "SNMP packet response latency",
-			ConstLabels: snmpLabels,
+			ConstLabels: nil,
 			Buckets:     []float64{0.0005, 0.001, 0.0025, .005, .01, .025, .05, .1, .25, .5, 1},
-			//Buckets: prometheus.DefBuckets,  // or use the defaults
+			//Buckets: prometheus.DefBuckets,  // You could use the defaults instead.
 		},
 	)
 	snmpRegistry.MustRegister(snmpDurationHist)
 
-	// Collect the local version numbers
+	// Collect the local version numbers.
 	snmpRegistry.MustRegister(version.NewCollector("snmp"))
 }
 
