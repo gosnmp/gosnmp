@@ -111,15 +111,13 @@ func main() {
 		for i, variable := range result.Variables {
 			switch variable.Name {
 			case ".1.3.6.1.2.1.1.4.0":
-				// Store the contact string into our about labels for parsing
+				// Store the contact string into our about labels for parsing.
 				snmpInfoLabels["contact"] = string(variable.Value.([]byte))
 			case ".1.3.6.1.2.1.1.7.0":
-				// Store the sysServices into our about labels for parsing
+				// Store the sysServices into our about labels for parsing.
 				snmpInfoLabels["sysServices"] = strconv.FormatInt(g.ToBigInt(variable.Value).Int64(), 2)
 			default:
-				// ... or often you're just interested in numeric values.
-				// ToBigInt() will return the Value as a BigInt, for plugging
-				// into your calculations.
+				// ... or you've specified an OID but haven't caught it here.
 				fmt.Printf("%d: unmatched oid: %s  value: %v\n", i, variable.Name, variable.Value)
 			}
 
