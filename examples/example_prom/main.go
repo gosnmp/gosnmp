@@ -4,7 +4,7 @@
 
 /*
 
-This is an example of a Prometheus endpoing to query SNMP.  We provide prometheus
+This is an example of a Prometheus endpoint to query SNMP.  We provide prometheus
 a cached version of the values so that our SNMP endpoint is not hit should there be
 multiple queries over a short period of time.  Too many SNMP queries to older (and
 some newer routers) will cause the control plane to stop responding.
@@ -151,7 +151,7 @@ func SleepDuration(d string) (next time.Time) {
 		log.Fatalf("Invalid duration: %v", err)
 	}
 	next = time.Now()
-	next = next.Add(time.Duration(duration.Nanoseconds() - ((next.UnixNano()) % duration.Nanoseconds())))
+	next = next.Add(time.Duration(duration.Nanoseconds() - (next.UnixNano() % duration.Nanoseconds())))
 	time.Sleep(time.Until(next))
 	return
 }
@@ -176,7 +176,6 @@ func ObserveLatency(latency float64) {
 			prometheus.GaugeValue, latency,
 		),
 	)
-
 }
 
 func promInit() {
