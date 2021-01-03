@@ -4,12 +4,13 @@
 
 /*
 
-This is an example of a Prometheus endpoint to query SNMP.  Key points this example
-exemplifies are:
+This is an example of a Prometheus exporter to query SNMP.  This example provides
+a baseline for development.  Areas addressed in this example include:
 
 - Latency durations binned into buckets to make a histogram
+- Parse SNMP reply into prometheus info metric labels.
+- Latency statistics in both latest value and buckets to show trends over time
 - Prometheus gauge with a timestamp containing latency
-- Setting dynamic label values from the output of a SNMP query
 
 To run this, first edit the source to have the correct IP address,
 
@@ -135,7 +136,7 @@ func main() {
 }
 
 func promMapToSlice(inVarLbl map[string]string) (varLbl []string, varVal []string) {
-	// Simple function to break apart a map into key value pair slices before sending to Prometheus.
+	// Function to break apart a map into key value pair slices before sending to Prometheus.
 	for k, v := range inVarLbl {
 		varLbl = append(varLbl, k)
 		varVal = append(varVal, v)
