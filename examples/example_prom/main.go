@@ -9,11 +9,11 @@ a cached version of the values so that our SNMP endpoint is not hit should there
 multiple queries over a short period of time.  Too many SNMP queries to older (and
 some newer routers) will cause the control plane to stop responding.
 
-To run this, first edit the source to have the correct IP address
+To run this, first edit the source to have the correct IP address,
 
 $ go run main.go
 
-Then curl the http address like this:
+then curl the http address like this:
 
 $ curl localhost:8436/metrics
 # HELP snmp_about_info SNMP narrative metric with a default value of 1
