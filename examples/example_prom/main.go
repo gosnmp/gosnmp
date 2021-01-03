@@ -24,23 +24,23 @@ snmp_about_info{contact="contact",site="hq",sysServices="1001110",target="10.12.
 snmp_build_info{branch="",goversion="go1.15.2",revision="",version=""} 1
 # HELP snmp_response_duration_seconds SNMP packet response latency
 # TYPE snmp_response_duration_seconds histogram
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.0005"} 0
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.001"} 9
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.0025"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.005"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.01"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.025"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.05"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.1"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.25"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="0.5"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="1"} 10
-snmp_response_duration_seconds_bucket{site="hq",target="10.12.0.1",le="+Inf"} 10
-snmp_response_duration_seconds_sum{site="hq",target="10.12.0.1"} 0.007858001
-snmp_response_duration_seconds_count{site="hq",target="10.12.0.1"} 10
+snmp_response_duration_seconds_bucket{le="0.0005"} 0
+snmp_response_duration_seconds_bucket{le="0.001"} 9
+snmp_response_duration_seconds_bucket{le="0.0025"} 10
+snmp_response_duration_seconds_bucket{le="0.005"} 10
+snmp_response_duration_seconds_bucket{le="0.01"} 10
+snmp_response_duration_seconds_bucket{le="0.025"} 10
+snmp_response_duration_seconds_bucket{le="0.05"} 10
+snmp_response_duration_seconds_bucket{le="0.1"} 10
+snmp_response_duration_seconds_bucket{le="0.25"} 10
+snmp_response_duration_seconds_bucket{le="0.5"} 10
+snmp_response_duration_seconds_bucket{le="1"} 10
+snmp_response_duration_seconds_bucket{le="+Inf"} 10
+snmp_response_duration_seconds_sum 0.007858001
+snmp_response_duration_seconds_count 10
 # HELP snmp_response_latency_seconds SNMP packet response latency
 # TYPE snmp_response_latency_seconds gauge
-snmp_response_latency_seconds{site="hq",target="10.12.0.1"} 0.000714456 1609641200001
+snmp_response_latency_seconds 0.000714456 1609641200001
 
 */
 
