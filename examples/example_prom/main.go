@@ -91,10 +91,10 @@ func main() {
 	}()
 
 	for {
-		// We don't want this metrics tool to query our SNMP endpoints too quickly,
-		// as queries (ie those faster than 60s) to older (and some newer routers)
-		// will cause the control plane to stop responding.  Instead we will do our
-		// own queries at a defined interval and provide the latest cached value in
+		// We don't want this metrics tool to query our SNMP endpoints too quickly, as
+		// queries (ie those faster than 60s) to older (and some newer routers / SDN
+		// switches) will cause the control plane to stop responding.  Instead we will do
+		// our own queries at a defined interval and provide the latest cached value in
 		// the collection.  This also helps with making sure that the evaluations
 		// have temporal consistency in the latency bins as counts would not be evenly
 		// spaced in time.
