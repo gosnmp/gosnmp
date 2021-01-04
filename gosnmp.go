@@ -40,38 +40,38 @@ const (
 	udp = "udp"
 )
 
-// GoSNMP represents GoSNMP library state
+// GoSNMP represents GoSNMP library state.
 type GoSNMP struct {
 	mu sync.Mutex
 
-	// Conn is net connection to use, typically established using GoSNMP.Connect()
+	// Conn is net connection to use, typically established using GoSNMP.Connect().
 	Conn net.Conn
 
-	// Target is an ipv4 address
+	// Target is an ipv4 address.
 	Target string
 
-	// Port is a port
+	// Port is a port.
 	Port uint16
 
 	// Transport is the transport protocol to use ("udp" or "tcp"); if unset "udp" will be used.
 	Transport string
 
-	// Community is an SNMP Community string
+	// Community is an SNMP Community string.
 	Community string
 
-	// Version is an SNMP Version
+	// Version is an SNMP Version.
 	Version SnmpVersion
 
-	// Context allows for overall deadlines and cancellation
+	// Context allows for overall deadlines and cancellation.
 	Context context.Context
 
-	// Timeout is the timeout for one SNMP request/response
+	// Timeout is the timeout for one SNMP request/response.
 	Timeout time.Duration
 
-	// Set the number of retries to attempt
+	// Set the number of retries to attempt.
 	Retries int
 
-	// Double timeout in each retry
+	// Double timeout in each retry.
 	ExponentialTimeout bool
 
 	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
@@ -80,10 +80,31 @@ type GoSNMP struct {
 	Logger Logger
 
 	// loggingEnabled is set if the Logger isn't nil, otherwise any logging calls
-	// are ignored via shortcircuit
+	// are ignored via shortcircuit.
 	loggingEnabled bool
 
-	// MaxOids is the maximum number of oids allowed in a Get()
+	// Message hook methods allow passing in a functions at various points in the packet handling.
+	// For example, this can be used to collect packet timing, add metrics, or implement tracing.
+	/*
+
+
+	 */
+	// PreSend is called before a packet is sent.
+	PreSend func(*GoSNMP)
+
+	// OnSent is called when a packet is sent.
+	OnSent func(*GoSNMP)
+
+	// OnRecv is called when a packet is received.
+	OnRecv func(*GoSNMP)
+
+	// OnRetry is called when a retry attempt is done.
+	OnRetry func(*GoSNMP)
+
+	// OnFinish is called when the request completed.
+	OnFinish func(*GoSNMP)
+
+	// MaxOids is the maximum number of oids allowed in a Get().
 	// (default: MaxOids)
 	MaxOids int
 
@@ -93,7 +114,7 @@ type GoSNMP struct {
 	// See comments in https://github.com/gosnmp/gosnmp/issues/100
 	MaxRepetitions uint8
 
-	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*
+	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*.
 	// (default: 0 as per RFC 1905)
 	NonRepeaters int
 
@@ -104,28 +125,28 @@ type GoSNMP struct {
 	// - 'p,i,I,t,E' -> pull requests welcome
 	AppOpts map[string]interface{}
 
-	// Internal - used to sync requests to responses
+	// Internal - used to sync requests to responses.
 	requestID uint32
 	random    uint32
 
 	rxBuf *[rxBufSize]byte // has to be pointer due to https://github.com/golang/go/issues/11728
 
-	// MsgFlags is an SNMPV3 MsgFlags
+	// MsgFlags is an SNMPV3 MsgFlags.
 	MsgFlags SnmpV3MsgFlags
 
-	// SecurityModel is an SNMPV3 Security Model
+	// SecurityModel is an SNMPV3 Security Model.
 	SecurityModel SnmpV3SecurityModel
 
-	// SecurityParameters is an SNMPV3 Security Model parameters struct
+	// SecurityParameters is an SNMPV3 Security Model parameters struct.
 	SecurityParameters SnmpV3SecurityParameters
 
-	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU
+	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU.
 	ContextEngineID string
 
 	// ContextName is SNMPV3 ContextName in ScopedPDU
 	ContextName string
 
-	// Internal - used to sync requests to responses - snmpv3
+	// Internal - used to sync requests to responses - snmpv3.
 	msgID uint32
 }
 

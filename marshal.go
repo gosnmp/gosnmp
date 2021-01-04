@@ -137,6 +137,10 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	withContextDeadline := false
 	for retries := 0; ; retries++ {
 		if retries > 0 {
+			if x.OnRetry != nil {
+				x.OnRetry(x)
+			}
+
 			x.logPrintf("Retry number %d. Last error was: %v", retries, err)
 			if withContextDeadline && strings.Contains(err.Error(), "timeout") {
 				err = context.DeadlineExceeded
@@ -203,10 +207,16 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			break
 		}
 
+		if x.PreSend != nil {
+			x.PreSend(x)
+		}
 		x.logPrintf("SENDING PACKET: %#+v", *packetOut)
 		_, err = x.Conn.Write(outBuf)
 		if err != nil {
 			continue
+		}
+		if x.OnSent != nil {
+			x.OnSent(x)
 		}
 
 		// all sends wait for the return packet, except for SNMPv2Trap
@@ -235,6 +245,9 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			} else if err != nil {
 				// receive error. retrying won't help. abort
 				break
+			}
+			if x.OnRecv != nil {
+				x.OnRecv(x)
 			}
 			x.logPrintf("GET RESPONSE OK: %+v", resp)
 			result = new(SnmpPacket)
@@ -309,6 +322,9 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			continue
 		}
 
+		if x.OnFinish != nil {
+			x.OnFinish(x)
+		}
 		// Success!
 		return result, nil
 	}
