@@ -64,7 +64,7 @@ go get github.com/gosnmp/gosnmp
 
 # Documentation
 
-http://godoc.org/github.com/gosnmp/gosnmp
+https://pkg.go.dev/github.com/gosnmp/gosnmp
 
 # Usage
 
@@ -268,5 +268,5 @@ license.
 
 See the LICENSE file for more details.
 
-The remaining code is Copyright 2012-2020 the GoSNMP Authors - see
+The remaining code is Copyright 2012 the GoSNMP Authors - see
 AUTHORS.md for a list of authors.
