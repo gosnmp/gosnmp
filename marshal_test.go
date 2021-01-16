@@ -1435,7 +1435,8 @@ func TestSendOneRequest_dups(t *testing.T) {
 	}()
 
 	pdus := []SnmpPDU{{Name: ".1.2", Type: Null}}
-	reqPkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0) //not actually a GetResponse, but we need something our test server can unmarshal
+	// This is not actually a GetResponse, but we need something our test server can unmarshal.
+	reqPkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0)
 
 	_, err = x.sendOneRequest(reqPkt, true)
 	if err != nil {
@@ -1501,6 +1502,88 @@ func BenchmarkSendOneRequest(b *testing.B) {
 			b.Fatalf("error: %s", err)
 			return
 		}
+	}
+}
+
+func TestUnconnectedSocket_fail(t *testing.T) {
+	withUnconnectedSocket(t, false)
+}
+
+func TestUnconnectedSocket_success(t *testing.T) {
+	withUnconnectedSocket(t, true)
+}
+
+func withUnconnectedSocket(t *testing.T, enable bool) {
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	if err != nil {
+		t.Fatalf("udp4 error listening: %s", err)
+	}
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version:                 Version2c,
+		Target:                  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:                    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout:                 time.Millisecond * 100,
+		Retries:                 2,
+		UseUnconnectedUDPSocket: enable,
+	}
+	if err := x.Connect(); err != nil {
+		t.Fatalf("error connecting: %s", err)
+	}
+
+	go func() {
+		buf := make([]byte, 256)
+		for {
+			n, addr, err := srvr.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			buf := buf[:n]
+
+			var reqPkt SnmpPacket
+			var cursor int
+			cursor, err = x.unmarshalHeader(buf, &reqPkt)
+			if err != nil {
+				t.Errorf("error: %s", err)
+			}
+			err = x.unmarshalPayload(buf, cursor, &reqPkt)
+			if err != nil {
+				t.Errorf("error: %s", err)
+			}
+
+			rspPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{
+				{
+					Name:  ".1.2",
+					Type:  Integer,
+					Value: 123,
+				},
+			}, 0, 0)
+			rspPkt.RequestID = reqPkt.RequestID
+			outBuf, err := rspPkt.marshalMsg()
+			if err != nil {
+				t.Errorf("ERR: %s", err)
+			}
+			// Temporary socket will use different source port, it's enough to break
+			// connected socket reply filters.
+			nsock, err := net.ListenUDP("udp4", nil)
+			if err != nil {
+				t.Errorf("can't create temporary reply socket: %v", err)
+			}
+			nsock.WriteTo(outBuf, addr)
+			nsock.Close()
+		}
+	}()
+
+	pdus := []SnmpPDU{{Name: ".1.2", Type: Null}}
+	// This is not actually a GetResponse, but we need something our test server can unmarshal.
+	reqPkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0)
+
+	_, err = x.sendOneRequest(reqPkt, true)
+	if err != nil && enable {
+		t.Errorf("with unconnected socket enabled got unexpected error: %v", err)
+	} else if err == nil && !enable {
+		t.Errorf("with unconnected socket disabled didn't get an error")
 	}
 }
 

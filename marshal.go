@@ -211,7 +211,12 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			x.PreSend(x)
 		}
 		x.logPrintf("SENDING PACKET: %#+v", *packetOut)
-		_, err = x.Conn.Write(outBuf)
+		// If using UDP and unconnected socket, send packet directly to stored address.
+		if uconn, ok := x.Conn.(net.PacketConn); ok && x.uaddr != nil {
+			_, err = uconn.WriteTo(outBuf, x.uaddr)
+		} else {
+			_, err = x.Conn.Write(outBuf)
+		}
 		if err != nil {
 			continue
 		}
@@ -1163,7 +1168,15 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 
 // receive response from network and read into a byte array
 func (x *GoSNMP) receive() ([]byte, error) {
-	n, err := x.Conn.Read(x.rxBuf[:])
+	var n int
+	var err error
+	// If we are using UDP and unconnected socket, read the packet and
+	// disregard the source address.
+	if uconn, ok := x.Conn.(net.PacketConn); ok {
+		n, _, err = uconn.ReadFrom(x.rxBuf[:])
+	} else {
+		n, err = x.Conn.Read(x.rxBuf[:])
+	}
 	if err == io.EOF {
 		return nil, err
 	} else if err != nil {

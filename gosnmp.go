@@ -118,6 +118,12 @@ type GoSNMP struct {
 	// (default: 0 as per RFC 1905)
 	NonRepeaters int
 
+	// UseUnconnectedUDPSocket if set, changes net.Conn to be unconnected UDP socket.
+	// Some multi-homed network gear isn't smart enough to send SNMP responses
+	// from the address it received the requests on. To work around that,
+	// we open unconnected UDP socket and use sendto/recvfrom.
+	UseUnconnectedUDPSocket bool
+
 	// netsnmp has '-C APPOPTS - set various application specific behaviours'
 	//
 	// - 'c: do not check returned OIDs are increasing' - use AppOpts = map[string]interface{"c":true} with
@@ -148,6 +154,9 @@ type GoSNMP struct {
 
 	// Internal - used to sync requests to responses - snmpv3.
 	msgID uint32
+
+	// Internal - we use to send packets if using unconnected socket.
+	uaddr *net.UDPAddr
 }
 
 // Default connection settings
@@ -302,6 +311,26 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 func (x *GoSNMP) netConnect() error {
 	var err error
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
+
+	switch transport := x.Transport; transport {
+	case "udp", "udp4", "udp6":
+		if x.UseUnconnectedUDPSocket {
+			x.uaddr, err = net.ResolveUDPAddr(transport, addr)
+			if err != nil {
+				return err
+			}
+
+			// As far as I know, this should not be needed in production but only to
+			// work around tests: in tests we are opening fake destination with ends up
+			// being ipv4:0.0.0.0. You can't send packets from :: to 0.0.0.0.
+			if addr4 := x.uaddr.IP.To4(); addr4 != nil {
+				x.uaddr.IP = addr4
+				transport = "udp4"
+			}
+			x.Conn, err = net.ListenUDP(transport, nil)
+			return err
+		}
+	}
 	dialer := net.Dialer{Timeout: x.Timeout}
 	x.Conn, err = dialer.DialContext(x.Context, x.Transport, addr)
 	return err
