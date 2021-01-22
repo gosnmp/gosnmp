@@ -386,19 +386,29 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 				x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
 				return nil, err
 			}
+
 			result, err = x.sendOneRequest(packetOut, wait)
+			if err != nil {
+				x.logPrintf("ERROR  out-of-time-window retransmit error: %s", err)
+				return nil, err
+			}
 		}
 	}
 
 	// detect unknown engine id error and retransmit with updated engine id
 	if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.4.0" {
-		x.logPrint("WARNING detected unknown enginer id ERROR") //nolint:misspell
+		x.logPrint("WARNING detected unknown engine id ERROR") //nolint:misspell
 		err = x.updatePktSecurityParameters(packetOut)
 		if err != nil {
 			x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
 			return nil, err
 		}
+
 		result, err = x.sendOneRequest(packetOut, wait)
+		if err != nil {
+			x.logPrintf("ERROR  unknown engine id retransmit error: %s", err)
+			return nil, err
+		}
 	}
 	return result, err
 }
