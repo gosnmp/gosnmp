@@ -406,7 +406,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 
 		result, err = x.sendOneRequest(packetOut, wait)
 		if err != nil {
-			x.logPrintf("ERROR  unknown engine id retransmit error: %s", err)
+			x.logPrintf("ERROR unknown engine id retransmit error: %s", err)
 			return nil, err
 		}
 	}
