@@ -67,6 +67,21 @@ func setupConnection(t *testing.T) {
 	}
 }
 
+func setupConnectionInstance(gs *GoSNMP, t *testing.T) {
+	target, port := getTarget(t)
+
+	gs.Target = target
+	gs.Port = port
+
+	err := gs.Connect()
+	if err != nil {
+		if len(target) > 0 {
+			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?\n(err: %v)",
+				target, port, err)
+		}
+	}
+}
+
 func setupConnectionIPv4(t *testing.T) {
 	target, port := getTarget(t)
 
@@ -234,6 +249,20 @@ func TestGenericBulkWalk(t *testing.T) {
 	}
 	if len(result) <= 1 {
 		t.Fatalf("Expected multiple values, got %d", len(result))
+	}
+}
+
+func TestV1BulkWalkError(t *testing.T) {
+	g := &GoSNMP{
+		Version: Version1,
+	}
+	setupConnectionInstance(g, t)
+
+	g.Conn.Close()
+
+	_, err := g.BulkWalkAll("")
+	if err == nil {
+		t.Fatalf("BulkWalkAll() should fail in SNMPv1 but returned nil")
 	}
 }
 

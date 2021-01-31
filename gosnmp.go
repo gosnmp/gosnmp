@@ -450,6 +450,9 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 //
 // For maxRepetitions greater than 255, use BulkWalk() or BulkWalkAll()
 func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8) (result *SnmpPacket, err error) {
+	if x.Version == Version1 {
+		return nil, fmt.Errorf("GETBULK not supported in SNMPv1")
+	}
 	oidCount := len(oids)
 	if oidCount > x.MaxOids {
 		return nil, fmt.Errorf("oid count (%d) is greater than MaxOids (%d)",
