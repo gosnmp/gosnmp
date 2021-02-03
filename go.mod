@@ -1,4 +1,4 @@
-module github.com/soniah/gosnmp
+module github.com/kentik/gosnmp
 
 require (
 	github.com/golang/mock v1.2.0
