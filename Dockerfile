@@ -7,8 +7,11 @@ RUN apk add --no-cache  \
         gcc             \
         libc-dev        \
         make            \
+        net-snmp        \
+        net-snmp-tools  \
         python3         \
-        py3-pip
+        py3-pip         \
+        vim
 
 # add new user
 RUN addgroup -g 1001                \
@@ -18,6 +21,7 @@ RUN addgroup -g 1001                \
             -h /home/gosnmp         \
             -G gosnmp gosnmp
 
+RUN chmod -R a+rw /etc/snmp /var/lib/net-snmp/
 RUN pip install snmpsim
 
 # Copy local branch into container
