@@ -1,4 +1,4 @@
-FROM golang:1.14.4-alpine3.12
+FROM golang:1.15-alpine3.13
 
 # Install deps
 RUN apk add --no-cache  \
@@ -7,8 +7,12 @@ RUN apk add --no-cache  \
         gcc             \
         libc-dev        \
         make            \
+        net-snmp        \
+        net-snmp-tools  \
+        openssl-dev     \
         python3         \
-        py3-pip
+        py3-pip         \
+        vim
 
 # add new user
 RUN addgroup -g 1001                \
@@ -18,6 +22,7 @@ RUN addgroup -g 1001                \
             -h /home/gosnmp         \
             -G gosnmp gosnmp
 
+RUN chmod -R a+rw /etc/snmp /var/lib/net-snmp/
 RUN pip install snmpsim
 
 # Copy local branch into container
@@ -35,5 +40,6 @@ ENV GOSNMP_TARGET_IPV4=127.0.0.1
 ENV GOSNMP_PORT_IPV4=1024
 ENV GOSNMP_TARGET_IPV6='::1'
 ENV GOSNMP_PORT_IPV6=1024
+ENV GOSNMP_SNMPD=true
 
 ENTRYPOINT ["/go/src/github.com/gosnmp/gosnmp/build_tests.sh"]
