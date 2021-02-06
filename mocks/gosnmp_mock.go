@@ -93,7 +93,7 @@ func (mr *MockHandlerMockRecorder) Get(oids interface{}) *gomock.Call {
 }
 
 // GetBulk mocks base method
-func (m *MockHandler) GetBulk(oids []string, nonRepeaters, maxRepetitions uint8) (*gosnmp.SnmpPacket, error) {
+func (m *MockHandler) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint32) (*gosnmp.SnmpPacket, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBulk", oids, nonRepeaters, maxRepetitions)
 	ret0, _ := ret[0].(*gosnmp.SnmpPacket)
@@ -485,10 +485,10 @@ func (mr *MockHandlerMockRecorder) SetMaxOids(maxOids interface{}) *gomock.Call 
 }
 
 // MaxRepetitions mocks base method
-func (m *MockHandler) MaxRepetitions() uint8 {
+func (m *MockHandler) MaxRepetitions() uint32 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxRepetitions")
-	ret0, _ := ret[0].(uint8)
+	ret0, _ := ret[0].(uint32)
 	return ret0
 }
 
@@ -499,7 +499,7 @@ func (mr *MockHandlerMockRecorder) MaxRepetitions() *gomock.Call {
 }
 
 // SetMaxRepetitions mocks base method
-func (m *MockHandler) SetMaxRepetitions(maxRepetitions uint8) {
+func (m *MockHandler) SetMaxRepetitions(maxRepetitions uint32) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetMaxRepetitions", maxRepetitions)
 }

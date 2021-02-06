@@ -51,7 +51,7 @@ type SnmpPacket struct {
 	Error              SNMPError
 	ErrorIndex         uint8
 	NonRepeaters       uint8
-	MaxRepetitions     uint8
+	MaxRepetitions     uint32
 	Variables          []SnmpPDU
 	Logger             Logger // interface
 
@@ -536,7 +536,15 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		buf.Write([]byte{2, 1, packet.NonRepeaters})
 
 		// max repetitions
-		buf.Write([]byte{2, 1, packet.MaxRepetitions})
+		maxRepetitions, err := marshalUint32(packet.MaxRepetitions)
+		if err != nil {
+			return nil, fmt.Errorf("marshalPDU: unable to marshal maxRepetitions to uint32: %s", err.Error())
+		}
+
+		buf.Write([]byte{2, byte(len(maxRepetitions))})
+		if err = binary.Write(buf, binary.BigEndian, maxRepetitions); err != nil {
+			return nil, fmt.Errorf("marshalPDU: unable to marshal maxRepetitions: %s", err.Error())
+		}
 
 	case Trap:
 		// write SNMP V1 Trap Header fields
@@ -551,7 +559,6 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		// requestid
 		buf.Write([]byte{2, 4})
 		err := binary.Write(buf, binary.BigEndian, packet.RequestID)
-
 		if err != nil {
 			return nil, fmt.Errorf("unable to marshal OID: %s", err.Error())
 		}
@@ -975,8 +982,8 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 		}
 
-		if maxRepetitions, ok := rawMaxRepetitions.(int); ok {
-			response.MaxRepetitions = uint8(maxRepetitions)
+		if maxRepetitions, ok := rawMaxRepetitions.(uint32); ok {
+			response.MaxRepetitions = (maxRepetitions & 0x7FFFFFFF)
 		}
 	} else {
 		// Parse Error-Status

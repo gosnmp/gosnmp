@@ -37,9 +37,7 @@ type Handler interface {
 	Get(oids []string) (result *SnmpPacket, err error)
 
 	// GetBulk sends an SNMP GETBULK request
-	//
-	// For maxRepetitions greater than 255, use BulkWalk() or BulkWalkAll()
-	GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8) (result *SnmpPacket, err error)
+	GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint32) (result *SnmpPacket, err error)
 
 	// GetNext sends an SNMP GETNEXT request
 	GetNext(oids []string) (result *SnmpPacket, err error)
@@ -144,10 +142,10 @@ type Handler interface {
 	SetMaxOids(maxOids int)
 
 	// MaxRepetitions gets the maxRepetitions
-	MaxRepetitions() uint8
+	MaxRepetitions() uint32
 
 	// SetMaxRepetitions sets the maxRepetitions
-	SetMaxRepetitions(maxRepetitions uint8)
+	SetMaxRepetitions(maxRepetitions uint32)
 
 	// NonRepeaters gets the nonRepeaters
 	NonRepeaters() int
@@ -278,12 +276,13 @@ func (x *snmpHandler) SetMaxOids(maxOids int) {
 	x.GoSNMP.MaxOids = maxOids
 }
 
-func (x *snmpHandler) MaxRepetitions() uint8 {
-	return x.GoSNMP.MaxRepetitions
+func (x *snmpHandler) MaxRepetitions() uint32 {
+	return (x.GoSNMP.MaxRepetitions & 0x7FFFFFFF)
 }
 
-func (x *snmpHandler) SetMaxRepetitions(maxRepetitions uint8) {
-	x.GoSNMP.MaxRepetitions = maxRepetitions
+// SetMaxRepetitions wraps to 0 at max int32.
+func (x *snmpHandler) SetMaxRepetitions(maxRepetitions uint32) {
+	x.GoSNMP.MaxRepetitions = (maxRepetitions & 0x7FFFFFFF)
 }
 
 func (x *snmpHandler) NonRepeaters() int {
