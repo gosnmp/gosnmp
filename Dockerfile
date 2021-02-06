@@ -1,4 +1,4 @@
-FROM golang:1.14.4-alpine3.12
+FROM golang:1.15-alpine3.13
 
 # Install deps
 RUN apk add --no-cache  \
@@ -9,6 +9,7 @@ RUN apk add --no-cache  \
         make            \
         net-snmp        \
         net-snmp-tools  \
+        openssl-dev     \
         python3         \
         py3-pip         \
         vim
@@ -39,5 +40,6 @@ ENV GOSNMP_TARGET_IPV4=127.0.0.1
 ENV GOSNMP_PORT_IPV4=1024
 ENV GOSNMP_TARGET_IPV6='::1'
 ENV GOSNMP_PORT_IPV6=1024
+ENV GOSNMP_SNMPD=true
 
 ENTRYPOINT ["/go/src/github.com/gosnmp/gosnmp/build_tests.sh"]

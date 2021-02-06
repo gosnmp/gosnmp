@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 if [ "${GOSNMP_SNMPD}" != "" ]; then
-    echo "Using real net-snmp server"
+    echo "Using $(snmpd --version | awk /version:/)"
     ./snmp_users.sh
     sed -i -e 's/^agentAddress.*/agentAddress udp:127.0.0.1:1024/' /etc/snmp/snmpd.conf
     sed -i -e 's/ localhost / 127.0.0.1 /' /etc/snmp/snmpd.conf
@@ -9,7 +9,7 @@ if [ "${GOSNMP_SNMPD}" != "" ]; then
     sed -i -e 's/.*master\s*agentx//' /etc/snmp/snmpd.conf
     snmpd
 else
-    echo "Using snmpsimd simultator"
+    echo "Using snmpsimd simulator"
     snmpsimd.py --logging-method=null --agent-udpv4-endpoint=127.0.0.1:1024 &
 fi
 
