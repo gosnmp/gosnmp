@@ -4,6 +4,34 @@ package gosnmp
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[EndOfContents-0]
+	_ = x[UnknownType-0]
+	_ = x[Boolean-1]
+	_ = x[Integer-2]
+	_ = x[BitString-3]
+	_ = x[OctetString-4]
+	_ = x[Null-5]
+	_ = x[ObjectIdentifier-6]
+	_ = x[ObjectDescription-7]
+	_ = x[IPAddress-64]
+	_ = x[Counter32-65]
+	_ = x[Gauge32-66]
+	_ = x[TimeTicks-67]
+	_ = x[Opaque-68]
+	_ = x[NsapAddress-69]
+	_ = x[Counter64-70]
+	_ = x[Uinteger32-71]
+	_ = x[OpaqueFloat-120]
+	_ = x[OpaqueDouble-121]
+	_ = x[NoSuchObject-128]
+	_ = x[NoSuchInstance-129]
+	_ = x[EndOfMibView-130]
+}
+
 const (
 	_Asn1BER_name_0 = "EndOfContentsBooleanIntegerBitStringOctetStringNullObjectIdentifierObjectDescription"
 	_Asn1BER_name_1 = "IPAddressCounter32Gauge32TimeTicksOpaqueNsapAddressCounter64Uinteger32"
@@ -20,7 +48,7 @@ var (
 
 func (i Asn1BER) String() string {
 	switch {
-	case 0 <= i && i <= 7:
+	case i <= 7:
 		return _Asn1BER_name_0[_Asn1BER_index_0[i]:_Asn1BER_index_0[i+1]]
 	case 64 <= i && i <= 71:
 		i -= 64
