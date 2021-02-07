@@ -21,10 +21,10 @@ const _SnmpV3AuthProtocol_name = "NoAuthMD5SHASHA224SHA256SHA384SHA512"
 
 var _SnmpV3AuthProtocol_index = [...]uint8{0, 6, 9, 12, 18, 24, 30, 36}
 
-func (authProtocol SnmpV3AuthProtocol) String() string {
-	authProtocol -= 1
-	if authProtocol >= SnmpV3AuthProtocol(len(_SnmpV3AuthProtocol_index)-1) {
-		return "SnmpV3AuthProtocol(" + strconv.FormatInt(int64(authProtocol+1), 10) + ")"
+func (i SnmpV3AuthProtocol) String() string {
+	i -= 1
+	if i >= SnmpV3AuthProtocol(len(_SnmpV3AuthProtocol_index)-1) {
+		return "SnmpV3AuthProtocol(" + strconv.FormatInt(int64(i+1), 10) + ")"
 	}
-	return _SnmpV3AuthProtocol_name[_SnmpV3AuthProtocol_index[authProtocol]:_SnmpV3AuthProtocol_index[authProtocol+1]]
+	return _SnmpV3AuthProtocol_name[_SnmpV3AuthProtocol_index[i]:_SnmpV3AuthProtocol_index[i+1]]
 }
