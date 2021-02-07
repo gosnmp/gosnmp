@@ -7,6 +7,15 @@ executors:
     - image: cimg/go:1.15
 
 jobs:
+  generate:
+    executor: golang
+    steps:
+    - checkout
+    - run: cd /tmp && go get golang.org/x/tools/cmd/stringer
+    - run: cd /tmp && go get github.com/golang/mock/mockgen
+    - run: go generate
+    - run: git diff --exit-code
+
   lint:
     executor: golang
     steps:
@@ -54,6 +63,7 @@ workflows:
   version: 2
   test:
     jobs:
+    - generate
     - lint
     - test:
         matrix:
