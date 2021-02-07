@@ -5,6 +5,10 @@
 * [ENHANCEMENT]
 * [BUGFIX]
 
+NOTE:
+This release changes the ``MaxRepetitions`` type to uint32.
+
+* [CHANGE] Fix GetBulkRequest MaxRepetitions signedness issue in marshalPDU() #293
 * [BUGFIX] Add bounds checking for reqID and msgID #273
 
 ## v1.29.0

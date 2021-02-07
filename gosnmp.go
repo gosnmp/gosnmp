@@ -112,7 +112,7 @@ type GoSNMP struct {
 	// Unless MaxRepetitions is specified it will use defaultMaxRepetitions (50)
 	// This may cause issues with some devices, if so set MaxRepetitions lower.
 	// See comments in https://github.com/gosnmp/gosnmp/issues/100
-	MaxRepetitions uint8
+	MaxRepetitions uint32
 
 	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*.
 	// (default: 0 as per RFC 1905)
@@ -374,7 +374,7 @@ func (x *GoSNMP) validateParameters() error {
 	return nil
 }
 
-func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) *SnmpPacket {
+func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint32) *SnmpPacket {
 	var newSecParams SnmpV3SecurityParameters
 	if x.SecurityParameters != nil {
 		newSecParams = x.SecurityParameters.Copy()
@@ -391,7 +391,7 @@ func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint
 		ErrorIndex:         0,
 		PDUType:            pdutype,
 		NonRepeaters:       nonRepeaters,
-		MaxRepetitions:     maxRepetitions,
+		MaxRepetitions:     (maxRepetitions & 0x7FFFFFFF),
 		Variables:          pdus,
 	}
 }
@@ -449,7 +449,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 // GetBulk sends an SNMP GETBULK request
 //
 // For maxRepetitions greater than 255, use BulkWalk() or BulkWalkAll()
-func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8) (result *SnmpPacket, err error) {
+func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint32) (result *SnmpPacket, err error) {
 	if x.Version == Version1 {
 		return nil, fmt.Errorf("GETBULK not supported in SNMPv1")
 	}
@@ -473,7 +473,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint8
 // SnmpEncodePacket exposes SNMP packet generation to external callers.
 // This is useful for generating traffic for use over separate transport
 // stacks and creating traffic samples for test purposes.
-func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint8) ([]byte, error) {
+func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint32) ([]byte, error) {
 	err := x.validateParameters()
 	if err != nil {
 		return []byte{}, err
@@ -553,7 +553,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 
 // SetRequestID sets the base ID value for future requests
 func (x *GoSNMP) SetRequestID(reqID uint32) {
-	x.requestID = reqID
+	x.requestID = reqID & 0x7fffffff
 }
 
 // SetMsgID sets the base ID value for future messages
