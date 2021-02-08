@@ -360,7 +360,7 @@ func marshalUint64(v interface{}) ([]byte, error) {
 	return bytes.TrimLeft(bs, "\x00"), nil
 }
 
-// Counter32, Gauge32, TimeTicks, Unsigned32
+// Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
 func marshalUint32(v interface{}) ([]byte, error) {
 	bs := make([]byte, 4)
 
@@ -370,9 +370,10 @@ func marshalUint32(v interface{}) ([]byte, error) {
 		source = val
 	case uint:
 		source = uint32(val)
+	case uint8:
+		source = uint32(val)
 	// We could do others here, but coercing from anything else is dangerous.
-	// Even uint could be 64 bits, though in practice nothing we work with here
-	// is.
+	// Even uint could be 64 bits, though in practice nothing we work with is.
 	default:
 		return nil, fmt.Errorf("unable to marshal %T to uint32", v)
 	}
