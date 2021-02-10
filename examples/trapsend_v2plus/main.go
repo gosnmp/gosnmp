@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	g "github.com/gosnmp/gosnmp"
+	g "github.com/balasankarrajaguru/gosnmp"
 )
 
 func main() {
