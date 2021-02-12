@@ -535,23 +535,23 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		// non repeaters
 		nonRepeaters, err := marshalUint32(packet.NonRepeaters)
 		if err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal NonRepeaters to uint32: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal NonRepeaters to uint32: %w", err)
 		}
 
 		buf.Write([]byte{2, byte(len(nonRepeaters))})
 		if err = binary.Write(buf, binary.BigEndian, nonRepeaters); err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal NonRepeaters: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal NonRepeaters: %w", err)
 		}
 
 		// max repetitions
 		maxRepetitions, err := marshalUint32(packet.MaxRepetitions)
 		if err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal maxRepetitions to uint32: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal maxRepetitions to uint32: %w", err)
 		}
 
 		buf.Write([]byte{2, byte(len(maxRepetitions))})
 		if err = binary.Write(buf, binary.BigEndian, maxRepetitions); err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal maxRepetitions: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal maxRepetitions: %w", err)
 		}
 
 	case Trap:
@@ -568,36 +568,36 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		buf.Write([]byte{2, 4})
 		err := binary.Write(buf, binary.BigEndian, packet.RequestID)
 		if err != nil {
-			return nil, fmt.Errorf("unable to marshal OID: %s", err.Error())
+			return nil, fmt.Errorf("unable to marshal OID: %w", err)
 		}
 
 		// error status
 		errorStatus, err := marshalUint32(uint8(packet.Error))
 		if err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal errorStatus to uint32: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal errorStatus to uint32: %w", err)
 		}
 
 		buf.Write([]byte{2, byte(len(errorStatus))})
 		if err = binary.Write(buf, binary.BigEndian, errorStatus); err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal errorStatus: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal errorStatus: %w", err)
 		}
 
 		// error index
 		errorIndex, err := marshalUint32(packet.ErrorIndex)
 		if err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal errorIndex to uint32: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal errorIndex to uint32: %w", err)
 		}
 
 		buf.Write([]byte{2, byte(len(errorIndex))})
 		if err = binary.Write(buf, binary.BigEndian, errorIndex); err != nil {
-			return nil, fmt.Errorf("marshalPDU: unable to marshal errorIndex: %s", err.Error())
+			return nil, fmt.Errorf("marshalPDU: unable to marshal errorIndex: %w", err)
 		}
 	}
 
 	// build varbind list
 	vbl, err := packet.marshalVBL()
 	if err != nil {
-		return nil, fmt.Errorf("marshalPDU: unable to marshal varbind list: %s", err.Error())
+		return nil, fmt.Errorf("marshalPDU: unable to marshal varbind list: %w", err)
 	}
 	buf.Write(vbl)
 
@@ -606,7 +606,7 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 	// calculate pdu length
 	bufLengthBytes, err := marshalLength(buf.Len())
 	if err != nil {
-		return nil, fmt.Errorf("marshalPDU: unable to marshal pdu length: %s", err.Error())
+		return nil, fmt.Errorf("marshalPDU: unable to marshal pdu length: %w", err)
 	}
 	// write request type
 	pdu.WriteByte(byte(packet.PDUType))
@@ -614,7 +614,7 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 	pdu.Write(bufLengthBytes)
 	// write the tail (buf)
 	if _, err = buf.WriteTo(pdu); err != nil {
-		return nil, fmt.Errorf("marshalPDU: unable to marshal pdu: %s", err.Error())
+		return nil, fmt.Errorf("marshalPDU: unable to marshal pdu: %w", err)
 	}
 
 	return pdu.Bytes(), nil
