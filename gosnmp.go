@@ -284,13 +284,13 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 
 	x.Transport += networkSuffix
 	if err = x.netConnect(); err != nil {
-		return fmt.Errorf("error establishing connection to host: %s", err.Error())
+		return fmt.Errorf("error establishing connection to host: %w", err)
 	}
 
 	if x.random == 0 {
 		n, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32)) // returns a uniform random value in [0, 2147483647].
 		if err != nil {
-			return fmt.Errorf("error occurred while generating random: %s", err.Error())
+			return fmt.Errorf("error occurred while generating random: %w", err)
 		}
 		x.random = uint32(n.Uint64())
 	}
@@ -527,7 +527,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	var cursor int
 	cursor, err = x.unmarshalHeader(resp, result)
 	if err != nil {
-		err = fmt.Errorf("unable to decode packet header: %s", err.Error())
+		err = fmt.Errorf("unable to decode packet header: %w", err)
 		return result, err
 	}
 
@@ -540,7 +540,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 
 	err = x.unmarshalPayload(resp, cursor, result)
 	if err != nil {
-		err = fmt.Errorf("unable to decode packet body: %s", err.Error())
+		err = fmt.Errorf("unable to decode packet body: %w", err)
 		return result, err
 	}
 

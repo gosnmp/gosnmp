@@ -474,14 +474,14 @@ func marshalOID(oid string) ([]byte, error) {
 	for i := 0; i < len(oidParts); i++ {
 		oidBytes[i], err = strconv.Atoi(oidParts[i])
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse OID: %s", err.Error())
+			return nil, fmt.Errorf("unable to parse OID: %w", err)
 		}
 	}
 
 	mOid, err := marshalObjectIdentifier(oidBytes)
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to marshal OID: %s", err.Error())
+		return nil, fmt.Errorf("unable to marshal OID: %w", err)
 	}
 
 	return mOid, err
