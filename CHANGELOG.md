@@ -6,10 +6,21 @@
 * [BUGFIX]
 
 NOTE:
-This release changes the ``MaxRepetitions`` type to uint32.
 
-* [CHANGE] Fix GetBulkRequest MaxRepetitions signedness issue in marshalPDU() #293
+## v1.30.0
+
+NOTE: This release changes the MaxRepetitions type to uint32.
+
 * [BUGFIX] Add bounds checking for reqID and msgID #273
+* [FEATURE] New packet inspection hook methods for in-flight measurements #276
+* [ENHANCEMENT] Support for local e2e tests against net-snmpd #292
+* [CHANGE] Fix GetBulkRequest MaxRepetitions signedness issue in marshalPDU() #293
+* [CHANGE] mocks/gosnmp_mock.go: Update UnmarshalTrap mock base method #294
+* [BUGFIX] marshal.go: Fix signedness issue in marshalPDU() #295
+* [ENHANCEMENT] marshalPDU(): stricter integer conversion #301
+* [ENHANCEMENT] Use Go 1.13 error wrapping #304
+* [ENHANCEMENT] walk.go: improve BulkWalk error handling #306
+* [ENHANCEMENT] MaxRepetitions now allows values between 0..2147483647 and wraps to 0 at max int32.
 
 ## v1.29.0
 

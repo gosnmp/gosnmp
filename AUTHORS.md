@@ -69,7 +69,9 @@
 * nikandfor nikandfor@gmail.com
 * Patrick Hemmer patrick.hemmer@gmail.com
 * Patryk Najda ptrknjd@gmail.com
+* Paul Komkoff i@stingr.net
 * Peter Vypov peter.vypov@gmail.com
+* pschou pschou@users.noreply.github.com
 * Rene Fragoso ctrlrsf@gmail.com
 * rjammalamadaka rajanikanth.jammalamadaka@mandiant.com
 * Ross Wilson ross.wilson@iomart.com
@@ -78,7 +80,6 @@
 * Stefan Hauth stefan.hauth@dynatrace.com
 * Tara taramerin@gmail.com
 * The Binary binary4bytes@gmail.com
-* Tim Rots 8184932+TimRots@users.noreply.github.com
 * Tim Rots tim.rots@protonmail.ch
 * toni-moreno toni.moreno@gmail.com
 * Vallimamod Abdullah vma@users.noreply.github.com
