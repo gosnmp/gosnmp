@@ -344,7 +344,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 
 	rawMsgID, count, err := parseRawField(x.Logger, packet[cursor:], "msgID")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 message ID: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
@@ -358,7 +358,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 
 	rawMsgMaxSize, count, err := parseRawField(x.Logger, packet[cursor:], "msgMaxSize")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgMaxSize: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 msgMaxSize: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
@@ -372,7 +372,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 
 	rawMsgFlags, count, err := parseRawField(x.Logger, packet[cursor:], "msgFlags")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
@@ -386,7 +386,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 
 	rawSecModel, count, err := parseRawField(x.Logger, packet[cursor:], "msgSecurityModel")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgSecModel: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 msgSecModel: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
@@ -454,7 +454,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 
 		rawContextEngineID, count, err := parseRawField(x.Logger, packet[cursor:], "contextEngineID")
 		if err != nil {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextEngineID: %s", err.Error())
+			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextEngineID: %w", err)
 		}
 		cursor += count
 		if cursor > len(packet) {
@@ -467,7 +467,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		}
 		rawContextName, count, err := parseRawField(x.Logger, packet[cursor:], "contextName")
 		if err != nil {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextName: %s", err.Error())
+			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextName: %w", err)
 		}
 		cursor += count
 		if cursor > len(packet) {
