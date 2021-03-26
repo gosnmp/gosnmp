@@ -7,6 +7,8 @@
 
 NOTE:
 
+* [BUGFIX] Add validation to prevent calling updatePktSecurityParameters with non v3 packet #314
+
 ## v1.30.0
 
 NOTE: This release changes the MaxRepetitions type to uint32.
