@@ -5,7 +5,11 @@
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## Unreleased
+
 NOTE:
+
+* [BUGFIX] Add validation to prevent calling updatePktSecurityParameters with non v3 packet #251 #314
 
 ## v1.30.0
 

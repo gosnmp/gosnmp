@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/asn1"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -97,7 +98,28 @@ const (
 	GetBulkRequest PDUType = 0xa5
 	InformRequest  PDUType = 0xa6
 	SNMPv2Trap     PDUType = 0xa7 // v2c, v3
-	Report         PDUType = 0xa8
+	Report         PDUType = 0xa8 // v3
+)
+
+// SNMPv3: User-based Security Model Report PDUs and
+// error types as per https://tools.ietf.org/html/rfc3414
+const (
+	usmStatsUnsupportedSecLevels = ".1.3.6.1.6.3.15.1.1.1.0"
+	usmStatsNotInTimeWindows     = ".1.3.6.1.6.3.15.1.1.2.0"
+	usmStatsUnknownUserNames     = ".1.3.6.1.6.3.15.1.1.3.0"
+	usmStatsUnknownEngineIDs     = ".1.3.6.1.6.3.15.1.1.4.0"
+	usmStatsWrongDigests         = ".1.3.6.1.6.3.15.1.1.5.0"
+	usmStatsDecryptionErrors     = ".1.3.6.1.6.3.15.1.1.6.0"
+)
+
+var (
+	ErrDecryption           = errors.New("decryption error")
+	ErrNotInTimeWindow      = errors.New("not in time window")
+	ErrUnknownEngineID      = errors.New("unknown engine id")
+	ErrUnknownReportPDU     = errors.New("unknown report pdu")
+	ErrUnknownSecurityLevel = errors.New("unknown security level")
+	ErrUnknownUsername      = errors.New("unknown username")
+	ErrWrongDigest          = errors.New("wrong digest")
 )
 
 const rxBufSize = 65535 // max size of IPv4 & IPv6 packet
@@ -295,15 +317,39 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				continue
 			}
 
-			// Detect usmStats report PDUs and go out of this function with all data
-			// (usmStatsNotInTimeWindows [1.3.6.1.6.3.15.1.1.2.0] will be handled by the calling
-			// function, and retransmitted.  All others need to be handled by user code)
-			if result.Version == Version3 && len(result.Variables) == 1 && result.PDUType == Report {
+			// While Report PDU was defined by RFC 1905 as part of SNMPv2, it was never
+			// used until SNMPv3. Report PDU's allow a SNMP engine to tell another SNMP
+			// engine that an error was detected while processing an SNMP message.
+			//
+			// The format for a Report PDU is
+			// -----------------------------------
+			// | 0xA8 | reqid | 0 | 0 | varbinds |
+			// -----------------------------------
+			// where:
+			// - PDU type 0xA8 indicates a Report PDU.
+			// - reqid is either:
+			//    The request identifier of the message that triggered the report
+			//    or zero if the request identifier cannot be extracted.
+			// - The variable bindings will contain a single object identifier and its value
+			//
+			// usmStatsNotInTimeWindows and usmStatsUnknownEngineIDs are recoverable errors
+			// and will be retransmitted, for others we return the result with an error.
+			if result.Version == Version3 && result.PDUType == Report && len(result.Variables) == 1 {
 				switch result.Variables[0].Name {
-				case ".1.3.6.1.6.3.15.1.1.1.0", ".1.3.6.1.6.3.15.1.1.2.0",
-					".1.3.6.1.6.3.15.1.1.3.0", ".1.3.6.1.6.3.15.1.1.4.0",
-					".1.3.6.1.6.3.15.1.1.5.0", ".1.3.6.1.6.3.15.1.1.6.0":
+				case usmStatsUnsupportedSecLevels:
+					return result, ErrUnknownSecurityLevel
+				case usmStatsNotInTimeWindows:
 					break waitingResponse
+				case usmStatsUnknownUserNames:
+					return result, ErrUnknownUsername
+				case usmStatsUnknownEngineIDs:
+					break waitingResponse
+				case usmStatsWrongDigests:
+					return result, ErrWrongDigest
+				case usmStatsDecryptionErrors:
+					return result, ErrDecryption
+				default:
+					return result, ErrUnknownReportPDU
 				}
 			}
 
@@ -378,36 +424,34 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 		x.logPrintf("SEND STORE SECURITY PARAMS from result: %+v", result)
 		err = x.storeSecurityParameters(result)
 
-		// detect out-of-time-window error and retransmit with updated auth engine parameters
-		if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.2.0" {
-			x.logPrint("WARNING detected out-of-time-window ERROR")
-			err = x.updatePktSecurityParameters(packetOut)
-			if err != nil {
-				x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
-				return nil, err
+		if result.PDUType == Report && len(result.Variables) == 1 {
+			switch result.Variables[0].Name {
+			case usmStatsNotInTimeWindows:
+				x.logPrint("WARNING detected out-of-time-window ERROR")
+				if err = x.updatePktSecurityParameters(packetOut); err != nil {
+					x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
+					return nil, err
+				}
+				// retransmit with updated auth engine params
+				result, err = x.sendOneRequest(packetOut, wait)
+				if err != nil {
+					x.logPrintf("ERROR  out-of-time-window retransmit error: %s", err)
+					return result, ErrNotInTimeWindow
+				}
+
+			case usmStatsUnknownEngineIDs:
+				x.logPrint("WARNING detected unknown engine id ERROR")
+				if err = x.updatePktSecurityParameters(packetOut); err != nil {
+					x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
+					return nil, err
+				}
+				// retransmit with updated engine id
+				result, err = x.sendOneRequest(packetOut, wait)
+				if err != nil {
+					x.logPrintf("ERROR unknown engine id retransmit error: %s", err)
+					return result, ErrUnknownEngineID
+				}
 			}
-
-			result, err = x.sendOneRequest(packetOut, wait)
-			if err != nil {
-				x.logPrintf("ERROR  out-of-time-window retransmit error: %s", err)
-				return nil, err
-			}
-		}
-	}
-
-	// detect unknown engine id error and retransmit with updated engine id
-	if len(result.Variables) == 1 && result.Variables[0].Name == ".1.3.6.1.6.3.15.1.1.4.0" {
-		x.logPrint("WARNING detected unknown engine id ERROR")
-		err = x.updatePktSecurityParameters(packetOut)
-		if err != nil {
-			x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
-			return nil, err
-		}
-
-		result, err = x.sendOneRequest(packetOut, wait)
-		if err != nil {
-			x.logPrintf("ERROR unknown engine id retransmit error: %s", err)
-			return nil, err
 		}
 	}
 	return result, err
