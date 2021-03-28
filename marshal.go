@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/asn1"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -100,8 +101,8 @@ const (
 	Report         PDUType = 0xa8 // v3
 )
 
-// SNMPv3: User-based Security Model Report PDUs
-// as per https://tools.ietf.org/html/rfc3414.html
+// SNMPv3: User-based Security Model Report PDUs and
+// error types as per https://tools.ietf.org/html/rfc3414
 const (
 	usmStatsUnsupportedSecLevels = ".1.3.6.1.6.3.15.1.1.1.0"
 	usmStatsNotInTimeWindows     = ".1.3.6.1.6.3.15.1.1.2.0"
@@ -109,6 +110,16 @@ const (
 	usmStatsUnknownEngineIDs     = ".1.3.6.1.6.3.15.1.1.4.0"
 	usmStatsWrongDigests         = ".1.3.6.1.6.3.15.1.1.5.0"
 	usmStatsDecryptionErrors     = ".1.3.6.1.6.3.15.1.1.6.0"
+)
+
+var (
+	ErrDecryption           = errors.New("decryption error")
+	ErrNotInTimeWindow      = errors.New("not in time window")
+	ErrUnknownEngineID      = errors.New("unknown engine id")
+	ErrUnknownReportPDU     = errors.New("unknown report pdu")
+	ErrUnknownSecurityLevel = errors.New("unknown security level")
+	ErrUnknownUsername      = errors.New("unknown username")
+	ErrWrongDigest          = errors.New("wrong digest")
 )
 
 const rxBufSize = 65535 // max size of IPv4 & IPv6 packet
@@ -326,19 +337,19 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			if result.Version == Version3 && result.PDUType == Report && len(result.Variables) == 1 {
 				switch result.Variables[0].Name {
 				case usmStatsUnsupportedSecLevels:
-					return result, fmt.Errorf("error: unknown security level")
+					return result, ErrUnknownSecurityLevel
 				case usmStatsNotInTimeWindows:
 					break waitingResponse
 				case usmStatsUnknownUserNames:
-					return result, fmt.Errorf("error: unknown username")
+					return result, ErrUnknownUsername
 				case usmStatsUnknownEngineIDs:
 					break waitingResponse
 				case usmStatsWrongDigests:
-					return result, fmt.Errorf("error: wrong digest")
+					return result, ErrWrongDigest
 				case usmStatsDecryptionErrors:
-					return result, fmt.Errorf("error: decryption error")
+					return result, ErrDecryption
 				default:
-					return result, fmt.Errorf("error: received unknown Report PDU %v", result.Variables[0].Name)
+					return result, ErrUnknownReportPDU
 				}
 			}
 
@@ -390,7 +401,6 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
 	}
 
-	// detected unknown engine id error,
 	if x.Retries < 0 {
 		x.Retries = 0
 	}
@@ -414,11 +424,9 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 		x.logPrintf("SEND STORE SECURITY PARAMS from result: %+v", result)
 		err = x.storeSecurityParameters(result)
 
-		// v3: check for recoverable errors
 		if result.PDUType == Report && len(result.Variables) == 1 {
 			switch result.Variables[0].Name {
 			case usmStatsNotInTimeWindows:
-				// detected out-of-time-window error,
 				x.logPrint("WARNING detected out-of-time-window ERROR")
 				if err = x.updatePktSecurityParameters(packetOut); err != nil {
 					x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
@@ -428,11 +436,10 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 				result, err = x.sendOneRequest(packetOut, wait)
 				if err != nil {
 					x.logPrintf("ERROR  out-of-time-window retransmit error: %s", err)
-					return result, err
+					return result, ErrNotInTimeWindow
 				}
 
 			case usmStatsUnknownEngineIDs:
-				// detected unknown engine id error,
 				x.logPrint("WARNING detected unknown engine id ERROR")
 				if err = x.updatePktSecurityParameters(packetOut); err != nil {
 					x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
@@ -442,7 +449,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 				result, err = x.sendOneRequest(packetOut, wait)
 				if err != nil {
 					x.logPrintf("ERROR unknown engine id retransmit error: %s", err)
-					return result, err
+					return result, ErrUnknownEngineID
 				}
 			}
 		}
