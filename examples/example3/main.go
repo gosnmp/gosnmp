@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	g "github.com/gosnmp/gosnmp"
 )
@@ -20,6 +21,7 @@ func main() {
 		Version:       g.Version3,
 		SecurityModel: g.UserSecurityModel,
 		MsgFlags:      g.AuthPriv,
+		Timeout:       time.Duration(30) * time.Second,
 		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",
 			AuthenticationProtocol:   g.SHA,
 			AuthenticationPassphrase: "password",
