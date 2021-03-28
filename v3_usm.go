@@ -154,7 +154,7 @@ type UsmSecurityParameters struct {
 	Logger Logger
 }
 
-// Log logs security paramater information to the provided GoSNMP Logger
+// Description logs authentication paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Description() string {
 	var sb strings.Builder
 	sb.WriteString("user=")
