@@ -18,7 +18,6 @@ import (
 	"math/big"
 	"net"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -42,8 +41,6 @@ const (
 
 // GoSNMP represents GoSNMP library state.
 type GoSNMP struct {
-	mu sync.Mutex
-
 	// Conn is net connection to use, typically established using GoSNMP.Connect().
 	Conn net.Conn
 
@@ -337,12 +334,10 @@ func (x *GoSNMP) netConnect() error {
 }
 
 func (x *GoSNMP) validateParameters() error {
-	if x.Logger == nil {
-		x.mu.Lock()
-		defer x.mu.Unlock()
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	} else {
+	if x.Logger != nil {
 		x.loggingEnabled = true
+	} else {
+		x.Logger = log.New(ioutil.Discard, "", 0)
 	}
 
 	if x.Transport == "" {
