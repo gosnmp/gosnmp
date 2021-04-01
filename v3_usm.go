@@ -730,7 +730,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursorTmp += cursor
 	if cursorTmp > len(packet) {
-		return nil, fmt.Errorf("error decrypting ScopedPDU: truncated packet")
+		return nil, errors.New("error decrypting ScopedPDU: truncated packet")
 	}
 
 	switch sp.PrivacyProtocol {
@@ -751,7 +751,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		packet = packet[:cursor+len(plaintext)]
 	default:
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
-			return nil, fmt.Errorf("error decrypting ScopedPDU: not multiple of des block size")
+			return nil, errors.New("error decrypting ScopedPDU: not multiple of des block size")
 		}
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
@@ -831,12 +831,12 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	var err error
 
 	if PDUType(packet[cursor]) != Sequence {
-		return 0, fmt.Errorf("error parsing SNMPV3 User Security Model parameters")
+		return 0, errors.New("error parsing SNMPV3 User Security Model parameters")
 	}
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursor += cursorTmp
 	if cursorTmp > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 User Security Model parameters: truncated packet")
+		return 0, errors.New("error parsing SNMPV3 User Security Model parameters: truncated packet")
 	}
 
 	rawMsgAuthoritativeEngineID, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthoritativeEngineID")

@@ -225,7 +225,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		outBuf, err = packetOut.marshalMsg()
 		if err != nil {
 			// Don't retry - not going to get any better!
-			err = fmt.Errorf("marshal: %v", err)
+			err = fmt.Errorf("marshal: %w", err)
 			break
 		}
 
@@ -393,7 +393,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 			var buf = make([]byte, 8192)
 			runtime.Stack(buf, true)
 
-			err = fmt.Errorf("recover: %v\nStack:%v", e, string(buf))
+			err = fmt.Errorf("recover: %v Stack:%v", e, string(buf))
 		}
 	}()
 
@@ -553,9 +553,9 @@ func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 	buf.Write(specificTrapBytes)
 
 	// marshal timeTicks
-	timeTickBytes, e := marshalUint32(uint32(packet.Timestamp))
-	if e != nil {
-		return nil, fmt.Errorf("unable to Timestamp: %s", e.Error())
+	timeTickBytes, err := marshalUint32(uint32(packet.Timestamp))
+	if err != nil {
+		return nil, fmt.Errorf("unable to Timestamp: %w", err)
 	}
 	buf.Write([]byte{byte(TimeTicks), byte(len(timeTickBytes))})
 	buf.Write(timeTickBytes)
@@ -1239,7 +1239,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 		// Parse Value
 		v, err := x.decodeValue(packet[cursor:], "value")
 		if err != nil {
-			return fmt.Errorf("error decoding value: %v", err)
+			return fmt.Errorf("error decoding value: %w", err)
 		}
 
 		valueLength, _ := parseLength(packet[cursor:])

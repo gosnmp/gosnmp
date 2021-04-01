@@ -64,7 +64,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 	}
 
 	if len(data) == 0 {
-		return nil, fmt.Errorf("err: zero byte buffer")
+		return nil, errors.New("zero byte buffer")
 	}
 
 	// values matching this mask have the type in subsequent byte
@@ -87,7 +87,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		var err2 error
 		if ret, err2 = parseInt(data[cursor:length]); err2 != nil {
 			x.logPrintf("%v:", err2)
-			return nil, fmt.Errorf("bytes: % x err: %v", data, err2)
+			return nil, fmt.Errorf("bytes: % x err: %w", data, err2)
 		}
 		retVal.Type = Integer
 		retVal.Value = ret
@@ -111,7 +111,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		x.logPrint("decodeValue: type is ObjectIdentifier")
 		rawOid, _, err2 := parseRawField(x.Logger, data, "OID")
 		if err2 != nil {
-			return nil, fmt.Errorf("error parsing OID Value: %s", err2.Error())
+			return nil, fmt.Errorf("error parsing OID Value: %w", err2)
 		}
 		var oid []int
 		var ok bool
@@ -511,7 +511,7 @@ func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) 
 	offset = initOffset
 	for shifted := 0; offset < len(bytes); shifted++ {
 		if shifted > 4 {
-			err = fmt.Errorf("structural error: base 128 integer too large")
+			err = errors.New("structural error: base 128 integer too large")
 			return
 		}
 		ret <<= 7
@@ -522,7 +522,7 @@ func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) 
 			return
 		}
 	}
-	err = fmt.Errorf("syntax error: truncated base 128 integer")
+	err = errors.New("syntax error: truncated base 128 integer")
 	return
 }
 
@@ -632,7 +632,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		i, err := parseInt(data[cursor:length])
 		if err != nil {
-			return nil, 0, fmt.Errorf("unable to parse raw INTEGER: %x err: %v", data, err)
+			return nil, 0, fmt.Errorf("unable to parse raw INTEGER: %x err: %w", data, err)
 		}
 		return i, length, nil
 	case OctetString:
@@ -672,7 +672,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			return nil, 0, fmt.Errorf("error in parseUint: %s", err)
+			return nil, 0, fmt.Errorf("error in parseUint: %w", err)
 		}
 		return ret, length, nil
 	}
