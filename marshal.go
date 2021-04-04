@@ -312,8 +312,8 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
 				continue
 			}
-			if len(result.Variables) < 1 {
-				x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
+			if result.Error == NoError && len(result.Variables) < 1 {
+				x.logPrintf("ERROR on UnmarshalPayload on v3: Empty result")
 				continue
 			}
 
