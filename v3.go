@@ -11,6 +11,7 @@ package gosnmp
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"runtime"
 )
@@ -57,10 +58,10 @@ type SnmpV3SecurityParameters interface {
 func (x *GoSNMP) validateParametersV3() error {
 	// update following code if you implement a new security model
 	if x.SecurityModel != UserSecurityModel {
-		return fmt.Errorf("the SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
+		return errors.New("the SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
 	}
 	if x.SecurityParameters == nil {
-		return fmt.Errorf("SNMPV3 SecurityParameters must be set")
+		return errors.New("SNMPV3 SecurityParameters must be set")
 	}
 
 	return x.SecurityParameters.validate(x.MsgFlags)
@@ -339,7 +340,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursor += cursorTmp
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	rawMsgID, count, err := parseRawField(x.Logger, packet[cursor:], "msgID")
@@ -348,7 +349,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if MsgID, ok := rawMsgID.(int); ok {
@@ -362,7 +363,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if MsgMaxSize, ok := rawMsgMaxSize.(int); ok {
@@ -376,7 +377,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if MsgFlags, ok := rawMsgFlags.(string); ok {
@@ -390,7 +391,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if SecModel, ok := rawSecModel.(int); ok {
@@ -399,12 +400,12 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 
 	if PDUType(packet[cursor]) != PDUType(OctetString) {
-		return 0, fmt.Errorf("invalid SNMPV3 Security Parameters")
+		return 0, errors.New("invalid SNMPV3 Security Parameters")
 	}
 	_, cursorTmp = parseLength(packet[cursor:])
 	cursor += cursorTmp
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 	if response.SecurityParameters == nil {
 		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
@@ -424,7 +425,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 	var decrypted = false
 
 	if cursor > len(packet) {
-		return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+		return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 	}
 
 	switch PDUType(packet[cursor]) {
@@ -443,13 +444,13 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 			// truncate padding that might have been included with
 			// the encrypted PDU
 			if cursor+tlength > len(packet) {
-				return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+				return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 			}
 			packet = packet[:cursor+tlength]
 		}
 		cursor += cursorTmp
 		if cursor > len(packet) {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
 		rawContextEngineID, count, err := parseRawField(x.Logger, packet[cursor:], "contextEngineID")
@@ -458,7 +459,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		}
 		cursor += count
 		if cursor > len(packet) {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
 		if contextEngineID, ok := rawContextEngineID.(string); ok {
@@ -471,7 +472,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		}
 		cursor += count
 		if cursor > len(packet) {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
 		if contextName, ok := rawContextName.(string); ok {
@@ -480,7 +481,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		}
 
 	default:
-		return nil, 0, fmt.Errorf("error parsing SNMPV3 scoped PDU")
+		return nil, 0, errors.New("error parsing SNMPV3 scoped PDU")
 	}
 	return packet, cursor, nil
 }
