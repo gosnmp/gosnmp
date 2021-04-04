@@ -9,7 +9,11 @@
 
 NOTE:
 
+## v1.31.0
+
 * [BUGFIX] Add validation to prevent calling updatePktSecurityParameters with non v3 packet #251 #314
+* [ENHANCEMENT] walk.go: improve BulkWalk error handling #306
+* [ENHANCEMENT] return received SNMP error code immediately instead of waiting for timeout #319
 
 ## v1.30.0
 
