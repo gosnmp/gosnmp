@@ -304,7 +304,11 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 					x.logPrintf("ERROR on Test Authentication on v3: %s", err)
 					break
 				}
-				resp, cursor, _ = x.decryptPacket(resp, cursor, result)
+				resp, cursor, err = x.decryptPacket(resp, cursor, result)
+				if err != nil {
+					x.logPrintf("ERROR on decryptPacket on v3: %s", err)
+					break
+				}
 			}
 
 			err = x.unmarshalPayload(resp, cursor, result)
@@ -976,7 +980,16 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 }
 
 func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacket) error {
-	var err error
+	if len(packet) == 0 {
+		return errors.New("cannot unmarshal nil or empty payload packet")
+	}
+	if cursor > len(packet) {
+		return fmt.Errorf("cannot unmarshal payload, packet length %d cursor %d", len(packet), cursor)
+	}
+	if response == nil {
+		return errors.New("cannot unmarshal payload response into nil packet reference")
+	}
+
 	// Parse SNMP packet type
 	requestType := PDUType(packet[cursor])
 	x.logPrintf("UnmarshalPayload Meet PDUType %#x. Offset %v", requestType, cursor)
@@ -984,16 +997,14 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 	// known, supported types
 	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPv2Trap, GetRequest, SetRequest, InformRequest:
 		response.PDUType = requestType
-		err = x.unmarshalResponse(packet[cursor:], response)
-		if err != nil {
+		if err := x.unmarshalResponse(packet[cursor:], response); err != nil {
 			return fmt.Errorf("error in unmarshalResponse: %w", err)
 		}
 		// If it's an InformRequest, mark the trap.
 		response.IsInform = (requestType == InformRequest)
 	case Trap:
 		response.PDUType = requestType
-		err = x.unmarshalTrapV1(packet[cursor:], response)
-		if err != nil {
+		if err := x.unmarshalTrapV1(packet[cursor:], response); err != nil {
 			return fmt.Errorf("error in unmarshalTrapV1: %w", err)
 		}
 	default:
