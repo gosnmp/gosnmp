@@ -289,7 +289,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			cursor, err = x.unmarshalHeader(resp, result)
 			if err != nil {
 				x.logPrintf("ERROR on unmarshall header: %s", err)
-				continue
+				break
 			}
 
 			if x.Version == Version3 {
@@ -314,11 +314,11 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			err = x.unmarshalPayload(resp, cursor, result)
 			if err != nil {
 				x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
-				continue
+				break
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
 				x.logPrintf("ERROR on UnmarshalPayload on v3: Empty result")
-				continue
+				break
 			}
 
 			// While Report PDU was defined by RFC 1905 as part of SNMPv2, it was never
