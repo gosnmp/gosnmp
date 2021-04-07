@@ -9,6 +9,8 @@
 
 NOTE:
 
+* [BUGFIX] marshal.go: improve packet validation and error handling #323
+
 ## v1.31.0
 
 * [BUGFIX] Add validation to prevent calling updatePktSecurityParameters with non v3 packet #251 #314
