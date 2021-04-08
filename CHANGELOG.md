@@ -10,6 +10,7 @@
 NOTE:
 
 * [BUGFIX] marshal.go: improve packet validation and error handling #323
+* [BUGFIX] marshal.go: Fix on-error-continue flow in sendOneRequest #324
 
 ## v1.31.0
 
