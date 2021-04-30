@@ -539,10 +539,6 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 		return result, err
 	}
 
-	// if result == nil {
-	// 	err = fmt.Errorf("Unable to decode packet: no variables")
-	// 	return result, err
-	// }
 	return result, nil
 }
 

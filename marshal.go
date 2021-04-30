@@ -225,7 +225,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		outBuf, err = packetOut.marshalMsg()
 		if err != nil {
 			// Don't retry - not going to get any better!
-			err = fmt.Errorf("marshal: %v", err)
+			err = fmt.Errorf("marshal: %w", err)
 			break
 		}
 
@@ -289,7 +289,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 			cursor, err = x.unmarshalHeader(resp, result)
 			if err != nil {
 				x.logPrintf("ERROR on unmarshall header: %s", err)
-				continue
+				break
 			}
 
 			if x.Version == Version3 {
@@ -304,17 +304,21 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 					x.logPrintf("ERROR on Test Authentication on v3: %s", err)
 					break
 				}
-				resp, cursor, _ = x.decryptPacket(resp, cursor, result)
+				resp, cursor, err = x.decryptPacket(resp, cursor, result)
+				if err != nil {
+					x.logPrintf("ERROR on decryptPacket on v3: %s", err)
+					break
+				}
 			}
 
 			err = x.unmarshalPayload(resp, cursor, result)
 			if err != nil {
 				x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
-				continue
+				break
 			}
-			if len(result.Variables) < 1 {
-				x.logPrintf("ERROR on UnmarshalPayload on v3: %s", err)
-				continue
+			if result.Error == NoError && len(result.Variables) < 1 {
+				x.logPrintf("ERROR on UnmarshalPayload on v3: Empty result")
+				break
 			}
 
 			// While Report PDU was defined by RFC 1905 as part of SNMPv2, it was never
@@ -393,7 +397,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 			var buf = make([]byte, 8192)
 			runtime.Stack(buf, true)
 
-			err = fmt.Errorf("recover: %v\nStack:%v", e, string(buf))
+			err = fmt.Errorf("recover: %v Stack:%v", e, string(buf))
 		}
 	}()
 
@@ -553,9 +557,9 @@ func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 	buf.Write(specificTrapBytes)
 
 	// marshal timeTicks
-	timeTickBytes, e := marshalUint32(uint32(packet.Timestamp))
-	if e != nil {
-		return nil, fmt.Errorf("unable to Timestamp: %s", e.Error())
+	timeTickBytes, err := marshalUint32(uint32(packet.Timestamp))
+	if err != nil {
+		return nil, fmt.Errorf("unable to Timestamp: %w", err)
 	}
 	buf.Write([]byte{byte(TimeTicks), byte(len(timeTickBytes))})
 	buf.Write(timeTickBytes)
@@ -976,7 +980,16 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 }
 
 func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacket) error {
-	var err error
+	if len(packet) == 0 {
+		return errors.New("cannot unmarshal nil or empty payload packet")
+	}
+	if cursor > len(packet) {
+		return fmt.Errorf("cannot unmarshal payload, packet length %d cursor %d", len(packet), cursor)
+	}
+	if response == nil {
+		return errors.New("cannot unmarshal payload response into nil packet reference")
+	}
+
 	// Parse SNMP packet type
 	requestType := PDUType(packet[cursor])
 	x.logPrintf("UnmarshalPayload Meet PDUType %#x. Offset %v", requestType, cursor)
@@ -984,16 +997,14 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 	// known, supported types
 	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPv2Trap, GetRequest, SetRequest, InformRequest:
 		response.PDUType = requestType
-		err = x.unmarshalResponse(packet[cursor:], response)
-		if err != nil {
+		if err := x.unmarshalResponse(packet[cursor:], response); err != nil {
 			return fmt.Errorf("error in unmarshalResponse: %w", err)
 		}
 		// If it's an InformRequest, mark the trap.
 		response.IsInform = (requestType == InformRequest)
 	case Trap:
 		response.PDUType = requestType
-		err = x.unmarshalTrapV1(packet[cursor:], response)
-		if err != nil {
+		if err := x.unmarshalTrapV1(packet[cursor:], response); err != nil {
 			return fmt.Errorf("error in unmarshalTrapV1: %w", err)
 		}
 	default:
@@ -1239,7 +1250,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 		// Parse Value
 		v, err := x.decodeValue(packet[cursor:], "value")
 		if err != nil {
-			return fmt.Errorf("error decoding value: %v", err)
+			return fmt.Errorf("error decoding value: %w", err)
 		}
 
 		valueLength, _ := parseLength(packet[cursor:])

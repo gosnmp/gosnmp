@@ -239,13 +239,13 @@ func (t *TrapListener) listenUDP(addr string) error {
 					// determine), so it's left to future implementations.
 					ob, err := traps.marshalMsg()
 					if err != nil {
-						return fmt.Errorf("error marshaling INFORM response: %v", err)
+						return fmt.Errorf("error marshaling INFORM response: %w", err)
 					}
 
 					// Send the return packet back.
 					count, err := t.conn.WriteTo(ob, remote)
 					if err != nil {
-						return fmt.Errorf("error sending INFORM response: %v", err)
+						return fmt.Errorf("error sending INFORM response: %w", err)
 					}
 
 					// This isn't fatal, but should be logged.
