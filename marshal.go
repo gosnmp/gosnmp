@@ -367,7 +367,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 				validID = true
 			}
 			if !validID {
-				x.logPrint("ERROR  out of order")
+				x.logPrint("ERROR out of order")
 				continue
 			}
 
@@ -433,20 +433,20 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 			case usmStatsNotInTimeWindows:
 				x.logPrint("WARNING detected out-of-time-window ERROR")
 				if err = x.updatePktSecurityParameters(packetOut); err != nil {
-					x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
+					x.logPrintf("ERROR updatePktSecurityParameters error: %s", err)
 					return nil, err
 				}
 				// retransmit with updated auth engine params
 				result, err = x.sendOneRequest(packetOut, wait)
 				if err != nil {
-					x.logPrintf("ERROR  out-of-time-window retransmit error: %s", err)
+					x.logPrintf("ERROR out-of-time-window retransmit error: %s", err)
 					return result, ErrNotInTimeWindow
 				}
 
 			case usmStatsUnknownEngineIDs:
 				x.logPrint("WARNING detected unknown engine id ERROR")
 				if err = x.updatePktSecurityParameters(packetOut); err != nil {
-					x.logPrintf("ERROR  updatePktSecurityParameters error: %s", err)
+					x.logPrintf("ERROR updatePktSecurityParameters error: %s", err)
 					return nil, err
 				}
 				// retransmit with updated engine id
