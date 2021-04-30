@@ -19,8 +19,7 @@ func main() {
 	g.Default.Port = 162
 	g.Default.Version = g.Version2c
 	g.Default.Community = "public"
-	g.Default.Logger = log.New(os.Stdout, "", 0)
-
+	g.Default.Logger = g.NewLogger(log.New(os.Stdout, "", 0))
 	err := g.Default.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)

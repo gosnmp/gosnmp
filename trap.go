@@ -202,7 +202,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 					// err most likely comes from reading from a closed connection
 					continue
 				}
-				t.Params.logPrintf("TrapListener: error in read %s\n", err)
+				t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
 				continue
 			}
 
@@ -250,7 +250,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 
 					// This isn't fatal, but should be logged.
 					if count != len(ob) {
-						t.Params.logPrintf("Failed to send all bytes of INFORM response!\n")
+						t.Params.Logger.Printf("Failed to send all bytes of INFORM response!\n")
 					}
 				}
 			}
@@ -264,7 +264,7 @@ func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 	// Read the incoming connection into the buffer.
 	reqLen, err := conn.Read(buf)
 	if err != nil {
-		t.Params.logPrintf("TrapListener: error in read %s\n", err)
+		t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
 		return
 	}
 
@@ -353,7 +353,7 @@ func (t *TrapListener) Listen(addr string) error {
 
 // Default trap handler
 func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
-	t.Params.logPrintf("got trapdata from %+v: %+v\n", u, s)
+	t.Params.Logger.Printf("got trapdata from %+v: %+v\n", u, s)
 }
 
 // UnmarshalTrap unpacks the SNMP Trap.
@@ -372,7 +372,7 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 
 	cursor, err := x.unmarshalHeader(trap, result)
 	if err != nil {
-		x.logPrintf("UnmarshalTrap: %s\n", err)
+		x.Logger.Printf("UnmarshalTrap: %s\n", err)
 		return nil
 	}
 
@@ -380,20 +380,20 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 		if result.SecurityModel == UserSecurityModel {
 			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
-				x.logPrintf("UnmarshalTrap v3 auth: %s\n", err)
+				x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
 				return nil
 			}
 		}
 
 		trap, cursor, err = x.decryptPacket(trap, cursor, result)
 		if err != nil {
-			x.logPrintf("UnmarshalTrap v3 decrypt: %s\n", err)
+			x.Logger.Printf("UnmarshalTrap v3 decrypt: %s\n", err)
 			return nil
 		}
 	}
 	err = x.unmarshalPayload(trap, cursor, result)
 	if err != nil {
-		x.logPrintf("UnmarshalTrap: %s\n", err)
+		x.Logger.Printf("UnmarshalTrap: %s\n", err)
 		return nil
 	}
 	return result

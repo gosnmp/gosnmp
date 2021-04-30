@@ -7,10 +7,11 @@
 
 ## Unreleased
 
-NOTE:
+NOTE: This release changes the Logger interface. The loggingEnabled variable has been deprecated.
 
 * [BUGFIX] marshal.go: improve packet validation and error handling #323
 * [BUGFIX] marshal.go: Fix on-error-continue flow in sendOneRequest #324
+* [CHANGE] New Logger interface has been implemented #329
 
 ## v1.31.0
 
