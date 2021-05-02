@@ -30,6 +30,7 @@ GoSNMP has the following SNMP functions:
 * **Walk** - retrieves a subtree of values using GETNEXT.
 * **BulkWalk** - retrieves a subtree of values using GETBULK (SNMPv2c and
   SNMPv3 only).
+* **BulkWalkAll** - similar to BulkWalk but returns a filled array of all values rather than using a callback function to stream results.
 * **Set** - supports Integers and OctetStrings.
 * **SendTrap** - send SNMP TRAPs.
 * **Listen** - act as an NMS for receiving TRAPs.
