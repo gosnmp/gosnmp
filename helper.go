@@ -623,7 +623,9 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 	if len(data) == 0 {
 		return nil, 0, fmt.Errorf("empty data passed to parseRawField")
 	}
-	logger.Printf("parseRawField: %s", msg)
+	if logger != nil {
+		logger.Printf("parseRawField: %s", msg)
+	}
 	switch Asn1BER(data[0]) {
 	case Integer:
 		length, cursor := parseLength(data)
