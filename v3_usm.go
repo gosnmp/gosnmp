@@ -18,8 +18,6 @@ import (
 	"crypto/md5" //nolint:gosec
 	crand "crypto/rand"
 	"crypto/sha1" //nolint:gosec
-	_ "crypto/sha256"
-	_ "crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -668,11 +666,11 @@ func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
 
 	switch h {
 	case MD5:
-		h1 = md5.New()
-		h2 = md5.New()
+		h1 = md5.New() //nolint:gosec
+		h2 = md5.New() //nolint:gosec
 	case SHA:
-		h1 = sha1.New()
-		h2 = sha1.New()
+		h1 = sha1.New() //nolint:gosec
+		h2 = sha1.New() //nolint:gosec
 	}
 
 	for i := 0; i < 64; i++ {
