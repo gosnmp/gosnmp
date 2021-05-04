@@ -18,8 +18,8 @@ import (
 	"crypto/md5" //nolint:gosec
 	crand "crypto/rand"
 	"crypto/sha1"     //nolint:gosec
-	_ "crypto/sha256" //nolint:gosec resolve requested hash function #4,#5is unavailable
-	_ "crypto/sha512" //nolint:gosec resolve requested hash function #7 is unavailable
+	_ "crypto/sha256" // Register hash function #4 (SHA224), #5 (SHA256)
+	_ "crypto/sha512" // Register hash function #6 (SHA384), #7 (SHA512)
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
