@@ -15,10 +15,10 @@ import (
 	"crypto/cipher"
 	"crypto/des" //nolint:gosec
 	"crypto/hmac"
-	"crypto/md5"
+	"crypto/md5"   //nolint:gosec
 	_ "crypto/md5" //nolint:gosec
 	crand "crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1"   //nolint:gosec
 	_ "crypto/sha1" //nolint:gosec
 	_ "crypto/sha256"
 	_ "crypto/sha512"
@@ -624,7 +624,6 @@ func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
 }
 
 func (sp *UsmSecurityParameters) calcPacketDigest(packet []byte) []byte {
-
 	return calcPacketDigest(packet, sp)
 }
 func calcPacketDigest(packetBytes []byte, secParams *UsmSecurityParameters) []byte {
@@ -687,8 +686,8 @@ func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
 	}
 
 	return h2.Sum(nil)[:12]
-
 }
+
 func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 	msgDigest := sp.calcPacketDigest(packet)
 	idx := bytes.Index(packet, macVarbinds[sp.AuthenticationProtocol])
