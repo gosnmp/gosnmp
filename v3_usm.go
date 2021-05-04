@@ -15,8 +15,10 @@ import (
 	"crypto/cipher"
 	"crypto/des" //nolint:gosec
 	"crypto/hmac"
+	"crypto/md5"
 	_ "crypto/md5" //nolint:gosec
 	crand "crypto/rand"
+	"crypto/sha1"
 	_ "crypto/sha1" //nolint:gosec
 	_ "crypto/sha256"
 	_ "crypto/sha512"
@@ -622,28 +624,71 @@ func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
 }
 
 func (sp *UsmSecurityParameters) calcPacketDigest(packet []byte) []byte {
+
+	return calcPacketDigest(packet, sp)
+}
+func calcPacketDigest(packetBytes []byte, secParams *UsmSecurityParameters) []byte {
 	var mac hash.Hash
 
-	switch sp.AuthenticationProtocol {
-	default:
-		mac = hmac.New(crypto.MD5.New, sp.SecretKey)
-	case SHA:
-		mac = hmac.New(crypto.SHA1.New, sp.SecretKey)
-	case SHA224:
-		mac = hmac.New(crypto.SHA224.New, sp.SecretKey)
-	case SHA256:
-		mac = hmac.New(crypto.SHA256.New, sp.SecretKey)
-	case SHA384:
-		mac = hmac.New(crypto.SHA384.New, sp.SecretKey)
-	case SHA512:
-		mac = hmac.New(crypto.SHA512.New, sp.SecretKey)
+	switch secParams.AuthenticationProtocol {
+	case MD5, SHA:
+		return digestRFC3414(secParams.AuthenticationProtocol, packetBytes, secParams.SecretKey)
+	case SHA224, SHA256, SHA384, SHA512:
+		mac = hmac.New(secParams.AuthenticationProtocol.HashType().New, secParams.SecretKey)
 	}
 
-	_, _ = mac.Write(packet)
+	_, _ = mac.Write(packetBytes)
 	msgDigest := mac.Sum(nil)
 	return msgDigest
 }
 
+func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
+	var extkey [64]byte
+	var err error
+	var k1, k2 [64]byte
+	var h1, h2 hash.Hash
+
+	copy(extkey[:], authKey)
+
+	switch h {
+	case MD5:
+		h1 = md5.New()
+		h2 = md5.New()
+	case SHA:
+		h1 = sha1.New()
+		h2 = sha1.New()
+	}
+
+	for i := 0; i < 64; i++ {
+		k1[i] = extkey[i] ^ 0x36
+		k2[i] = extkey[i] ^ 0x5c
+	}
+
+	_, err = h1.Write(k1[:])
+	if err != nil {
+		return []byte{}
+	}
+
+	_, err = h1.Write(packet)
+	if err != nil {
+		return []byte{}
+	}
+
+	d1 := h1.Sum(nil)
+
+	_, err = h2.Write(k2[:])
+	if err != nil {
+		return []byte{}
+	}
+
+	_, err = h2.Write(d1)
+	if err != nil {
+		return []byte{}
+	}
+
+	return h2.Sum(nil)[:12]
+
+}
 func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 	msgDigest := sp.calcPacketDigest(packet)
 	idx := bytes.Index(packet, macVarbinds[sp.AuthenticationProtocol])
@@ -665,7 +710,7 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 		return false, err
 	}
 	// TODO: investigate call chain to determine if this is really the best spot for this
-	msgDigest := sp.calcPacketDigest(packetBytes)
+	msgDigest := calcPacketDigest(packetBytes, packetSecParams)
 
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
 		if msgDigest[k] != v {
