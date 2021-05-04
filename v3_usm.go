@@ -17,7 +17,9 @@ import (
 	"crypto/hmac"
 	"crypto/md5" //nolint:gosec
 	crand "crypto/rand"
-	"crypto/sha1" //nolint:gosec
+	"crypto/sha1"     //nolint:gosec
+	_ "crypto/sha256" //nolint:gosec resolve requested hash function #4,#5is unavailable
+	_ "crypto/sha512" //nolint:gosec resolve requested hash function #7 is unavailable
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
