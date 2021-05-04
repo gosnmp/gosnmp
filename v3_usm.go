@@ -15,11 +15,9 @@ import (
 	"crypto/cipher"
 	"crypto/des" //nolint:gosec
 	"crypto/hmac"
-	"crypto/md5"   //nolint:gosec
-	_ "crypto/md5" //nolint:gosec
+	"crypto/md5" //nolint:gosec
 	crand "crypto/rand"
-	"crypto/sha1"   //nolint:gosec
-	_ "crypto/sha1" //nolint:gosec
+	"crypto/sha1" //nolint:gosec
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 	"encoding/binary"
@@ -626,21 +624,40 @@ func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
 func (sp *UsmSecurityParameters) calcPacketDigest(packet []byte) []byte {
 	return calcPacketDigest(packet, sp)
 }
+
+// calcPacketDigest calculate authenticate digest for incoming messages (TRAP or
+// INFORM).
+// Support MD5, SHA1, SHA224, SHA256, SHA384, SHA512 protocols
 func calcPacketDigest(packetBytes []byte, secParams *UsmSecurityParameters) []byte {
-	var mac hash.Hash
+	var digest []byte
 
 	switch secParams.AuthenticationProtocol {
 	case MD5, SHA:
-		return digestRFC3414(secParams.AuthenticationProtocol, packetBytes, secParams.SecretKey)
+		digest = digestRFC3414(
+			secParams.AuthenticationProtocol,
+			packetBytes,
+			secParams.SecretKey)
 	case SHA224, SHA256, SHA384, SHA512:
-		mac = hmac.New(secParams.AuthenticationProtocol.HashType().New, secParams.SecretKey)
+		digest = digestRFC7860(
+			secParams.AuthenticationProtocol,
+			packetBytes,
+			secParams.SecretKey)
 	}
 
-	_, _ = mac.Write(packetBytes)
+	return digest
+}
+
+// digestRFC7860 calculate digest for incoming messages using HMAC-SHA2 protcols
+// according to RFC7860 4.2.2
+func digestRFC7860(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
+	mac := hmac.New(h.HashType().New, authKey)
+	_, _ = mac.Write(packet)
 	msgDigest := mac.Sum(nil)
 	return msgDigest
 }
 
+// digestRFC3414 calculate digest for incoming messages using MD5 or SHA1
+// according to RFC3414 6.3.2 and 7.3.2
 func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
 	var extkey [64]byte
 	var err error
