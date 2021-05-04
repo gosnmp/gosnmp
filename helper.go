@@ -581,6 +581,9 @@ func parseLength(bytes []byte) (length int, cursor int) {
 		cursor += 2
 	default:
 		numOctets := int(bytes[1]) & 127
+		if len(bytes) < numOctets {
+			return 0, 0
+		}
 		for i := 0; i < numOctets; i++ {
 			length <<= 8
 			length += int(bytes[2+i])
