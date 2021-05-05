@@ -41,7 +41,7 @@ type testsEnmarshalVarbindPosition struct {
 		what's actually happening
 
 		2) for counting byte positions: select "Simple Network Management
-		Protocal" line in Wiresharks middle pane, then right click and choose
+		Protocol" line in Wiresharks middle pane, then right click and choose
 		"Export Packet Bytes..." (as .raw). Open the capture in wireshark, it
 		will decode as "BER Encoded File". Click on each varbind and the
 		"packet bytes" window will highlight the corresponding bytes, then the
@@ -269,7 +269,7 @@ func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 // ie check each varbind is working, then the varbind list, etc
 
 func TestEnmarshalVarbind(t *testing.T) {
-	Default.Logger = log.New(ioutil.Discard, "", 0)
+	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
@@ -286,7 +286,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 }
 
 func TestEnmarshalVBL(t *testing.T) {
-	Default.Logger = log.New(ioutil.Discard, "", 0)
+	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -306,7 +306,7 @@ func TestEnmarshalVBL(t *testing.T) {
 }
 
 func TestEnmarshalPDU(t *testing.T) {
-	Default.Logger = log.New(ioutil.Discard, "", 0)
+	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -327,7 +327,7 @@ func TestEnmarshalPDU(t *testing.T) {
 }
 
 func TestEnmarshalMsg(t *testing.T) {
-	Default.Logger = log.New(ioutil.Discard, "", 0)
+	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -714,7 +714,7 @@ var testsUnmarshal = []struct {
 }
 
 func TestUnmarshal(t *testing.T) {
-	Default.Logger = log.New(ioutil.Discard, "", 0)
+	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
 
 	for i, test := range testsUnmarshal {
 		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
@@ -1345,7 +1345,7 @@ func TestUnmarshalEmptyPanic(t *testing.T) {
 }
 
 func TestV3USMInitialPacket(t *testing.T) {
-	logger := log.New(ioutil.Discard, "", 0)
+	logger := NewLogger(log.New(ioutil.Discard, "", 0))
 	var emptyPdus []SnmpPDU
 	blankPacket := &SnmpPacket{
 		Version:            Version3,
@@ -1360,7 +1360,7 @@ func TestV3USMInitialPacket(t *testing.T) {
 	if err != nil {
 		t.Errorf("#TestV3USMInitialPacket: marshalMsg() err returned: %v", err)
 	}
-	engine := GoSNMP{Logger: logger}
+	engine := GoSNMP{Logger: Default.Logger}
 	pktNew, errDecode := engine.SnmpDecodePacket(iBytes)
 	if errDecode != nil {
 		t.Logf("-->Bytes=%v", iBytes)
@@ -1723,7 +1723,7 @@ func dumpBytes1(data []byte, msg string, maxlength int) {
 	if len(data) < maxlength {
 		length = len(data)
 	}
-	length *= 2 //One Byte Symobls Two Hex
+	length *= 2 //One Byte Symbols Two Hex
 	hexStr := hex.EncodeToString(data)
 	for i := 0; length >= i+16; i += 16 {
 		buffer.WriteString("\n")

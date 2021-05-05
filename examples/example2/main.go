@@ -72,10 +72,9 @@ func main() {
 		Port:      uint16(port),
 		Community: "public",
 		Version:   g.Version2c,
-		Logger:    log.New(os.Stdout, "", 0),
 		Timeout:   time.Duration(2) * time.Second,
+		Logger:    g.NewLogger(log.New(os.Stdout, "", 0)),
 	}
-
 	err := params.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)

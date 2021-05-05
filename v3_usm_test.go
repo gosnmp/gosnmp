@@ -2,6 +2,8 @@ package gosnmp
 
 import (
 	"encoding/hex"
+	"io/ioutil"
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -64,8 +66,8 @@ func TestAuthenticationSHA224(t *testing.T) {
 		AuthenticationPassphrase: "authkey1",
 		PrivacyPassphrase:        "",
 		SecretKey:                nil,
+		Logger:                   NewLogger(log.New(ioutil.Discard, "", 0)),
 		PrivacyKey:               nil,
-		Logger:                   nil,
 	}
 
 	sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
@@ -100,7 +102,7 @@ func TestIsAuthenticaSHA224(t *testing.T) {
 		PrivacyPassphrase:        "",
 		SecretKey:                nil,
 		PrivacyKey:               nil,
-		Logger:                   nil,
+		Logger:                   NewLogger(log.New(ioutil.Discard, "", 0)),
 	}
 
 	sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
@@ -167,7 +169,7 @@ func TestAuthenticationSHA512(t *testing.T) {
 		PrivacyPassphrase:        "",
 		SecretKey:                nil,
 		PrivacyKey:               nil,
-		Logger:                   nil,
+		Logger:                   NewLogger(log.New(ioutil.Discard, "", 0)),
 	}
 
 	sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
@@ -201,8 +203,8 @@ func TestIsAuthenticaSHA512(t *testing.T) {
 		AuthenticationPassphrase: "authkey1",
 		PrivacyPassphrase:        "",
 		SecretKey:                nil,
+		Logger:                   NewLogger(log.New(ioutil.Discard, "", 0)),
 		PrivacyKey:               nil,
-		Logger:                   nil,
 	}
 
 	sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,

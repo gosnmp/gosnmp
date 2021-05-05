@@ -26,7 +26,7 @@ func main() {
 		Timeout:       time.Duration(30) * time.Second,
 		SecurityModel: g.UserSecurityModel,
 		MsgFlags:      g.AuthPriv,
-		Logger:        log.New(os.Stdout, "", 0),
+		Logger:        g.NewLogger(log.New(os.Stdout, "", 0)),
 		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",
 			AuthoritativeEngineID:    "1234",
 			AuthenticationProtocol:   g.SHA,
@@ -35,7 +35,6 @@ func main() {
 			PrivacyPassphrase:        "password",
 		},
 	}
-
 	err := params.Connect()
 	if err != nil {
 		log.Fatalf("Connect() err: %v", err)

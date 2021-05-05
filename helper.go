@@ -60,7 +60,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 	retVal := &variable{}
 
 	if len(msg) > 0 {
-		x.logPrintf("decodeValue: msg: %s", msg)
+		x.Logger.Printf("decodeValue: msg: %s", msg)
 	}
 
 	if len(data) == 0 {
@@ -77,7 +77,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 	switch Asn1BER(data[0]) {
 	case Integer:
 		// 0x02. signed
-		x.logPrint("decodeValue: type is Integer")
+		x.Logger.Print("decodeValue: type is Integer")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
@@ -86,14 +86,14 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		var ret int
 		var err2 error
 		if ret, err2 = parseInt(data[cursor:length]); err2 != nil {
-			x.logPrintf("%v:", err2)
+			x.Logger.Printf("%v:", err2)
 			return nil, fmt.Errorf("bytes: % x err: %w", data, err2)
 		}
 		retVal.Type = Integer
 		retVal.Value = ret
 	case OctetString:
 		// 0x04
-		x.logPrint("decodeValue: type is OctetString")
+		x.Logger.Print("decodeValue: type is OctetString")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
@@ -103,12 +103,12 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		retVal.Value = data[cursor:length]
 	case Null:
 		// 0x05
-		x.logPrint("decodeValue: type is Null")
+		x.Logger.Print("decodeValue: type is Null")
 		retVal.Type = Null
 		retVal.Value = nil
 	case ObjectIdentifier:
 		// 0x06
-		x.logPrint("decodeValue: type is ObjectIdentifier")
+		x.Logger.Print("decodeValue: type is ObjectIdentifier")
 		rawOid, _, err2 := parseRawField(x.Logger, data, "OID")
 		if err2 != nil {
 			return nil, fmt.Errorf("error parsing OID Value: %w", err2)
@@ -122,7 +122,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		retVal.Value = oidToString(oid)
 	case IPAddress:
 		// 0x40
-		x.logPrint("decodeValue: type is IPAddress")
+		x.Logger.Print("decodeValue: type is IPAddress")
 		retVal.Type = IPAddress
 		if len(data) < 2 {
 			return nil, fmt.Errorf("not enough data for ipv4 address: %x", data)
@@ -149,7 +149,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		}
 	case Counter32:
 		// 0x41. unsigned
-		x.logPrint("decodeValue: type is Counter32")
+		x.Logger.Print("decodeValue: type is Counter32")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("not enough data for Counter32 %x (data %d length %d)", data, len(data), length)
@@ -157,14 +157,14 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 
 		ret, err2 := parseUint(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Counter32
 		retVal.Value = ret
 	case Gauge32:
 		// 0x42. unsigned
-		x.logPrint("decodeValue: type is Gauge32")
+		x.Logger.Print("decodeValue: type is Gauge32")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("not enough data for Gauge32 %x (data %d length %d)", data, len(data), length)
@@ -172,14 +172,14 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 
 		ret, err2 := parseUint(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Gauge32
 		retVal.Value = ret
 	case TimeTicks:
 		// 0x43
-		x.logPrint("decodeValue: type is TimeTicks")
+		x.Logger.Print("decodeValue: type is TimeTicks")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("not enough data for TimeTicks %x (data %d length %d)", data, len(data), length)
@@ -187,14 +187,14 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 
 		ret, err2 := parseUint32(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = TimeTicks
 		retVal.Value = ret
 	case Opaque:
 		// 0x44
-		x.logPrint("decodeValue: type is Opaque")
+		x.Logger.Print("decodeValue: type is Opaque")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("not enough data for Opaque %x (data %d length %d)", data, len(data), length)
@@ -205,7 +205,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		return x.decodeValue(opaqueData, msg)
 	case Counter64:
 		// 0x46
-		x.logPrint("decodeValue: type is Counter64")
+		x.Logger.Print("decodeValue: type is Counter64")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("not enough data for Counter64 %x (data %d length %d)", data, len(data), length)
@@ -213,14 +213,14 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 
 		ret, err2 := parseUint64(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Counter64
 		retVal.Value = ret
 	case OpaqueFloat:
 		// 0x78
-		x.logPrint("decodeValue: type is OpaqueFloat")
+		x.Logger.Print("decodeValue: type is OpaqueFloat")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
@@ -234,7 +234,7 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		}
 	case OpaqueDouble:
 		// 0x79
-		x.logPrint("decodeValue: type is OpaqueDouble")
+		x.Logger.Print("decodeValue: type is OpaqueDouble")
 		length, cursor := parseLength(data)
 		if length > len(data) {
 			return nil, fmt.Errorf("not enough data for OpaqueDouble %x (data %d length %d)", data, len(data), length)
@@ -248,25 +248,25 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		}
 	case NoSuchObject:
 		// 0x80
-		x.logPrint("decodeValue: type is NoSuchObject")
+		x.Logger.Print("decodeValue: type is NoSuchObject")
 		retVal.Type = NoSuchObject
 		retVal.Value = nil
 	case NoSuchInstance:
 		// 0x81
-		x.logPrint("decodeValue: type is NoSuchInstance")
+		x.Logger.Print("decodeValue: type is NoSuchInstance")
 		retVal.Type = NoSuchInstance
 		retVal.Value = nil
 	case EndOfMibView:
 		// 0x82
-		x.logPrint("decodeValue: type is EndOfMibView")
+		x.Logger.Print("decodeValue: type is EndOfMibView")
 		retVal.Type = EndOfMibView
 		retVal.Value = nil
 	default:
-		x.logPrintf("decodeValue: type %x isn't implemented", data[0])
+		x.Logger.Printf("decodeValue: type %x isn't implemented", data[0])
 		retVal.Type = UnknownType
 		retVal.Value = nil
 	}
-	x.logPrintf("decodeValue: value is %#v", retVal.Value)
+	x.Logger.Printf("decodeValue: value is %#v", retVal.Value)
 	return retVal, nil
 }
 
