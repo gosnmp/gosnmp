@@ -9,7 +9,6 @@
 package gosnmp
 
 import (
-	// "bytes"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -21,7 +20,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 )
 
 // variable struct is used by decodeValue(), which is used for debugging
@@ -113,13 +111,12 @@ func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
 		if err2 != nil {
 			return nil, fmt.Errorf("error parsing OID Value: %w", err2)
 		}
-		var oid []int
-		var ok bool
-		if oid, ok = rawOid.([]int); !ok {
-			return nil, fmt.Errorf("unable to type assert rawOid |%v| to []int", rawOid)
+		oid, ok := rawOid.(string)
+		if !ok {
+			return nil, fmt.Errorf("unable to type assert rawOid |%v| to string", rawOid)
 		}
 		retVal.Type = ObjectIdentifier
-		retVal.Value = oidToString(oid)
+		retVal.Value = oid
 	case IPAddress:
 		// 0x40
 		x.Logger.Print("decodeValue: type is IPAddress")
@@ -442,62 +439,59 @@ func marshalLength(length int) ([]byte, error) {
 	return append(header, bufBytes...), nil
 }
 
-func marshalObjectIdentifier(oid []int) (ret []byte, err error) {
+func marshalObjectIdentifier(oid string) ([]byte, error) {
 	out := new(bytes.Buffer)
-	if len(oid) < 2 || oid[0] > 6 || oid[1] >= 40 {
-		return nil, errors.New("invalid object identifier")
-	}
-
-	err = out.WriteByte(byte(oid[0]*40 + oid[1]))
-	if err != nil {
-		return
-	}
-	for i := 2; i < len(oid); i++ {
-		err = marshalBase128Int(out, int64(oid[i]))
-		if err != nil {
-			return
-		}
-	}
-
-	ret = out.Bytes()
-	return
-}
-
-func marshalOID(oid string) ([]byte, error) {
+	oidLength := len(oid)
+	oidBase := 0
 	var err error
-
-	// Encode the oid
-	oid = strings.Trim(oid, ".")
-	oidParts := strings.Split(oid, ".")
-	oidBytes := make([]int, len(oidParts))
-
-	// Convert the string OID to an array of integers
-	for i := 0; i < len(oidParts); i++ {
-		oidBytes[i], err = strconv.Atoi(oidParts[i])
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse OID: %w", err)
+	i := 0
+	for j := 0; j < oidLength; {
+		if oid[j] == '.' {
+			j++
+			continue
 		}
+		var val int64 = 0
+		for j < oidLength && oid[j] != '.' {
+			ch := int64(oid[j] - '0')
+			if ch > 9 {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+			val *= 10
+			val += ch
+			j++
+		}
+		switch i {
+		case 0:
+			if val > 6 {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+			oidBase = int(val * 40)
+		case 1:
+			if val >= 40 {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+			oidBase += int(val)
+			err = out.WriteByte(byte(oidBase))
+			if err != nil {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+
+		default:
+			if val > MaxObjectSubIdentifierValue {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Value out of range")
+			}
+			err = marshalBase128Int(out, val)
+			if err != nil {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+		}
+		i++
+	}
+	if i < 2 || i > 128 {
+		return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 	}
 
-	mOid, err := marshalObjectIdentifier(oidBytes)
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to marshal OID: %w", err)
-	}
-
-	return mOid, err
-}
-
-func oidToString(oid []int) (ret string) {
-	oidAsString := make([]string, len(oid)+1)
-
-	// used for appending of the first dot
-	oidAsString[0] = ""
-	for i := range oid {
-		oidAsString[i+1] = strconv.Itoa(oid[i])
-	}
-
-	return strings.Join(oidAsString, ".")
+	return out.Bytes(), nil
 }
 
 // TODO no tests
@@ -507,7 +501,7 @@ func ipv4toBytes(ip net.IP) []byte {
 
 // parseBase128Int parses a base-128 encoded int from the given offset in the
 // given byte slice. It returns the value and the new offset.
-func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) {
+func parseBase128Int(bytes []byte, initOffset int) (ret int64, offset int, err error) {
 	offset = initOffset
 	for shifted := 0; offset < len(bytes); shifted++ {
 		if shifted > 4 {
@@ -516,7 +510,7 @@ func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) 
 		}
 		ret <<= 7
 		b := bytes[offset]
-		ret |= int(b & 0x7f)
+		ret |= int64(b & 0x7f)
 		offset++
 		if b&0x80 == 0 {
 			return
@@ -594,28 +588,28 @@ func parseLength(bytes []byte) (length int, cursor int) {
 // parseObjectIdentifier parses an OBJECT IDENTIFIER from the given bytes and
 // returns it. An object identifier is a sequence of variable length integers
 // that are assigned in a hierarchy.
-func parseObjectIdentifier(bytes []byte) (s []int, err error) {
-	if len(bytes) == 0 {
-		return []int{0}, nil
+func parseObjectIdentifier(src []byte) (ret string, err error) {
+	if len(src) == 0 {
+		err = fmt.Errorf("invalid OID length")
+		return
 	}
+	out := new(bytes.Buffer)
 
-	// In the worst case, we get two elements from the first byte (which is
-	// encoded differently) and then every varint is a single byte long.
-	s = make([]int, len(bytes)+1)
+	out.WriteByte('.')
+	out.WriteString(strconv.FormatInt(int64(int(src[0])/40), 10))
+	out.WriteByte('.')
+	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
 
-	// The first byte is 40*value1 + value2:
-	s[0] = int(bytes[0]) / 40
-	s[1] = int(bytes[0]) % 40
-	i := 2
-	for offset := 1; offset < len(bytes); i++ {
-		var v int
-		v, offset, err = parseBase128Int(bytes, offset)
+	for offset := 1; offset < len(src); {
+		out.WriteByte('.')
+		var v int64
+		v, offset, err = parseBase128Int(src, offset)
 		if err != nil {
 			return
 		}
-		s[i] = v
+		out.WriteString(strconv.FormatInt(v, 10))
 	}
-	s = s[0:i]
+	ret = out.String()
 	return
 }
 

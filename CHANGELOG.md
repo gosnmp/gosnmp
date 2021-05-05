@@ -12,6 +12,7 @@ NOTE: This release changes the Logger interface. The loggingEnabled variable has
 * [BUGFIX] marshal.go: improve packet validation and error handling #323
 * [BUGFIX] marshal.go: Fix on-error-continue flow in sendOneRequest #324
 * [CHANGE] New Logger interface has been implemented #329
+* [ENHANCEMENT]: helper.go: Improved OID marshaling with sub-identifier validation as per rfc2578 section-3.5 #321
 
 ## v1.31.0
 
