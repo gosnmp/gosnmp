@@ -117,7 +117,7 @@ const (
 
 var (
 	ErrDecryption            = errors.New("decryption error")
-	ErrInvalidMsgs           = errors.New("invalid msgs")
+	ErrInvalidMsgs           = errors.New("invalid messages")
 	ErrNotInTimeWindow       = errors.New("not in time window")
 	ErrUnknownEngineID       = errors.New("unknown engine id")
 	ErrUnknownPDUHandlers    = errors.New("unknown pdu handlers")
