@@ -110,16 +110,22 @@ const (
 	usmStatsUnknownEngineIDs     = ".1.3.6.1.6.3.15.1.1.4.0"
 	usmStatsWrongDigests         = ".1.3.6.1.6.3.15.1.1.5.0"
 	usmStatsDecryptionErrors     = ".1.3.6.1.6.3.15.1.1.6.0"
+	snmpUnknownSecurityModels    = ".1.3.6.1.6.3.11.2.1.1.0"
+	snmpInvalidMsgs              = ".1.3.6.1.6.3.11.2.1.2.0"
+	snmpUnknownPDUHandlers       = ".1.3.6.1.6.3.11.2.1.3.0"
 )
 
 var (
-	ErrDecryption           = errors.New("decryption error")
-	ErrNotInTimeWindow      = errors.New("not in time window")
-	ErrUnknownEngineID      = errors.New("unknown engine id")
-	ErrUnknownReportPDU     = errors.New("unknown report pdu")
-	ErrUnknownSecurityLevel = errors.New("unknown security level")
-	ErrUnknownUsername      = errors.New("unknown username")
-	ErrWrongDigest          = errors.New("wrong digest")
+	ErrDecryption            = errors.New("decryption error")
+	ErrInvalidMsgs           = errors.New("invalid msgs")
+	ErrNotInTimeWindow       = errors.New("not in time window")
+	ErrUnknownEngineID       = errors.New("unknown engine id")
+	ErrUnknownPDUHandlers    = errors.New("unknown pdu handlers")
+	ErrUnknownReportPDU      = errors.New("unknown report pdu")
+	ErrUnknownSecurityLevel  = errors.New("unknown security level")
+	ErrUnknownSecurityModels = errors.New("unknown security models")
+	ErrUnknownUsername       = errors.New("unknown username")
+	ErrWrongDigest           = errors.New("wrong digest")
 )
 
 const rxBufSize = 65535 // max size of IPv4 & IPv6 packet
@@ -352,6 +358,12 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 					return result, ErrWrongDigest
 				case usmStatsDecryptionErrors:
 					return result, ErrDecryption
+				case snmpUnknownSecurityModels:
+					return result, ErrUnknownSecurityModels
+				case snmpInvalidMsgs:
+					return result, ErrInvalidMsgs
+				case snmpUnknownPDUHandlers:
+					return result, ErrUnknownPDUHandlers
 				default:
 					return result, ErrUnknownReportPDU
 				}
