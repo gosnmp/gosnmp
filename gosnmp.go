@@ -12,8 +12,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"math"
 	"math/big"
 	"net"
@@ -71,19 +69,15 @@ type GoSNMP struct {
 	// Double timeout in each retry.
 	ExponentialTimeout bool
 
-	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
-	// output will be discarded (/dev/null). For verbose logging to stdout:
-	// x.Logger = log.New(os.Stdout, "", 0)
+	// Logger is the GoSNMP.Logger to use for debugging.
+	// For verbose logging to stdout:
+	// x.Logger = NewLogger(log.New(os.Stdout, "", 0))
+	// For Release builds, you can turn off logging entirely by using the go build tag "gosnmp_nodebug" even if the logger was installed.
 	Logger Logger
-
-	// loggingEnabled is set if the Logger isn't nil, otherwise any logging calls
-	// are ignored via shortcircuit.
-	loggingEnabled bool
 
 	// Message hook methods allow passing in a functions at various points in the packet handling.
 	// For example, this can be used to collect packet timing, add metrics, or implement tracing.
 	/*
-
 
 	 */
 	// PreSend is called before a packet is sent.
@@ -334,12 +328,6 @@ func (x *GoSNMP) netConnect() error {
 }
 
 func (x *GoSNMP) validateParameters() error {
-	if x.Logger != nil {
-		x.loggingEnabled = true
-	} else {
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	}
-
 	if x.Transport == "" {
 		x.Transport = udp
 	}

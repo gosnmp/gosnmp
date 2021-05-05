@@ -44,7 +44,7 @@ func main() {
 	gosnmp.Default.Transport = "tcp"
 	gosnmp.Default.Community = community
 	gosnmp.Default.Timeout = time.Duration(10 * time.Second) // Timeout better suited to walking
-	gosnmp.Default.Logger = log.New(os.Stdout, "", 0)
+	gosnmp.Default.Logger = gosnmp.NewLogger(log.New(os.Stdout, "", 0))
 	err := gosnmp.Default.Connect()
 	if err != nil {
 		fmt.Printf("Connect err: %v\n", err)

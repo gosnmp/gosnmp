@@ -48,15 +48,33 @@ will require modification in these (and other) locations:
   (see Usage below). `Connect` uses the `GoSNMP` struct;
   `gosnmp.Default` is provided for you to build on.
 * GoSNMP no longer relies on **alouca/gologger** - you can use your
-  logger if it conforms to the `gosnmp.Logger` interface; otherwise
-  debugging will be discarded (/dev/null).
+  logger if it conforms to the `gosnmp.LoggerInterface` interface; otherwise
+  debugging will disabled.
 
 ```go
-type Logger interface {
+type LoggerInterface interface {
     Print(v ...interface{})
     Printf(format string, v ...interface{})
 }
 ```
+To enable logging, you must call gosnmp.NewLogger() function, and pass a pointer to your logging interface, for example with standard *log.Logger:
+
+```go
+gosnmp.Default.Logger = gosnmp.NewLogger(log.New(os.Stdout, "", 0))
+```
+or
+```go
+g := &gosnmp.GoSNMP{
+    ...
+    Logger:    gosnmp.NewLogger(log.New(os.Stdout, "", 0)),
+}
+
+```
+You can completely remove the logging code from your application using the golang build tag "gosnmp_nodebug", for example:
+```
+go build -tags gosnmp_nodebug
+```
+This will completely disable the logging of the gosnmp library, even if the logger interface is specified in the code. This provides a small performance improvement.
 
 # Installation
 

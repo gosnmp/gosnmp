@@ -33,7 +33,7 @@ func main() {
 	tl := g.NewTrapListener()
 	tl.OnNewTrap = myTrapHandler
 	tl.Params = g.Default
-	tl.Params.Logger = log.New(os.Stdout, "", 0)
+	tl.Params.Logger = g.NewLogger(log.New(os.Stdout, "", 0))
 
 	err := tl.Listen("0.0.0.0:9162")
 	if err != nil {

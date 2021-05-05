@@ -30,11 +30,10 @@ func TestAPIConfigTypes(t *testing.T) {
 	g.Version = gosnmp.Version2c
 	g.Timeout = time.Duration(0)
 	g.Retries = 0
-	g.Logger = log.New(ioutil.Discard, "", 0)
 	g.MaxOids = 0
 	g.MaxRepetitions = 0
 	g.NonRepeaters = 0
-
+	g.Logger = gosnmp.NewLogger(log.New(ioutil.Discard, "", 0))
 	var c net.Conn
 	c = g.Conn
 	_ = c

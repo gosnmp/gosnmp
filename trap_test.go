@@ -7,9 +7,9 @@
 package gosnmp
 
 import (
+	"io/ioutil"
 	"log"
 	"net"
-	"os" //"io/ioutil"
 	"reflect"
 	"testing"
 	"time"
@@ -41,28 +41,28 @@ var testsUnmarshalTrap = []struct {
 		&SnmpPacket{
 			Version:   Version3,
 			PDUType:   SNMPv2Trap,
-			RequestID: 190378322,
+			RequestID: 957979745,
 			MsgFlags:  AuthNoPriv,
 			SecurityParameters: &UsmSecurityParameters{
 				UserName:                 "myuser",
 				AuthenticationProtocol:   MD5,
 				AuthenticationPassphrase: "mypassword",
-				Logger:                   log.New(os.Stdout, "", 0),
+				Logger:                   NewLogger(log.New(ioutil.Discard, "", 0)),
 			},
 		},
 	},
 }
 
-/*func TestUnmarshalTrap(t *testing.T) {
-	Default.Logger = log.New(os.Stdout, "", 0)
+func TestUnmarshalTrap(t *testing.T) {
+	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
 
 SANITY:
 	for i, test := range testsUnmarshalTrap {
 
 		Default.SecurityParameters = test.out.SecurityParameters.Copy()
-
+		Default.Version = Version3
 		var buf = test.in()
-		var res = Default.unmarshalTrap(buf)
+		var res = Default.UnmarshalTrap(buf, true)
 		if res == nil {
 			t.Errorf("#%d, UnmarshalTrap returned nil", i)
 			continue SANITY
@@ -78,7 +78,7 @@ SANITY:
 		}
 	}
 }
-*/
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
@@ -103,6 +103,7 @@ func genericV3Trap() []byte {
 }
 
 func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
+	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
 	return func(packet *SnmpPacket, addr *net.UDPAddr) {
 		//log.Printf("got trapdata from %s\n", addr.IP)
 		defer close(done)
@@ -181,7 +182,6 @@ func TestSendTrapBasic(t *testing.T) {
 	case err := <-errch:
 		t.Fatalf("error in listen: %v", err)
 	}
-
 	ts := &GoSNMP{
 		Target:    trapTestAddress,
 		Port:      trapTestPort,
@@ -190,6 +190,7 @@ func TestSendTrapBasic(t *testing.T) {
 		Timeout:   time.Duration(2) * time.Second,
 		Retries:   3,
 		MaxOids:   MaxOids,
+		Logger:    NewLogger(log.New(ioutil.Discard, "", 0)),
 	}
 
 	err := ts.Connect()
