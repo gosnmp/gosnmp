@@ -41,7 +41,7 @@ type testsEnmarshalVarbindPosition struct {
 		what's actually happening
 
 		2) for counting byte positions: select "Simple Network Management
-		Protocal" line in Wiresharks middle pane, then right click and choose
+		Protocol" line in Wiresharks middle pane, then right click and choose
 		"Export Packet Bytes..." (as .raw). Open the capture in wireshark, it
 		will decode as "BER Encoded File". Click on each varbind and the
 		"packet bytes" window will highlight the corresponding bytes, then the
@@ -1723,7 +1723,7 @@ func dumpBytes1(data []byte, msg string, maxlength int) {
 	if len(data) < maxlength {
 		length = len(data)
 	}
-	length *= 2 //One Byte Symobls Two Hex
+	length *= 2 //One Byte Symbols Two Hex
 	hexStr := hex.EncodeToString(data)
 	for i := 0; length >= i+16; i += 16 {
 		buffer.WriteString("\n")
