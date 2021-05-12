@@ -30,6 +30,10 @@ const (
 	// Base OID for MIB-2 defined SNMP variables
 	baseOid = ".1.3.6.1.2.1"
 
+	// Max oid sub-identifier value
+	// https://tools.ietf.org/html/rfc2578#section-7.1.3
+	MaxObjectSubIdentifierValue = 4294967295
+
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
 

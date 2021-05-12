@@ -15,30 +15,45 @@ import (
 
 // https://www.scadacore.com/tools/programming-calculators/online-hex-converter/ is useful
 
-func TestOidToString(t *testing.T) {
-	oid := []int{1, 2, 3, 4, 5}
-	expected := ".1.2.3.4.5"
-	result := oidToString(oid)
+func TestParseObjectIdentifier(t *testing.T) {
+	oid := []byte{43, 6, 1, 2, 1, 31, 1, 1, 1, 10, 143, 255, 255, 255, 127}
+	expected := ".1.3.6.1.2.1.31.1.1.1.10.4294967295"
 
-	if result != expected {
-		t.Errorf("oidToString(%v) = %s, want %s", oid, result, expected)
+	buf, err := parseObjectIdentifier(oid)
+	if err != nil {
+		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
+	}
+	result := string(buf)
+
+	if string(result) != expected {
+		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
 	}
 }
 
-func TestWithAnotherOid(t *testing.T) {
-	oid := []int{4, 3, 2, 1, 3}
-	expected := ".4.3.2.1.3"
-	result := oidToString(oid)
-
-	if result != expected {
-		t.Errorf("oidToString(%v) = %s, want %s", oid, result, expected)
+func TestParseObjectIdentifierWithOtherOid(t *testing.T) {
+	oid := []byte{43, 6, 3, 30, 11, 1, 10}
+	expected := ".1.3.6.3.30.11.1.10"
+	buf, err := parseObjectIdentifier(oid)
+	if err != nil {
+		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
+	}
+	result := string(buf)
+	if string(result) != expected {
+		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
 	}
 }
 
-func BenchmarkOidToString(b *testing.B) {
-	oid := []int{1, 2, 3, 4, 5}
+func BenchmarkParseObjectIdentifier(b *testing.B) {
+	oid := []byte{43, 6, 3, 30, 11, 1, 10}
 	for i := 0; i < b.N; i++ {
-		oidToString(oid)
+		parseObjectIdentifier(oid)
+	}
+}
+
+func BenchmarkMarshalObjectIdentifier(b *testing.B) {
+	oid := ".1.3.6.3.30.11.1.10"
+	for i := 0; i < b.N; i++ {
+		marshalObjectIdentifier(oid)
 	}
 }
 

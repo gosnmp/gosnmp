@@ -531,7 +531,7 @@ func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// marshal OID
-	oidBytes, err := marshalOID(packet.Enterprise)
+	oidBytes, err := marshalObjectIdentifier(packet.Enterprise)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal OID: %w", err)
 	}
@@ -702,7 +702,7 @@ func (packet *SnmpPacket) marshalVBL() ([]byte, error) {
 
 // marshal a varbind
 func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
-	oid, err := marshalOID(pdu.Name)
+	oid, err := marshalObjectIdentifier(pdu.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -826,7 +826,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
 		value := pdu.Value.(string)
-		oidBytes, err := marshalOID(value)
+		oidBytes, err := marshalObjectIdentifier(value)
 		if err != nil {
 			return nil, fmt.Errorf("error marshalling ObjectIdentifier: %w", err)
 		}
@@ -1122,13 +1122,14 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 	if err != nil {
 		return fmt.Errorf("error parsing SNMP packet error: %w", err)
 	}
+
 	cursor += count
 	if cursor > len(packet) {
 		return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
-	if Enterprise, ok := rawEnterprise.([]int); ok {
-		response.Enterprise = oidToString(Enterprise)
+	if Enterprise, ok := rawEnterprise.(string); ok {
+		response.Enterprise = Enterprise
 		x.Logger.Printf("Enterprise: %+v", Enterprise)
 	}
 
@@ -1240,20 +1241,15 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 		if err != nil {
 			return fmt.Errorf("error parsing OID Value: %w", err)
 		}
-
 		cursor += oidLength
 		if cursor > len(packet) {
 			return fmt.Errorf("error parsing OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
-
-		var oid []int
-		var ok bool
-		if oid, ok = rawOid.([]int); !ok {
-			return fmt.Errorf("unable to type assert rawOid |%v| to []int", rawOid)
+		oid, ok := rawOid.(string)
+		if !ok {
+			return fmt.Errorf("unable to type assert rawOid |%v| to string", rawOid)
 		}
-		oidStr := oidToString(oid)
-		x.Logger.Printf("OID: %s", oidStr)
-
+		x.Logger.Printf("OID: %s", oid)
 		// Parse Value
 		v, err := x.decodeValue(packet[cursor:], "value")
 		if err != nil {
@@ -1266,7 +1262,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
 
-		response.Variables = append(response.Variables, SnmpPDU{oidStr, v.Type, v.Value})
+		response.Variables = append(response.Variables, SnmpPDU{oid, v.Type, v.Value})
 	}
 	return nil
 }
