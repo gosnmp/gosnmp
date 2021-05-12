@@ -621,44 +621,48 @@ func (sp *UsmSecurityParameters) discoveryRequired() *SnmpPacket {
 	return nil
 }
 
-func (sp *UsmSecurityParameters) calcPacketDigest(packet []byte) []byte {
+func (sp *UsmSecurityParameters) calcPacketDigest(packet []byte) ([]byte, error) {
 	return calcPacketDigest(packet, sp)
 }
 
 // calcPacketDigest calculate authenticate digest for incoming messages (TRAP or
 // INFORM).
 // Support MD5, SHA1, SHA224, SHA256, SHA384, SHA512 protocols
-func calcPacketDigest(packetBytes []byte, secParams *UsmSecurityParameters) []byte {
+func calcPacketDigest(packetBytes []byte, secParams *UsmSecurityParameters) ([]byte, error) {
 	var digest []byte
+	var err error
 
 	switch secParams.AuthenticationProtocol {
 	case MD5, SHA:
-		digest = digestRFC3414(
+		digest, err = digestRFC3414(
 			secParams.AuthenticationProtocol,
 			packetBytes,
 			secParams.SecretKey)
 	case SHA224, SHA256, SHA384, SHA512:
-		digest = digestRFC7860(
+		digest, err = digestRFC7860(
 			secParams.AuthenticationProtocol,
 			packetBytes,
 			secParams.SecretKey)
 	}
 
-	return digest
+	return digest, err
 }
 
 // digestRFC7860 calculate digest for incoming messages using HMAC-SHA2 protcols
 // according to RFC7860 4.2.2
-func digestRFC7860(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
+func digestRFC7860(h SnmpV3AuthProtocol, packet []byte, authKey []byte) ([]byte, error) {
 	mac := hmac.New(h.HashType().New, authKey)
-	_, _ = mac.Write(packet)
+	_, err := mac.Write(packet)
+	if err != nil {
+		return []byte{}, err
+	}
 	msgDigest := mac.Sum(nil)
-	return msgDigest
+	return msgDigest, nil
 }
 
 // digestRFC3414 calculate digest for incoming messages using MD5 or SHA1
 // according to RFC3414 6.3.2 and 7.3.2
-func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
+func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) ([]byte, error) {
 	var extkey [64]byte
 	var err error
 	var k1, k2 [64]byte
@@ -682,31 +686,37 @@ func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) []byte {
 
 	_, err = h1.Write(k1[:])
 	if err != nil {
-		return []byte{}
+		return []byte{}, err
 	}
 
 	_, err = h1.Write(packet)
 	if err != nil {
-		return []byte{}
+		return []byte{}, err
 	}
 
 	d1 := h1.Sum(nil)
 
 	_, err = h2.Write(k2[:])
 	if err != nil {
-		return []byte{}
+		return []byte{}, err
 	}
 
 	_, err = h2.Write(d1)
 	if err != nil {
-		return []byte{}
+		return []byte{}, err
 	}
 
-	return h2.Sum(nil)[:12]
+	return h2.Sum(nil)[:12], nil
 }
 
 func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
-	msgDigest := sp.calcPacketDigest(packet)
+	var msgDigest []byte
+	var err error
+
+	if msgDigest, err = sp.calcPacketDigest(packet); err != nil {
+		return err
+	}
+
 	idx := bytes.Index(packet, macVarbinds[sp.AuthenticationProtocol])
 
 	if idx < 0 {
@@ -719,6 +729,7 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 
 // determine whether a message is authentic
 func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error) {
+	var msgDigest []byte
 	var packetSecParams *UsmSecurityParameters
 	var err error
 
@@ -726,7 +737,9 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 		return false, err
 	}
 	// TODO: investigate call chain to determine if this is really the best spot for this
-	msgDigest := calcPacketDigest(packetBytes, packetSecParams)
+	if msgDigest, err = calcPacketDigest(packetBytes, packetSecParams); err != nil {
+		return false, err
+	}
 
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
 		if msgDigest[k] != v {
