@@ -22,9 +22,8 @@ import (
 	"strconv"
 )
 
-// variable struct is used by decodeValue(), which is used for debugging
+// variable struct is used by decodeValue()
 type variable struct {
-	Name  []int
 	Type  Asn1BER
 	Value interface{}
 }
