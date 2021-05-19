@@ -7,6 +7,10 @@ NOTE:
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## Unreleased
+
+* [FEATURE] Add LocalAddr setting to bind source address of SNMP queries #342
+
 ## v1.32.0
 
 NOTE: This release changes the Logger interface. The loggingEnabled variable has been deprecated.
