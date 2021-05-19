@@ -119,6 +119,10 @@ type GoSNMP struct {
 	// we open unconnected UDP socket and use sendto/recvfrom.
 	UseUnconnectedUDPSocket bool
 
+	// Used if only UseUnconnectedUDPSocket if set
+	// Default ":0" - bind to 0.0.0.0 with random port
+	Listen string
+
 	// netsnmp has '-C APPOPTS - set various application specific behaviours'
 	//
 	// - 'c: do not check returned OIDs are increasing' - use AppOpts = map[string]interface{"c":true} with
@@ -322,7 +326,12 @@ func (x *GoSNMP) netConnect() error {
 				x.uaddr.IP = addr4
 				transport = "udp4"
 			}
-			x.Conn, err = net.ListenUDP(transport, nil)
+			var saddr *net.UDPAddr
+			saddr, err = net.ResolveUDPAddr(transport, x.Listen)
+			if err != nil {
+				return err
+			}
+			x.Conn, err = net.ListenUDP(transport, saddr)
 			return err
 		}
 	}
@@ -334,6 +343,9 @@ func (x *GoSNMP) netConnect() error {
 func (x *GoSNMP) validateParameters() error {
 	if x.Transport == "" {
 		x.Transport = udp
+	}
+	if x.Listen == "" {
+		x.Listen = ":0"
 	}
 
 	if x.MaxOids == 0 {
