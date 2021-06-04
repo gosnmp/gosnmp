@@ -27,11 +27,11 @@ func TestSnmpAgent(t *testing.T) {
 	g.Version = Version2c
 	g.Timeout = time.Duration(time.Second * 3)
 	g.Retries = 0
-	g.Logger = log.New(os.Stdout, "", 0)
+	g.Logger = Logger{log.New(os.Stdout, "", 0)}
 	a := &GoSNMPAgent{
 		Port:           161,
 		IPAddr:         "0.0.0.0",
-		Logger:         log.New(os.Stdout, "", 0),
+		Logger:         Logger{log.New(os.Stdout, "", 0)},
 		Snmp:           g,
 		SupportSnmpMIB: true,
 	}

@@ -151,8 +151,9 @@ func (a *GoSNMPAgent) findMib(oid string, bNext bool) (string, Asn1BER, interfac
 
 // Start : start snmp agent
 func (a *GoSNMPAgent) Start() error {
-	if a.Logger == nil {
-		a.Logger = log.New(ioutil.Discard, "", 0)
+	l := Logger{}
+	if a.Logger == l {
+		a.Logger = Logger{log.New(ioutil.Discard, "", 0)}
 	}
 	a.Stop()
 	var err error
