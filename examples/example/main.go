@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log"
 
-	g "github.com/gosnmp/gosnmp"
+	g "github.com/fakiot/gosnmp"
 )
 
 func main() {

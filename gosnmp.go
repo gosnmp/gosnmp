@@ -493,6 +493,39 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 	return out, nil
 }
 
+// SnmpEncodeGetResponsePacket exposes SNMP packet generation to external callers.
+// This is useful for generating traffic for use over separate transport
+// stacks and creating traffic samples for test purposes.
+func (x *GoSNMP) SnmpEncodeGetResponsePacket(reqID uint32, errorIndex int32, pdus []SnmpPDU) ([]byte, error) {
+	err := x.validateParameters()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	pkt := x.mkSnmpPacket(GetResponse, pdus, 0, 0)
+	pkt.RequestID = reqID
+	if errorIndex >= 0 {
+		pkt.Error = NoSuchName
+		pkt.ErrorIndex = uint8(errorIndex)
+	}
+
+	if x.Version == Version3 {
+		pkt.MsgID = reqID
+		err = x.initPacket(pkt)
+		if err != nil {
+			return []byte{}, err
+		}
+	}
+
+	var out []byte
+	out, err = pkt.marshalMsg()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return out, nil
+}
+
 // SnmpDecodePacket exposes SNMP packet parsing to external callers.
 // This is useful for processing traffic from other sources and
 // building test harnesses.

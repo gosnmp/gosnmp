@@ -7,6 +7,10 @@ NOTE:
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## v1.32.1
+
+Fork from fakiot/gosnmp v1.28.4
+
 ## v1.32.0
 
 NOTE: This release changes the Logger interface. The loggingEnabled variable has been deprecated.

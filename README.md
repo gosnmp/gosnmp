@@ -1,9 +1,36 @@
+gosnmp for TWSNMP
+===
+
+**04 Jun 2021**
+
+Forked from gosnmp(**twsnmp/gosnmp**)
+
+Original note
+======
+
+**11 July 2020** - I'm planning on archiving **gosnmp**, as maintaining it is
+having too much of an effect on my work and personal life. I started the fork
+in March 2013 and I've been working on it ever since.
+
+At the moment I'm keeping it open so it can act as a central clearing house for
+issues and discussions around who is going to fork and maintain gosnmp - maybe one
+person, maybe a team. Here are some suggestions around short term goals:
+
+- more tests, both unit and integration
+- Docker infrastructure, so developers can locally troubleshoot their changes
+  before submitting (broken) PRs
+- fix snmpv3, INFORM responses, traps
+
+Thanks to Tim Rots for reaching out to me, to the many people who have submitted
+PRs, and of course Andreas Louca, who started the project in 2012.
+
+Tim has raised issue [Searching for collaboration to fork gosnmp](https://github.com/soniah/gosnmp/issues/247)
+to help coordinate replacement maintainers.
+
+Sonia Hamilton, sonia@snowfrog.net, Australia.
+
 gosnmp
 ======
-[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#networking)
-
-[![Build Status](https://circleci.com/gh/gosnmp/gosnmp.svg?style=shield)](https://circleci.com/gh/gosnmp/gosnmp/tree/master)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/gosnmp/gosnmp)](https://pkg.go.dev/github.com/gosnmp/gosnmp)
 
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
 GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
@@ -34,13 +61,14 @@ GoSNMP has the following SNMP functions:
 * **Set** - supports Integers and OctetStrings.
 * **SendTrap** - send SNMP TRAPs.
 * **Listen** - act as an NMS for receiving TRAPs.
+* **SNMP Agent** - act as SNMP agent.
 
 GoSNMP has the following **helper** functions:
 
 * **ToBigInt** - treat returned values as `*big.Int`
 * **Partition** - facilitates dividing up large slices of OIDs
 
-**gosnmp/gosnmp** has completely diverged from **alouca/gosnmp**, your code
+**fakiot/gosnmp** has completely diverged from **soniah/gosnmp**, your code
 will require modification in these (and other) locations:
 
 * the **Get** function has a different method signature
@@ -79,12 +107,8 @@ This will completely disable the logging of the gosnmp library, even if the logg
 # Installation
 
 ```shell
-go get github.com/gosnmp/gosnmp
+go get github.com/fakiot/gosnmp
 ```
-
-# Documentation
-
-https://pkg.go.dev/github.com/gosnmp/gosnmp
 
 # Usage
 
@@ -138,7 +162,48 @@ Running this example gives the following output (from my printer):
 * `examples/example3.go` demonstrates `SNMPv3`
 * `examples/trapserver.go` demonstrates writing an SNMP v2c trap server
 
-# MIB Parser
+SNMP Agent
+----------
+
+1. Make SNMP agent struct
+
+```go
+	g := &gosnmp.GoSNMP{}
+	g.Port = 161
+	g.Community = "public"
+	g.Version = gosnmp.Version2c
+	a := &gosnmp.GoSNMPAgent{
+		Port:   161,
+		IPAddr: "0.0.0.0",
+		Logger: log.New(os.Stdout, "", 0),
+		Snmp:   g,
+  }
+```
+
+2. Make MIB get function
+
+```go
+func getSysDescr(oid string) interface{} {
+	return "test"
+}
+```
+
+3. Add MIB to MIB Database
+
+```go
+	a.AddMibList(".1.3.6.1.2.1.1.1.0", gosnmp.OctetString, getSysDescr)
+```
+
+4. Start SNMP agent
+
+```go
+	if err := a.Start(); err != nil {
+		log.Fatal(err)
+	}
+```
+
+MIB Parser
+----------
 
 I don't have any plans to write a mib parser. Others have suggested
 https://github.com/sleepinggenius2/gosmi
@@ -150,9 +215,9 @@ below).
 
 If you've never contributed to a Go project before, here is an example workflow.
 
-1. [fork this repo on the GitHub webpage](https://github.com/gosnmp/gosnmp/fork)
-1. `go get github.com/gosnmp/gosnmp`
-1. `cd $GOPATH/src/github.com/gosnmp/gosnmp`
+1. [fork this repo on the GitHub webpage](https://github.com/fakiot/gosnmp/fork)
+1. `go get github.com/fakiot/gosnmp`
+1. `cd $GOPATH/src/github.com/fakiot/gosnmp`
 1. `git remote rename origin upstream`
 1. `git remote add origin git@github.com:<your-github-username>/gosnmp.git`
 1. `git checkout -b development`
@@ -218,8 +283,8 @@ The following BER types have been implemented:
 
 Local testing in Docker
 ```shell
-docker build -t gosnmp/gosnmp:latest .
-docker run -it gosnmp/gosnmp:latest
+docker build -t fakiot/gosnmp:latest .
+docker run -it fakiot/gosnmp:latest
 ```
 
 or
@@ -275,7 +340,7 @@ To check test coverage:
 ```shell
 go get github.com/axw/gocov/gocov
 go get github.com/matm/gocov-html
-gocov test github.com/gosnmp/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
+gocov test github.com/fakiot/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
 ```
 
 
