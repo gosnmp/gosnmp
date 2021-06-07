@@ -391,7 +391,7 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 			oidCount, x.MaxOids)
 	}
 	// convert oids slice to pdu slice
-	var pdus []SnmpPDU
+	pdus := make([]SnmpPDU, 0, oidCount)
 	for _, oid := range oids {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
@@ -422,7 +422,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	}
 
 	// convert oids slice to pdu slice
-	var pdus []SnmpPDU
+	pdus := make([]SnmpPDU, 0, oidCount)
 	for _, oid := range oids {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
@@ -447,7 +447,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint3
 	}
 
 	// convert oids slice to pdu slice
-	var pdus []SnmpPDU
+	pdus := make([]SnmpPDU, 0, oidCount)
 	for _, oid := range oids {
 		pdus = append(pdus, SnmpPDU{oid, Null, nil})
 	}
