@@ -9,7 +9,7 @@ NOTE:
 
 ## v1.32.1
 
-Fork from fakiot/gosnmp v1.28.4
+Fork from twsnmp/gosnmp v1.28.4
 
 ## v1.32.0
 
