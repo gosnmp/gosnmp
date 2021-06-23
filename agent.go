@@ -71,6 +71,7 @@ type mibEnt struct {
 	oid     []uint16
 	objType Asn1BER
 	getFunc func(string) interface{}
+	setFunc func(interface{})
 }
 
 func toNumOid(s string) []uint16 {
@@ -105,10 +106,11 @@ func cmpOid(oid1, oid2 []uint16) int {
 	return 0
 }
 
-func (a *GoSNMPAgent) AddMibList(oid string, vbType Asn1BER, get func(string) interface{}) {
+func (a *GoSNMPAgent) AddMibList(oid string, vbType Asn1BER, get func(string) interface{}, set func(interface{})) {
 	mib := &mibEnt{
 		strOid:  oid,
 		getFunc: get,
+		setFunc: set,
 		objType: vbType,
 		oid:     toNumOid(oid),
 	}
@@ -128,7 +130,7 @@ func (a *GoSNMPAgent) AddMibList(oid string, vbType Asn1BER, get func(string) in
 	a.mibList[pos] = mib
 }
 
-func (a *GoSNMPAgent) findMib(oid string, bNext bool) (string, Asn1BER, interface{}, error) {
+func (a *GoSNMPAgent) findMib(oid string, bNext bool, ptype PDUType, value interface{}) (string, Asn1BER, interface{}, error) {
 	noid := toNumOid(oid)
 	i := sort.Search(len(a.mibList), func(i int) bool {
 		return cmpOid(noid, a.mibList[i].oid) <= 0
@@ -138,6 +140,9 @@ func (a *GoSNMPAgent) findMib(oid string, bNext bool) (string, Asn1BER, interfac
 	}
 	if cmpOid(noid, a.mibList[i].oid) == 0 {
 		if !bNext {
+			if ptype == SetRequest && a.mibList[i].setFunc != nil {
+				a.mibList[i].setFunc(value)
+			}
 			return oid, a.mibList[i].objType, a.mibList[i].getFunc(oid), nil
 		}
 		i++
@@ -146,6 +151,9 @@ func (a *GoSNMPAgent) findMib(oid string, bNext bool) (string, Asn1BER, interfac
 		}
 	}
 	oid = a.mibList[i].strOid
+	if ptype == SetRequest && a.mibList[i].setFunc != nil {
+		a.mibList[i].setFunc(value)
+	}
 	return oid, a.mibList[i].objType, a.mibList[i].getFunc(oid), nil
 }
 
@@ -217,7 +225,7 @@ func (a *GoSNMPAgent) process() {
 			a.Logger.Print("Drop Invalid Community request")
 			continue
 		}
-		if p.PDUType != GetRequest && p.PDUType != GetNextRequest {
+		if p.PDUType != GetRequest && p.PDUType != GetNextRequest && p.PDUType != SetRequest {
 			snmpInBadCommunityNames++
 			a.Logger.Printf("Drop Bad PDU Type=%v", p.PDUType)
 			continue
@@ -231,7 +239,7 @@ func (a *GoSNMPAgent) process() {
 		pdus := []SnmpPDU{}
 		errIndex := -1
 		for i, vb := range p.Variables {
-			o, t, m, err := a.findMib(vb.Name, bNext)
+			o, t, m, err := a.findMib(vb.Name, bNext, p.PDUType, vb.Value)
 			if err == nil {
 				vb.Name = o
 				vb.Type = t
@@ -298,7 +306,7 @@ func (a *GoSNMPAgent) AddSnmpMib() {
 		if i == 7 || i == 23 {
 			continue
 		}
-		a.AddMibList(fmt.Sprintf(".1.3.6.1.2.1.11.%d.0", i), Counter32, a.getCounter32)
+		a.AddMibList(fmt.Sprintf(".1.3.6.1.2.1.11.%d.0", i), Counter32, a.getCounter32, nil)
 	}
-	a.AddMibList(".1.3.6.1.2.1.11.30.0", Integer, a.getSnmpEnableAuthenTraps)
+	a.AddMibList(".1.3.6.1.2.1.11.30.0", Integer, a.getSnmpEnableAuthenTraps, nil)
 }
