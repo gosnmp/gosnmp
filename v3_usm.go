@@ -994,7 +994,6 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 			if sp.PrivacyProtocol <= NoPriv {
 				msg := "privacy parameters are not configured to parse incoming encrypted message"
 				return 0, fmt.Errorf("error parsing SNMPv3 User Security Model: %s ", msg)
-
 			}
 		}
 	}
