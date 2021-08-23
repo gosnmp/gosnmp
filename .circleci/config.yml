@@ -4,7 +4,7 @@ version: 2.1
 executors:
   golang:
     docker:
-    - image: cimg/go:1.15
+    - image: cimg/go:1.17
 
 jobs:
   generate:
@@ -30,7 +30,7 @@ jobs:
       goversion:
         type: string
     docker:
-      - image: circleci/golang:<< parameters.goversion >>
+      - image: cimg/go:<< parameters.goversion >>
     environment:
       GOARCH: << parameters.goarch >>
       GOSNMP_TARGET: "127.0.0.1"
@@ -45,7 +45,8 @@ jobs:
     - run: sudo apt-get update
     - run: sudo apt-get -y install snmpd
     - run: sudo ./snmp_users.sh
-    - run: sudo /etc/init.d/snmpd restart
+    - run: sudo sed -i -e 's/^agentaddress.*$/agentaddress 127.0.0.1/' /etc/snmp/snmpd.conf
+    - run: sudo service snmpd restart
     - run: go test -v -tags helper
     - run: go test -v -tags marshal
     - run: go test -v -tags misc
@@ -76,3 +77,4 @@ workflows:
             - "1.14"
             - "1.15"
             - "1.16"
+            - "1.17"
