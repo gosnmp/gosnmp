@@ -16,7 +16,6 @@ import (
 	"io"
 	"log"
 	"math"
-	"math/big"
 	"net"
 	"os"
 	"strconv"
@@ -724,28 +723,6 @@ func parseFloat64(bytes []byte) (ret float64, err error) {
 	}
 	ret = math.Float64frombits(binary.BigEndian.Uint64(bytes))
 	return
-}
-
-// Issue 4389: math/big: add SetUint64 and Uint64 functions to *Int
-//
-// uint64ToBigInt copied from: http://github.com/cznic/mathutil/blob/master/mathutil.go#L341
-//
-// replace with Uint64ToBigInt or equivalent when using Go 1.1
-
-//nolint:gochecknoglobals
-var uint64ToBigIntDelta big.Int
-
-func init() {
-	uint64ToBigIntDelta.SetBit(&uint64ToBigIntDelta, 63, 1)
-}
-
-func uint64ToBigInt(n uint64) *big.Int {
-	if n <= math.MaxInt64 {
-		return big.NewInt(int64(n))
-	}
-
-	y := big.NewInt(int64(n - uint64(math.MaxInt64) - 1))
-	return y.Add(y, &uint64ToBigIntDelta)
 }
 
 // -- Bit String ---------------------------------------------------------------
