@@ -636,6 +636,7 @@ func Partition(currentPosition, partitionSize, sliceLength int) bool {
 // return int32, uint32, and uint64.
 func ToBigInt(value interface{}) *big.Int {
 	var val int64
+
 	switch value := value.(type) { // shadow
 	case int:
 		val = int64(value)
@@ -655,16 +656,17 @@ func ToBigInt(value interface{}) *big.Int {
 		val = int64(value)
 	case uint32:
 		val = int64(value)
-	case uint64:
-		return (uint64ToBigInt(value))
+	case uint64: // beware: int64(MaxUint64) overflow, handle different
+		return new(big.Int).SetUint64(value)
 	case string:
 		// for testing and other apps - numbers may appear as strings
 		var err error
 		if val, err = strconv.ParseInt(value, 10, 64); err != nil {
-			return new(big.Int)
+			val = 0
 		}
 	default:
-		return new(big.Int)
+		val = 0
 	}
+
 	return big.NewInt(val)
 }
