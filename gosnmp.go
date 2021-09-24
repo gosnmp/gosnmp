@@ -119,6 +119,11 @@ type GoSNMP struct {
 	// we open unconnected UDP socket and use sendto/recvfrom.
 	UseUnconnectedUDPSocket bool
 
+	// LocalAddr is the local address in the format "address:port" to use when connecting an Target address.
+	// If the port parameter is empty or "0", as in
+	// "127.0.0.1:" or "[::1]:0", a port number is automatically (random) chosen.
+	LocalAddr string
+
 	// netsnmp has '-C APPOPTS - set various application specific behaviours'
 	//
 	// - 'c: do not check returned OIDs are increasing' - use AppOpts = map[string]interface{"c":true} with
@@ -305,28 +310,34 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 // reconnect (needed for TCP)
 func (x *GoSNMP) netConnect() error {
 	var err error
+	var localAddr net.Addr
 	addr := net.JoinHostPort(x.Target, strconv.Itoa(int(x.Port)))
 
-	switch transport := x.Transport; transport {
+	switch x.Transport {
 	case "udp", "udp4", "udp6":
+		if localAddr, err = net.ResolveUDPAddr(x.Transport, x.LocalAddr); err != nil {
+			return err
+		}
+		if addr4 := localAddr.(*net.UDPAddr).IP.To4(); addr4 != nil {
+			x.Transport = "udp4"
+		}
 		if x.UseUnconnectedUDPSocket {
-			x.uaddr, err = net.ResolveUDPAddr(transport, addr)
+			x.uaddr, err = net.ResolveUDPAddr(x.Transport, addr)
 			if err != nil {
 				return err
 			}
-
-			// As far as I know, this should not be needed in production but only to
-			// work around tests: in tests we are opening fake destination with ends up
-			// being ipv4:0.0.0.0. You can't send packets from :: to 0.0.0.0.
-			if addr4 := x.uaddr.IP.To4(); addr4 != nil {
-				x.uaddr.IP = addr4
-				transport = "udp4"
-			}
-			x.Conn, err = net.ListenUDP(transport, nil)
+			x.Conn, err = net.ListenUDP(x.Transport, localAddr.(*net.UDPAddr))
 			return err
 		}
+	case "tcp", "tcp4", "tcp6":
+		if localAddr, err = net.ResolveTCPAddr(x.Transport, x.LocalAddr); err != nil {
+			return err
+		}
+		if addr4 := localAddr.(*net.TCPAddr).IP.To4(); addr4 != nil {
+			x.Transport = "tcp4"
+		}
 	}
-	dialer := net.Dialer{Timeout: x.Timeout}
+	dialer := net.Dialer{Timeout: x.Timeout, LocalAddr: localAddr}
 	x.Conn, err = dialer.DialContext(x.Context, x.Transport, addr)
 	return err
 }
