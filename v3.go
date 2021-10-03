@@ -337,7 +337,10 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("invalid SNMPV3 Header")
 	}
 
-	_, cursorTmp := parseLength(packet[cursor:])
+	_, cursorTmp, err := parseLength(packet[cursor:])
+	if err != nil {
+		return 0, err
+	}
 	cursor += cursorTmp
 	if cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
@@ -402,7 +405,10 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	if PDUType(packet[cursor]) != PDUType(OctetString) {
 		return 0, errors.New("invalid SNMPV3 Security Parameters")
 	}
-	_, cursorTmp = parseLength(packet[cursor:])
+	_, cursorTmp, err = parseLength(packet[cursor:])
+	if err != nil {
+		return 0, err
+	}
 	cursor += cursorTmp
 	if cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
@@ -439,7 +445,10 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		fallthrough
 	case Sequence:
 		// pdu is plaintext or has been decrypted
-		tlength, cursorTmp := parseLength(packet[cursor:])
+		tlength, cursorTmp, err := parseLength(packet[cursor:])
+		if err != nil {
+			return nil, 0, err
+		}
 		if decrypted {
 			// truncate padding that might have been included with
 			// the encrypted PDU

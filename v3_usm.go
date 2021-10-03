@@ -801,7 +801,10 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 }
 
 func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byte, error) {
-	_, cursorTmp := parseLength(packet[cursor:])
+	_, cursorTmp, err := parseLength(packet[cursor:])
+	if err != nil {
+		return nil, err
+	}
 	cursorTmp += cursor
 	if cursorTmp > len(packet) {
 		return nil, errors.New("error decrypting ScopedPDU: truncated packet")
@@ -907,7 +910,10 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	if PDUType(packet[cursor]) != Sequence {
 		return 0, errors.New("error parsing SNMPV3 User Security Model parameters")
 	}
-	_, cursorTmp := parseLength(packet[cursor:])
+	_, cursorTmp, err := parseLength(packet[cursor:])
+	if err != nil {
+		return 0, err
+	}
 	cursor += cursorTmp
 	if cursorTmp > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 User Security Model parameters: truncated packet")
