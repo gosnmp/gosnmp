@@ -28,6 +28,11 @@ type variable struct {
 	Value interface{}
 }
 
+// helper error modes
+var (
+	ErrInvalidPacketLength = errors.New("invalid packet length")
+)
+
 // -- helper functions (mostly) in alphabetical order --------------------------
 
 // Check makes checking errors easy, so they actually get a minimal check
@@ -585,7 +590,6 @@ func parseInt(bytes []byte) (int, error) {
 //   octets give the length, base 256, most significant digit first.
 func parseLength(bytes []byte) (int, int, error) {
 	var cursor, length int
-	var ErrInvalidPacketLength = errors.New("invalid packet length")
 	switch {
 	case len(bytes) <= 2:
 		// handle null octet strings ie "0x04 0x00"
