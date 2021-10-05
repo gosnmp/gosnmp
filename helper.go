@@ -583,7 +583,8 @@ func parseInt(bytes []byte) (int, error) {
 // * Long form. Two to 127 octets. Bit 8 of first octet has value "1" and bits
 //   7-1 give the number of additional length octets. Second and following
 //   octets give the length, base 256, most significant digit first.
-func parseLength(bytes []byte) (length int, cursor int, err error) {
+func parseLength(bytes []byte) (int, int, error) {
+	var cursor, length int
 	var ErrInvalidPacketLength = errors.New("invalid packet length")
 	switch {
 	case len(bytes) <= 2:
