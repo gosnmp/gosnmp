@@ -31,6 +31,10 @@ type variable struct {
 // helper error modes
 var (
 	ErrInvalidPacketLength = errors.New("invalid packet length")
+	ErrIntegerTooLarge     = errors.New("integer too large")
+	ErrFloatTooLarge       = errors.New("float too large")
+	ErrZeroByteBuffer      = errors.New("zero byte buffer")
+	ErrInvalidOidLength    = errors.New("invalid OID length")
 )
 
 // -- helper functions (mostly) in alphabetical order --------------------------
@@ -60,7 +64,7 @@ func Check(err error) {
 
 func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 	if len(data) == 0 {
-		return errors.New("zero byte buffer")
+		return ErrZeroByteBuffer
 	}
 
 	// values matching this mask have the type in subsequent byte
@@ -549,8 +553,7 @@ func parseBase128Int(bytes []byte, initOffset int) (ret int64, offset int, err e
 func parseInt64(bytes []byte) (ret int64, err error) {
 	if len(bytes) > 8 {
 		// We'll overflow an int64 in this case.
-		err = errors.New("integer too large")
-		return
+		return 0, ErrIntegerTooLarge
 	}
 	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
 		ret <<= 8
@@ -571,7 +574,7 @@ func parseInt(bytes []byte) (int, error) {
 		return 0, err
 	}
 	if ret64 != int64(int(ret64)) {
-		return 0, errors.New("integer too large")
+		return 0, ErrIntegerTooLarge
 	}
 	return int(ret64), nil
 }
@@ -620,7 +623,7 @@ func parseLength(bytes []byte) (int, int, error) {
 // that are assigned in a hierarchy.
 func parseObjectIdentifier(src []byte) (ret string, err error) {
 	if len(src) == 0 {
-		err = fmt.Errorf("invalid OID length")
+		err = ErrInvalidOidLength
 		return
 	}
 	out := new(bytes.Buffer)
@@ -724,8 +727,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 func parseUint64(bytes []byte) (ret uint64, err error) {
 	if len(bytes) > 9 || (len(bytes) > 8 && bytes[0] != 0x0) {
 		// We'll overflow a uint64 in this case.
-		err = errors.New("integer too large")
-		return
+		return 0, ErrIntegerTooLarge
 	}
 	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
 		ret <<= 8
@@ -752,29 +754,25 @@ func parseUint(bytes []byte) (uint, error) {
 		return 0, err
 	}
 	if ret64 != uint64(uint(ret64)) {
-		return 0, errors.New("integer too large")
+		return 0, ErrIntegerTooLarge
 	}
 	return uint(ret64), nil
 }
 
-func parseFloat32(bytes []byte) (ret float32, err error) {
+func parseFloat32(bytes []byte) (float32, error) {
 	if len(bytes) > 4 {
 		// We'll overflow a uint64 in this case.
-		err = errors.New("float too large")
-		return
+		return 0, ErrFloatTooLarge
 	}
-	ret = math.Float32frombits(binary.BigEndian.Uint32(bytes))
-	return
+	return math.Float32frombits(binary.BigEndian.Uint32(bytes)), nil
 }
 
-func parseFloat64(bytes []byte) (ret float64, err error) {
+func parseFloat64(bytes []byte) (float64, error) {
 	if len(bytes) > 8 {
 		// We'll overflow a uint64 in this case.
-		err = errors.New("float too large")
-		return
+		return 0, ErrFloatTooLarge
 	}
-	ret = math.Float64frombits(binary.BigEndian.Uint64(bytes))
-	return
+	return math.Float64frombits(binary.BigEndian.Uint64(bytes)), nil
 }
 
 // -- Bit String ---------------------------------------------------------------
@@ -819,10 +817,14 @@ func (b BitStringValue) RightAlign() []byte {
 // -- SnmpVersion --------------------------------------------------------------
 
 func (s SnmpVersion) String() string {
-	if s == Version1 {
+	switch s {
+	case Version1:
 		return "1"
-	} else if s == Version2c {
+	case Version2c:
 		return "2c"
+	case Version3:
+		return "3"
+	default:
+		return "3"
 	}
-	return "3"
 }
