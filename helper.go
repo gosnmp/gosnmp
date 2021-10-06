@@ -23,9 +23,9 @@ import (
 
 // variable struct is used by decodeValue(), which is used for debugging
 type variable struct {
+	Value interface{}
 	Name  []int
 	Type  Asn1BER
-	Value interface{}
 }
 
 // helper error modes
@@ -474,7 +474,7 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 			j++
 			continue
 		}
-		var val int64 = 0
+		var val int64
 		for j < oidLength && oid[j] != '.' {
 			ch := int64(oid[j] - '0')
 			if ch > 9 {

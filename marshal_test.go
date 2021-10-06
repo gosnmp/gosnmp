@@ -235,7 +235,7 @@ var testsEnmarshal = []testsEnmarshalT{
 // vbPosPdus returns a slice of oids in the given test
 func vbPosPdus(test testsEnmarshalT) (pdus []SnmpPDU) {
 	for _, vbp := range test.vbPositions {
-		pdu := SnmpPDU{vbp.oid, vbp.pduType, vbp.pduValue}
+		pdu := SnmpPDU{Name: vbp.oid, Type: vbp.pduType, Value: vbp.pduValue}
 		pdus = append(pdus, pdu)
 	}
 	return
@@ -274,7 +274,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
-			snmppdu := &SnmpPDU{test2.oid, test2.pduType, test2.pduValue}
+			snmppdu := &SnmpPDU{Name: test2.oid, Type: test2.pduType, Value: test2.pduValue}
 			testBytes, err := marshalVarbind(snmppdu)
 			if err != nil {
 				t.Errorf("#%s:%d:%s err returned: %v",
@@ -1533,7 +1533,7 @@ func withUnconnectedSocket(t *testing.T, enable bool) {
 	if err := x.Connect(); err != nil {
 		t.Fatalf("error connecting: %s", err)
 	}
-    defer x.Conn.Close()
+	defer x.Conn.Close()
 
 	go func() {
 		buf := make([]byte, 256)
