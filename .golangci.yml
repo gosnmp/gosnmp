@@ -3,55 +3,46 @@ run:
   timeout: 5m
 
 linters:
-  disable-all: true
   enable:
   - bodyclose
-  - deadcode
   - dogsled
   - dupl
-  - errcheck
+  - exportloopref # Replaces scopelint
   - gochecknoglobals
   - goconst
   - gocritic
   - goimports
-  - golint
   - goprintffuncname
   - gosec
-  - gosimple
-  - govet
-  - ineffassign
-  - interfacer
   - misspell
   - nakedret
-  - staticcheck
-  - structcheck
-  - stylecheck
-  - typecheck
+  - nolintlint
+  - revive # Replaces golint
   - unconvert
   - unparam
-  - unused
-  - varcheck
-  - nolintlint
-  - scopelint
   - whitespace
+  # TODO the following linters
+  # - gocognit
+  # - gocyclo
+  # - goerr113
+  # - gomnd
+  # - lll
+  # - nestif
+  # - prealloc
+  disable:
+  # Disable soon to deprecated[1] linters that lead to false
+  # positives when build tags disable certain files[2]
+  # 1: https://github.com/golangci/golangci-lint/issues/1841
+  # 2: https://github.com/prometheus/node_exporter/issues/1545
+  - deadcode
+  - unused
+  - structcheck
+  - varcheck
 
 linters-settings:
   gofmt:
     simplify: true
-  golint:
-    min-confidence: 0
   gocyclo:
     min-complexity: 20
   govet:
     check-shadowing: true
-    enable-all: true
-
-    # TODO the following linters
-    # - gocognit
-    # - gocyclo
-    # - goerr113
-    # - gomnd
-    # - lll
-    # - maligned
-    # - nestif
-    # - prealloc

@@ -174,15 +174,15 @@ var Default = &GoSNMP{
 
 // SnmpPDU will be used when doing SNMP Set's
 type SnmpPDU struct {
+	// The value to be set by the SNMP set, or the value when
+	// sending a trap
+	Value interface{}
+
 	// Name is an oid in string format eg ".1.3.6.1.4.9.27"
 	Name string
 
 	// The type of the value eg Integer
 	Type Asn1BER
-
-	// The value to be set by the SNMP set, or the value when
-	// sending a trap
-	Value interface{}
 }
 
 // AsnExtensionID mask to identify types > 30 in subsequent byte
@@ -404,7 +404,7 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
 	for _, oid := range oids {
-		pdus = append(pdus, SnmpPDU{oid, Null, nil})
+		pdus = append(pdus, SnmpPDU{Name: oid, Type: Null, Value: nil})
 	}
 	// build up SnmpPacket
 	packetOut := x.mkSnmpPacket(GetRequest, pdus, 0, 0)
@@ -435,7 +435,7 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
 	for _, oid := range oids {
-		pdus = append(pdus, SnmpPDU{oid, Null, nil})
+		pdus = append(pdus, SnmpPDU{Name: oid, Type: Null, Value: nil})
 	}
 
 	// Marshal and send the packet
@@ -460,7 +460,7 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint3
 	// convert oids slice to pdu slice
 	var pdus []SnmpPDU
 	for _, oid := range oids {
-		pdus = append(pdus, SnmpPDU{oid, Null, nil})
+		pdus = append(pdus, SnmpPDU{Name: oid, Type: Null, Value: nil})
 	}
 
 	// Marshal and send the packet

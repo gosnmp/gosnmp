@@ -1280,7 +1280,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
 
-		response.Variables = append(response.Variables, SnmpPDU{oid, decodedVal.Type, decodedVal.Value})
+		response.Variables = append(response.Variables, SnmpPDU{Name: oid, Type: decodedVal.Type, Value: decodedVal.Value})
 	}
 	return nil
 }

@@ -55,7 +55,7 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 
 		if trap.Variables[0].Type != TimeTicks {
 			now := uint32(time.Now().Unix())
-			timetickPDU := SnmpPDU{"1.3.6.1.2.1.1.3.0", TimeTicks, now}
+			timetickPDU := SnmpPDU{Name: "1.3.6.1.2.1.1.3.0", Type: TimeTicks, Value: now}
 			// prepend timetickPDU
 			trap.Variables = append([]SnmpPDU{timetickPDU}, trap.Variables...)
 		}
@@ -98,6 +98,8 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 // A TrapListener defines parameters for running a SNMP Trap receiver.
 // nil values will be replaced by default values.
 type TrapListener struct {
+	done      chan bool
+	listening chan bool
 	sync.Mutex
 
 	// Params is a reference to the TrapListener's "parent" GoSNMP instance.
@@ -111,9 +113,7 @@ type TrapListener struct {
 	conn  *net.UDPConn
 	proto string
 
-	finish    int32 // Atomic flag; set to 1 when closing connection
-	done      chan bool
-	listening chan bool
+	finish int32 // Atomic flag; set to 1 when closing connection
 }
 
 // TrapHandlerFunc is a callback function type which receives SNMP Trap and
