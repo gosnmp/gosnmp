@@ -29,11 +29,13 @@ type variable struct {
 
 // helper error modes
 var (
-	ErrInvalidPacketLength = errors.New("invalid packet length")
-	ErrIntegerTooLarge     = errors.New("integer too large")
-	ErrFloatTooLarge       = errors.New("float too large")
-	ErrZeroByteBuffer      = errors.New("zero byte buffer")
-	ErrInvalidOidLength    = errors.New("invalid OID length")
+	ErrBase128IntegerTooLarge  = errors.New("base 128 integer too large")
+	ErrBase128IntegerTruncated = errors.New("base 128 integer truncated")
+	ErrFloatTooLarge           = errors.New("float too large")
+	ErrIntegerTooLarge         = errors.New("integer too large")
+	ErrInvalidOidLength        = errors.New("invalid OID length")
+	ErrInvalidPacketLength     = errors.New("invalid packet length")
+	ErrZeroByteBuffer          = errors.New("zero byte buffer")
 )
 
 // -- helper functions (mostly) in alphabetical order --------------------------
@@ -350,8 +352,8 @@ func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
 
 // marshalInt32 builds a byte representation of a signed 32 bit int in BigEndian form
 // ie -2^31 and 2^31-1 inclusive (-2147483648 to 2147483647 decimal)
-func marshalInt32(value int) (rs []byte, err error) {
-	rs = make([]byte, 4)
+func marshalInt32(value int) ([]byte, error) {
+	rs := make([]byte, 4)
 	if 0 <= value && value <= 2147483647 {
 		binary.BigEndian.PutUint32(rs, uint32(value))
 		if value < 0x80 {
@@ -528,41 +530,40 @@ func ipv4toBytes(ip net.IP) []byte {
 
 // parseBase128Int parses a base-128 encoded int from the given offset in the
 // given byte slice. It returns the value and the new offset.
-func parseBase128Int(bytes []byte, initOffset int) (ret int64, offset int, err error) {
-	offset = initOffset
+func parseBase128Int(bytes []byte, initOffset int) (int64, int, error) {
+	var ret int64
+	var offset = initOffset
 	for shifted := 0; offset < len(bytes); shifted++ {
 		if shifted > 4 {
-			err = errors.New("structural error: base 128 integer too large")
-			return
+			return 0, 0, ErrBase128IntegerTooLarge
 		}
 		ret <<= 7
 		b := bytes[offset]
 		ret |= int64(b & 0x7f)
 		offset++
 		if b&0x80 == 0 {
-			return
+			return ret, offset, nil
 		}
 	}
-	err = errors.New("syntax error: truncated base 128 integer")
-	return
+	return 0, 0, ErrBase128IntegerTruncated
 }
 
 // parseInt64 treats the given bytes as a big-endian, signed integer and
 // returns the result.
-func parseInt64(bytes []byte) (ret int64, err error) {
+func parseInt64(bytes []byte) (int64, error) {
 	if len(bytes) > 8 {
 		// We'll overflow an int64 in this case.
 		return 0, ErrIntegerTooLarge
 	}
+	var ret int64
 	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
 		ret <<= 8
 		ret |= int64(bytes[bytesRead])
 	}
-
 	// Shift up and down in order to sign extend the result.
 	ret <<= 64 - uint8(len(bytes))*8
 	ret >>= 64 - uint8(len(bytes))*8
-	return
+	return ret, nil
 }
 
 // parseInt treats the given bytes as a big-endian, signed integer and returns
@@ -620,11 +621,11 @@ func parseLength(bytes []byte) (int, int, error) {
 // parseObjectIdentifier parses an OBJECT IDENTIFIER from the given bytes and
 // returns it. An object identifier is a sequence of variable length integers
 // that are assigned in a hierarchy.
-func parseObjectIdentifier(src []byte) (ret string, err error) {
+func parseObjectIdentifier(src []byte) (string, error) {
 	if len(src) == 0 {
-		err = ErrInvalidOidLength
-		return
+		return "", ErrInvalidOidLength
 	}
+
 	out := new(bytes.Buffer)
 
 	out.WriteByte('.')
@@ -632,17 +633,17 @@ func parseObjectIdentifier(src []byte) (ret string, err error) {
 	out.WriteByte('.')
 	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
 
+	var v int64
+	var err error
 	for offset := 1; offset < len(src); {
 		out.WriteByte('.')
-		var v int64
 		v, offset, err = parseBase128Int(src, offset)
 		if err != nil {
-			return
+			return "", err
 		}
 		out.WriteString(strconv.FormatInt(v, 10))
 	}
-	ret = out.String()
-	return
+	return out.String(), nil
 }
 
 func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, error) {
@@ -723,7 +724,8 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 
 // parseUint64 treats the given bytes as a big-endian, unsigned integer and returns
 // the result.
-func parseUint64(bytes []byte) (ret uint64, err error) {
+func parseUint64(bytes []byte) (uint64, error) {
+	var ret uint64
 	if len(bytes) > 9 || (len(bytes) > 8 && bytes[0] != 0x0) {
 		// We'll overflow a uint64 in this case.
 		return 0, ErrIntegerTooLarge
@@ -732,7 +734,7 @@ func parseUint64(bytes []byte) (ret uint64, err error) {
 		ret <<= 8
 		ret |= uint64(bytes[bytesRead])
 	}
-	return
+	return ret, nil
 }
 
 // parseUint32 treats the given bytes as a big-endian, signed integer and returns
