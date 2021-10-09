@@ -265,7 +265,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 
 			var resp []byte
 			resp, err = x.receive()
-			if err == io.EOF && strings.HasPrefix(x.Transport, "tcp") {
+			if err == io.EOF && strings.HasPrefix(x.Transport, tcp) {
 				// EOF on TCP: reconnect and retry. Do not count
 				// as retry as socket was broken
 				x.Logger.Printf("ERROR: EOF. Performing reconnect")
