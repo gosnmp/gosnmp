@@ -76,8 +76,9 @@ func Start(address string) {
 	tl := gosnmp.NewTrapListener()
 	tl.OnNewTrap = myTrapHandlerTCP
 	tl.Params = gosnmp.Default
+	tl.Params.Target = address
 
-	err := tl.Listen(address)
+	err := tl.Listen()
 	if err != nil {
 		time.Sleep(1 * time.Second)
 		log.Fatalf("Error in TRAP listen: %s\n", err)

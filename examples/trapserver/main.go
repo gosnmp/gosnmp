@@ -34,8 +34,10 @@ func main() {
 	tl.OnNewTrap = myTrapHandler
 	tl.Params = g.Default
 	tl.Params.Logger = g.NewLogger(log.New(os.Stdout, "", 0))
+	tl.Params.Port = 9162
+	tl.Params.Target = "0.0.0.0"
 
-	err := tl.Listen("0.0.0.0:9162")
+	err := tl.Listen()
 	if err != nil {
 		log.Panicf("error in listen: %s", err)
 	}

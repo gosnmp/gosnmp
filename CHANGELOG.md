@@ -9,6 +9,10 @@ NOTE:
 
 ## Unreleased
 
+NOTE: This release changes TrapListener's Listen method to behave similar
+as Connect.
+
+* [CHANGE] Trap: make Listen() address format consistent with Connect() #366
 * [FEATURE] Add LocalAddr setting to bind source address of SNMP queries #342
 
 ## v1.32.0

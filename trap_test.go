@@ -18,11 +18,7 @@ import (
 
 const (
 	trapTestAddress = "127.0.0.1"
-
-	// TODO this is bad. Listen and Connect expect different address formats
-	// so we need an int version and a string version - they should be the same.
-	trapTestPort       = 9162
-	trapTestPortString = "9162"
+	trapTestPort    = 9162
 
 	trapTestOid     = ".1.2.1234.4.5"
 	trapTestPayload = "TRAPTEST1234"
@@ -166,12 +162,14 @@ func TestSendTrapBasic(t *testing.T) {
 
 	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
 	tl.Params = Default
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
 		// defer close(errch)
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -232,12 +230,14 @@ func TestSendInformBasic(t *testing.T) {
 
 	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
 	tl.Params = Default
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
 		// defer close(errch)
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -312,6 +312,8 @@ func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 
 	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
 	tl.Params = Default
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	errch := make(chan error)
 	listening := make(chan bool)
@@ -319,7 +321,7 @@ func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 		// Reduce the chance of necessity for a restart.
 		listening <- true
 
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -391,16 +393,19 @@ func TestSendV1Trap(t *testing.T) {
 
 	tl.OnNewTrap = makeTestTrapHandler(t, done, Version1)
 	tl.Params = Default
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		// defer close(errch)
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
 	}()
-
+	// listener goroutine
 	// Wait until the listener is ready.
 	select {
 	case <-tl.Listening():
@@ -471,11 +476,13 @@ func TestSendV3TrapNoAuthNoPriv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = NoAuthNoPriv
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -557,11 +564,12 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthNoPriv
-
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -643,11 +651,12 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthNoPriv
-
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -730,11 +739,13 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthPriv
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -818,11 +829,13 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthPriv
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -906,11 +919,13 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthPriv
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -993,11 +1008,13 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthPriv
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -1079,11 +1096,13 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthPriv
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}
@@ -1166,11 +1185,13 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthPriv
+	tl.Params.Port = trapTestPort
+	tl.Params.Target = trapTestAddress
 
 	// listener goroutine
 	errch := make(chan error)
 	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen()
 		if err != nil {
 			errch <- err
 		}

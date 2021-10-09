@@ -7,6 +7,7 @@ package gosnmp
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -320,7 +321,7 @@ func (t *TrapListener) listenTCP(addr string) error {
 // function specified in *TrapListener for every trap received.
 //
 // NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
-func (t *TrapListener) Listen(addr string) error {
+func (t *TrapListener) Listen() error {
 	if t.Params == nil {
 		t.Params = Default
 	}
@@ -335,6 +336,7 @@ func (t *TrapListener) Listen(addr string) error {
 		t.OnNewTrap = t.debugTrapHandler
 	}
 
+	addr := net.JoinHostPort(t.Params.Target, strconv.Itoa(int(t.Params.Port)))
 	splitted := strings.SplitN(addr, "://", 2)
 	t.proto = udp
 	if len(splitted) > 1 {
