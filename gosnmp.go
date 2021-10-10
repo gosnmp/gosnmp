@@ -37,8 +37,9 @@ const (
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
 
-	// "udp" is used regularly, prevent 'goconst' complaints
+	// "udp" and "tcp" are used regularly, prevent 'goconst' complaints
 	udp = "udp"
+	tcp = "tcp"
 )
 
 // GoSNMP represents GoSNMP library state.

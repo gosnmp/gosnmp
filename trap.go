@@ -286,7 +286,7 @@ func (t *TrapListener) listenTCP(addr string) error {
 		return err
 	}
 
-	l, err := net.ListenTCP("tcp", tcpAddr)
+	l, err := net.ListenTCP(tcp, tcpAddr)
 	if err != nil {
 		return err
 	}
@@ -342,13 +342,14 @@ func (t *TrapListener) Listen(addr string) error {
 		addr = splitted[1]
 	}
 
-	if t.proto == "tcp" {
+	switch t.proto {
+	case tcp:
 		return t.listenTCP(addr)
-	} else if t.proto == udp {
+	case udp:
 		return t.listenUDP(addr)
+	default:
+		return fmt.Errorf("not implemented network protocol: %s [use: tcp/udp]", t.proto)
 	}
-
-	return fmt.Errorf("not implemented network protocol: %s [use: tcp/udp]", t.proto)
 }
 
 // Default trap handler
