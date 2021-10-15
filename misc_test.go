@@ -2,6 +2,7 @@
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
 
+//go:build all || misc
 // +build all misc
 
 package gosnmp
@@ -12,13 +13,13 @@ import (
 	_ "crypto/md5"
 	_ "crypto/sha1"
 	"errors"
+	"math"
+	"math/big"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-// Tests in alphabetical order of function being tested
 
 // -----------------------------------------------------------------------------
 
@@ -76,6 +77,44 @@ func TestPartition(t *testing.T) {
 		ok := Partition(test.currentPosition, test.partitionSize, test.sliceLength)
 		if ok != test.ok {
 			t.Errorf("#%d: Bad result: %v (expected %v)", i, ok, test.ok)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------
+
+var testsToBigInt = []struct {
+	in       interface{}
+	expected *big.Int
+}{
+	{int8(-42), big.NewInt(-42)},
+	{int16(42), big.NewInt(42)},
+	{int32(-42), big.NewInt(-42)},
+	{int64(42), big.NewInt(42)},
+
+	{uint8(42), big.NewInt(42)},
+	{uint16(42), big.NewInt(42)},
+	{uint32(42), big.NewInt(42)},
+	{uint64(42), big.NewInt(42)},
+
+	// edge case, max uint64
+	{uint64(math.MaxUint64), new(big.Int).SetUint64(math.MaxUint64)},
+
+	// string: valid number
+	{"-123456789", big.NewInt(-123456789)},
+
+	// string: invalid number
+	{"foo", new(big.Int)},
+
+	// unhandled type
+	{struct{}{}, new(big.Int)},
+}
+
+func TestToBigInt(t *testing.T) {
+	for i, test := range testsToBigInt {
+		result := ToBigInt(test.in)
+		if result.Cmp(test.expected) != 0 {
+			t.Errorf("#%d, %T: got %v expected %v", i, test.in, result, test.expected)
 		}
 	}
 }
@@ -188,3 +227,5 @@ func parseBitString(bytes []byte) (ret BitStringValue, err error) {
 	ret.Bytes = bytes[1:]
 	return
 }
+
+// ---------------------------------------------------------------------

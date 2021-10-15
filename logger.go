@@ -1,3 +1,4 @@
+//go:build gosnmp_nodebug
 // +build gosnmp_nodebug
 
 // When building, specify the gosnmp_nodebug tag and logging will be completely disabled

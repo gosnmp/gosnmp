@@ -2,6 +2,7 @@
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
 
+//go:build all || marshal
 // +build all marshal
 
 package gosnmp
@@ -234,7 +235,7 @@ var testsEnmarshal = []testsEnmarshalT{
 // vbPosPdus returns a slice of oids in the given test
 func vbPosPdus(test testsEnmarshalT) (pdus []SnmpPDU) {
 	for _, vbp := range test.vbPositions {
-		pdu := SnmpPDU{vbp.oid, vbp.pduType, vbp.pduValue}
+		pdu := SnmpPDU{Name: vbp.oid, Type: vbp.pduType, Value: vbp.pduValue}
 		pdus = append(pdus, pdu)
 	}
 	return
@@ -273,7 +274,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
-			snmppdu := &SnmpPDU{test2.oid, test2.pduType, test2.pduValue}
+			snmppdu := &SnmpPDU{Name: test2.oid, Type: test2.pduType, Value: test2.pduValue}
 			testBytes, err := marshalVarbind(snmppdu)
 			if err != nil {
 				t.Errorf("#%s:%d:%s err returned: %v",
@@ -1514,9 +1515,9 @@ func TestUnconnectedSocket_success(t *testing.T) {
 }
 
 func withUnconnectedSocket(t *testing.T, enable bool) {
-	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	srvr, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
-		t.Fatalf("udp4 error listening: %s", err)
+		t.Fatalf("udp error listening: %s", err)
 	}
 	defer srvr.Close()
 
@@ -1527,10 +1528,12 @@ func withUnconnectedSocket(t *testing.T, enable bool) {
 		Timeout:                 time.Millisecond * 100,
 		Retries:                 2,
 		UseUnconnectedUDPSocket: enable,
+		LocalAddr:               "0.0.0.0:",
 	}
 	if err := x.Connect(); err != nil {
 		t.Fatalf("error connecting: %s", err)
 	}
+	defer x.Conn.Close()
 
 	go func() {
 		buf := make([]byte, 256)
@@ -1566,7 +1569,7 @@ func withUnconnectedSocket(t *testing.T, enable bool) {
 			}
 			// Temporary socket will use different source port, it's enough to break
 			// connected socket reply filters.
-			nsock, err := net.ListenUDP("udp4", nil)
+			nsock, err := net.ListenUDP("udp", nil)
 			if err != nil {
 				t.Errorf("can't create temporary reply socket: %v", err)
 			}

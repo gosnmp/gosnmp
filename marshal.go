@@ -265,7 +265,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 
 			var resp []byte
 			resp, err = x.receive()
-			if err == io.EOF && strings.HasPrefix(x.Transport, "tcp") {
+			if err == io.EOF && strings.HasPrefix(x.Transport, tcp) {
 				// EOF on TCP: reconnect and retry. Do not count
 				// as retry as socket was broken
 				x.Logger.Printf("ERROR: EOF. Performing reconnect")
@@ -938,7 +938,10 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 		return 0, fmt.Errorf("invalid packet header")
 	}
 
-	length, cursor := parseLength(packet)
+	length, cursor, err := parseLength(packet)
+	if err != nil {
+		return 0, err
+	}
 	if len(packet) != length {
 		return 0, fmt.Errorf("error verifying packet sanity: Got %d Expected: %d", len(packet), length)
 	}
@@ -1024,7 +1027,10 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 	cursor := 0
 
-	getResponseLength, cursor := parseLength(packet)
+	getResponseLength, cursor, err := parseLength(packet)
+	if err != nil {
+		return err
+	}
 	if len(packet) != getResponseLength {
 		return fmt.Errorf("error verifying Response sanity: Got %d Expected: %d", len(packet), getResponseLength)
 	}
@@ -1111,7 +1117,10 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 	cursor := 0
 
-	getResponseLength, cursor := parseLength(packet)
+	getResponseLength, cursor, err := parseLength(packet)
+	if err != nil {
+		return err
+	}
 	if len(packet) != getResponseLength {
 		return fmt.Errorf("error verifying Response sanity: Got %d Expected: %d", len(packet), getResponseLength)
 	}
@@ -1209,7 +1218,10 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("expected a sequence when unmarshalling a VBL, got %x", packet[cursor])
 	}
 
-	vblLength, cursor = parseLength(packet)
+	vblLength, cursor, err := parseLength(packet)
+	if err != nil {
+		return err
+	}
 	if vblLength == 0 || vblLength > len(packet) {
 		return fmt.Errorf("truncated packet when unmarshalling a VBL, packet length %d cursor %d", len(packet), cursor)
 	}
@@ -1230,7 +1242,10 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("expected a sequence when unmarshalling a VB, got %x", packet[cursor])
 		}
 
-		_, cursorInc = parseLength(packet[cursor:])
+		_, cursorInc, err = parseLength(packet[cursor:])
+		if err != nil {
+			return err
+		}
 		cursor += cursorInc
 		if cursor > len(packet) {
 			return fmt.Errorf("error parsing OID Value: packet %d cursor %d", len(packet), cursor)
@@ -1252,17 +1267,20 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 		x.Logger.Printf("OID: %s", oid)
 		// Parse Value
 		var decodedVal variable
-		if err := x.decodeValue(packet[cursor:], &decodedVal); err != nil {
+		if err = x.decodeValue(packet[cursor:], &decodedVal); err != nil {
 			return fmt.Errorf("error decoding value: %w", err)
 		}
 
-		valueLength, _ := parseLength(packet[cursor:])
+		valueLength, _, err := parseLength(packet[cursor:])
+		if err != nil {
+			return err
+		}
 		cursor += valueLength
 		if cursor > len(packet) {
 			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
 
-		response.Variables = append(response.Variables, SnmpPDU{oid, decodedVal.Type, decodedVal.Value})
+		response.Variables = append(response.Variables, SnmpPDU{Name: oid, Type: decodedVal.Type, Value: decodedVal.Value})
 	}
 	return nil
 }

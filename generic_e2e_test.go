@@ -9,6 +9,7 @@
 // Ensure "gosnmp-test-host" is defined in your hosts file, and points to your
 // generic test system.
 
+//go:build all || end2end
 // +build all end2end
 
 package gosnmp

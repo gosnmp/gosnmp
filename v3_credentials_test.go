@@ -119,13 +119,11 @@ const cIdxUserName = 0
 const cIdxAuthKey = 1
 const cIdxPrivKey = 2
 
-//nolint
 func isUsingSnmpLabs() bool {
 	return useSnmpLabsCredentials
 }
 
 // conveniently enable demo.snmplabs.com for a one test
-//nolint
 func useSnmpLabs(use bool) {
 	useSnmpLabsCredentials = use
 }
@@ -146,7 +144,6 @@ func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol 
 	return credentials
 }
 
-//nolint
 func getUserName(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
 	return getCredentials(t, authProtocol, privProtocol)[cIdxUserName]
 }
