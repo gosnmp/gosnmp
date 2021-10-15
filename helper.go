@@ -615,6 +615,10 @@ func parseLength(bytes []byte) (int, int, error) {
 		length += 2 + numOctets
 		cursor += 2 + numOctets
 	}
+	if length < 0 {
+		// Invalid data detected, return an error
+		return 0, 0, ErrInvalidPacketLength
+	}
 	return length, cursor, nil
 }
 
