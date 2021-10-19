@@ -9,7 +9,16 @@ NOTE:
 
 ## Unreleased
 
+
+## v1.33.0
+
+* [BUGFIX] parseLength: avoid OOB read, prevent panic #354
+* [BUGFIX] Detect negative lengths in parseLength, prevent panic #369 
 * [FEATURE] Add LocalAddr setting to bind source address of SNMP queries #342
+* [ENHANCEMENT] Validate SNMPv3 Auth/Priv Protocol for incoming trap message #351
+* [ENHANCEMENT] helper.go: add error handling to parseLength #358
+* [ENHANCEMENT] Rename v3_testing_credentials to avoid testing import in prod builds #360
+* [ENHANCEMENT] helper.go: Improved decodeValue() function #340
 
 ## v1.32.0
 
