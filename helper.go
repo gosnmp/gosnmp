@@ -353,29 +353,32 @@ func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
 // marshalInt32 builds a byte representation of a signed 32 bit int in BigEndian form
 // ie -2^31 and 2^31-1 inclusive (-2147483648 to 2147483647 decimal)
 func marshalInt32(value int) ([]byte, error) {
-	rs := make([]byte, 4)
-	if 0 <= value && value <= 2147483647 {
-		binary.BigEndian.PutUint32(rs, uint32(value))
-		if value < 0x80 {
-			return rs[3:], nil
-		}
-		if value < 0x8000 {
-			return rs[2:], nil
-		}
-		if value < 0x800000 {
-			return rs[1:], nil
-		}
-		return rs, nil
+	if value < math.MinInt32 || value > math.MaxInt32 {
+		return nil, fmt.Errorf("unable to marshal: %d overflows int32", value)
 	}
-	if -2147483648 <= value && value < 0 {
-		value = ^value
-		binary.BigEndian.PutUint32(rs, uint32(value))
-		for k, v := range rs {
-			rs[k] = ^v
-		}
-		return rs, nil
+	var data []byte
+	const mask1 uint32 = 0xFFFFFF80
+	const mask2 uint32 = 0xFFFF8000
+	const mask3 uint32 = 0xFF800000
+	const mask4 uint32 = 0x80000000
+	// ITU-T Rec. X.690 (2002) 8.3.2
+	// If the contents octets of an integer value encoding consist of more than
+	// one octet, then the bits of the first octet and bit 8 of the second octet:
+	//  a) shall not all be ones; and
+	//  b) shall not all be zero
+	// These rules ensure that an integer value is always encoded in the smallest
+	// possible number of octets.
+	val := uint32(value)
+	switch {
+	case val&mask1 == 0 || val&mask1 == mask1:
+		return []byte{byte(val)}, nil
+	case val&mask2 == 0 || val&mask2 == mask2:
+		return append(data, byte(val>>8), byte(val)), nil
+	case val&mask3 == 0 || val&mask3 == mask3:
+		return append(data, byte(val>>16), byte(val>>8), byte(val)), nil
+	default:
+		return append(data, byte(val>>24), byte(val>>16), byte(val>>8), byte(val)), nil
 	}
-	return nil, fmt.Errorf("unable to marshal %d", value)
 }
 
 func marshalUint64(v interface{}) ([]byte, error) {
