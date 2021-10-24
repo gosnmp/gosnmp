@@ -356,7 +356,6 @@ func marshalInt32(value int) ([]byte, error) {
 	if value < math.MinInt32 || value > math.MaxInt32 {
 		return nil, fmt.Errorf("unable to marshal: %d overflows int32", value)
 	}
-	var data []byte
 	const mask1 uint32 = 0xFFFFFF80
 	const mask2 uint32 = 0xFFFF8000
 	const mask3 uint32 = 0xFF800000
@@ -373,11 +372,11 @@ func marshalInt32(value int) ([]byte, error) {
 	case val&mask1 == 0 || val&mask1 == mask1:
 		return []byte{byte(val)}, nil
 	case val&mask2 == 0 || val&mask2 == mask2:
-		return append(data, byte(val>>8), byte(val)), nil
+		return []byte{byte(val >> 8), byte(val)}, nil
 	case val&mask3 == 0 || val&mask3 == mask3:
-		return append(data, byte(val>>16), byte(val>>8), byte(val)), nil
+		return []byte{byte(val >> 16), byte(val >> 8), byte(val)}, nil
 	default:
-		return append(data, byte(val>>24), byte(val>>16), byte(val>>8), byte(val)), nil
+		return []byte{byte(val >> 24), byte(val >> 16), byte(val >> 8), byte(val)}, nil
 	}
 }
 
