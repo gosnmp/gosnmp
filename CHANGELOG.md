@@ -9,11 +9,15 @@ NOTE:
 
 ## Unreleased
 
+NOTE: marshalInt32 now always encodes an integer value in the smallest possible
+number of octets as per ITU-T Rec. X.690 (07/2002).
+
+* [ENHANCEMENT] gosnmp/marshalInt32: adhere to ITU-T Rec. X.690 integer encoding #372
 
 ## v1.33.0
 
 * [BUGFIX] parseLength: avoid OOB read, prevent panic #354
-* [BUGFIX] Detect negative lengths in parseLength, prevent panic #369 
+* [BUGFIX] Detect negative lengths in parseLength, prevent panic #369
 * [FEATURE] Add LocalAddr setting to bind source address of SNMP queries #342
 * [ENHANCEMENT] Validate SNMPv3 Auth/Priv Protocol for incoming trap message #351
 * [ENHANCEMENT] helper.go: add error handling to parseLength #358
