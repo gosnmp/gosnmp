@@ -13,6 +13,7 @@ NOTE: marshalInt32 now always encodes an integer value in the smallest possible
 number of octets as per ITU-T Rec. X.690 (07/2002).
 
 * [ENHANCEMENT] gosnmp/marshalInt32: adhere to ITU-T Rec. X.690 integer encoding #372
+* [ENHANCEMENT] parseInt64: throw error on zero length as per X690 #373
 
 ## v1.33.0
 

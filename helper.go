@@ -36,6 +36,7 @@ var (
 	ErrInvalidOidLength        = errors.New("invalid OID length")
 	ErrInvalidPacketLength     = errors.New("invalid packet length")
 	ErrZeroByteBuffer          = errors.New("zero byte buffer")
+	ErrZeroLenInteger          = errors.New("zero length integer")
 )
 
 // -- helper functions (mostly) in alphabetical order --------------------------
@@ -553,7 +554,13 @@ func parseBase128Int(bytes []byte, initOffset int) (int64, int, error) {
 // parseInt64 treats the given bytes as a big-endian, signed integer and
 // returns the result.
 func parseInt64(bytes []byte) (int64, error) {
-	if len(bytes) > 8 {
+	switch {
+	case len(bytes) == 0:
+		// X.690 8.3.1: Encoding of an integer value:
+		// The encoding of an integer value shall be primitive.
+		// The contents octets shall consist of one or more octets.
+		return 0, ErrZeroLenInteger
+	case len(bytes) > 8:
 		// We'll overflow an int64 in this case.
 		return 0, ErrIntegerTooLarge
 	}
