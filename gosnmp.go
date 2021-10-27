@@ -186,8 +186,9 @@ type SnmpPDU struct {
 	Type Asn1BER
 }
 
-// AsnExtensionID mask to identify types > 30 in subsequent byte
+const AsnContext = 0x80
 const AsnExtensionID = 0x1F
+const AsnExtensionTag = (AsnContext | AsnExtensionID) // 0x9F
 
 //go:generate stringer -type Asn1BER
 
