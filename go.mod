@@ -1,4 +1,4 @@
-module github.com/gosnmp/gosnmp
+module github.com/gateway-2021/gosnmp
 
 go 1.13
 

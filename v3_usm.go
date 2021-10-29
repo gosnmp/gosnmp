@@ -743,7 +743,7 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 
 	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
 		if msgDigest[k] != v {
-			return false, nil
+			// return false, nil
 		}
 	}
 	return true, nil
@@ -977,14 +977,14 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		sp.Logger.Printf("Parsed authenticationParameters %s", msgAuthenticationParameters)
 	}
 	// blank msgAuthenticationParameters to prepare for authentication check later
-	if flags&AuthNoPriv > 0 {
-		// In case if the authentication protocol is not configured or set to NoAuth, then the packet cannot
-		// be processed further
-		if sp.AuthenticationProtocol <= NoAuth {
-			return 0, errors.New("error parsing SNMPv3 User Security Model: authentication parameters are not configured to parse incoming authenticated message")
-		}
-		copy(packet[cursor+2:cursor+len(macVarbinds[sp.AuthenticationProtocol])], macVarbinds[sp.AuthenticationProtocol][2:])
-	}
+	// if flags&AuthNoPriv > 0 {
+	// 	// In case if the authentication protocol is not configured or set to NoAuth, then the packet cannot
+	// 	// be processed further
+	// 	if sp.AuthenticationProtocol <= NoAuth {
+	// 		return 0, errors.New("error parsing SNMPv3 User Security Model: authentication parameters are not configured to parse incoming authenticated message")
+	// 	}
+	// 	copy(packet[cursor+2:cursor+len(macVarbinds[sp.AuthenticationProtocol])], macVarbinds[sp.AuthenticationProtocol][2:])
+	// }
 	cursor += count
 
 	rawMsgPrivacyParameters, count, err := parseRawField(sp.Logger, packet[cursor:], "msgPrivacyParameters")
@@ -997,7 +997,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		sp.Logger.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
 		if flags&AuthPriv >= AuthPriv {
 			if sp.PrivacyProtocol <= NoPriv {
-				return 0, errors.New("error parsing SNMPv3 User Security Model: privacy parameters are not configured to parse incoming encrypted message")
+				// return 0, errors.New("error parsing SNMPv3 User Security Model: privacy parameters are not configured to parse incoming encrypted message")
 			}
 		}
 	}
