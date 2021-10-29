@@ -6,4 +6,3 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/stretchr/testify v1.7.0
 )
-replace github.com/gosnmp/gosnmp => github.com/gateway-2021/gosnmp latest
