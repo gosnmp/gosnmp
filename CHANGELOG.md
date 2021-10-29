@@ -9,6 +9,10 @@ NOTE: The UnmarshalTrap now returns both an SnmpPacket and an error (#394)
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## Unreleased
+
+* [ENHANCEMENT] marshalUint32: Values above 2^31-1 encodes in 5 bytes #377
+
 ## v1.34.0
 
 NOTE: marshalInt32 now always encodes an integer value in the smallest possible
