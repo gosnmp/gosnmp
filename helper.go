@@ -69,13 +69,6 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		return ErrZeroByteBuffer
 	}
 
-	// values matching this mask have the type in subsequent byte
-	if data[0]&AsnExtensionID == AsnExtensionID {
-		if len(data) < 2 {
-			return fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), 2)
-		}
-		data = data[1:]
-	}
 	switch Asn1BER(data[0]) {
 	case Integer:
 		// 0x02. signed
@@ -219,10 +212,7 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		if length > len(data) {
 			return fmt.Errorf("not enough data for Opaque %x (data %d length %d)", data, len(data), length)
 		}
-
-		opaqueData := data[cursor:length]
-		// recursively decode opaque data
-		return x.decodeValue(opaqueData, retVal)
+		return parseOpaque(x.Logger, data[cursor:length], retVal)
 	case Counter64:
 		// 0x46
 		x.Logger.Print("decodeValue: type is Counter64")
@@ -233,7 +223,6 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		if length > len(data) {
 			return fmt.Errorf("not enough data for Counter64 %x (data %d length %d)", data, len(data), length)
 		}
-
 		ret, err := parseUint64(data[cursor:length])
 		if err != nil {
 			x.Logger.Printf("decodeValue: err is %v", err)
@@ -241,38 +230,6 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		}
 		retVal.Type = Counter64
 		retVal.Value = ret
-	case OpaqueFloat:
-		// 0x78
-		x.Logger.Print("decodeValue: type is OpaqueFloat")
-		length, cursor, err := parseLength(data)
-		if err != nil {
-			return err
-		}
-		if length > len(data) {
-			return fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
-		}
-
-		retVal.Type = OpaqueFloat
-		retVal.Value, err = parseFloat32(data[cursor:length])
-		if err != nil {
-			return err
-		}
-	case OpaqueDouble:
-		// 0x79
-		x.Logger.Print("decodeValue: type is OpaqueDouble")
-		length, cursor, err := parseLength(data)
-		if err != nil {
-			return err
-		}
-		if length > len(data) {
-			return fmt.Errorf("not enough data for OpaqueDouble %x (data %d length %d)", data, len(data), length)
-		}
-
-		retVal.Type = OpaqueDouble
-		retVal.Value, err = parseFloat64(data[cursor:length])
-		if err != nil {
-			return err
-		}
 	case NoSuchObject:
 		// 0x80
 		x.Logger.Print("decodeValue: type is NoSuchObject")
@@ -529,6 +486,61 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 // TODO no tests
 func ipv4toBytes(ip net.IP) []byte {
 	return []byte(ip)[12:]
+}
+
+// parseOpaque  parses a Opaque encoded data
+// Known data-types is OpaqueDouble and OpaqueFloat
+// Other data decoded as binary Opaque data
+// TODO: add OpaqueCounter64 (0x76), OpaqueInteger64 (0x80), OpaqueUinteger64 (0x81)
+func parseOpaque(logger Logger, data []byte, retVal *variable) error {
+	if len(data) == 0 {
+		return ErrZeroByteBuffer
+	}
+	if len(data) > 2 && data[0] == AsnExtensionTag {
+		switch Asn1BER(data[1]) {
+		case OpaqueDouble:
+			// 0x79
+			data = data[1:]
+			logger.Print("decodeValue: type is OpaqueDouble")
+			length, cursor, err := parseLength(data)
+			if err != nil {
+				return err
+			}
+			if length > len(data) {
+				return fmt.Errorf("not enough data for OpaqueDouble %x (data %d length %d)", data, len(data), length)
+			}
+			retVal.Type = OpaqueDouble
+			retVal.Value, err = parseFloat64(data[cursor:length])
+			if err != nil {
+				return err
+			}
+		case OpaqueFloat:
+			// 0x78
+			data = data[1:]
+			logger.Print("decodeValue: type is OpaqueFloat")
+			length, cursor, err := parseLength(data)
+			if err != nil {
+				return err
+			}
+			if length > len(data) {
+				return fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
+			}
+			retVal.Type = OpaqueFloat
+			retVal.Value, err = parseFloat32(data[cursor:length])
+			if err != nil {
+				return err
+			}
+		default:
+			logger.Print("decodeValue: type is Opaque")
+			retVal.Type = Opaque
+			retVal.Value = data[0:]
+		}
+	} else {
+		logger.Print("decodeValue: type is Opaque")
+		retVal.Type = Opaque
+		retVal.Value = data[0:]
+	}
+	return nil
 }
 
 // parseBase128Int parses a base-128 encoded int from the given offset in the
