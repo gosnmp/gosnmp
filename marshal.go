@@ -1034,7 +1034,7 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 	if len(packet) == 0 {
 		return errors.New("cannot unmarshal nil or empty payload packet")
 	}
-	if cursor > len(packet) {
+	if cursor >= len(packet) {
 		return fmt.Errorf("cannot unmarshal payload, packet length %d cursor %d", len(packet), cursor)
 	}
 	if response == nil {
