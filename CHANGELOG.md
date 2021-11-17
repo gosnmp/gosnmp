@@ -7,7 +7,7 @@ NOTE:
 * [ENHANCEMENT]
 * [BUGFIX]
 
-## Unreleased
+## v1.34.0
 
 NOTE: marshalInt32 now always encodes an integer value in the smallest possible
 number of octets as per ITU-T Rec. X.690 (07/2002).
