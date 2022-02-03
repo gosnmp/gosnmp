@@ -65,7 +65,8 @@ SANITY:
 		Default.SecurityParameters = test.out.SecurityParameters.Copy()
 		Default.Version = Version3
 		var buf = test.in()
-		res, _ := Default.UnmarshalTrap(buf, true)
+		res, err := Default.UnmarshalTrap(buf, true)
+		require.NoError(t, err, "unmarshalTrap failed")
 		if res == nil {
 			t.Errorf("#%d, UnmarshalTrap returned nil", i)
 			continue SANITY

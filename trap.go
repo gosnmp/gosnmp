@@ -114,6 +114,9 @@ type TrapListener struct {
 	conn  *net.UDPConn
 	proto string
 
+	// Total number of packets received referencing an unknown snmpEngineID
+	usmStatsUnknownEngineIDsCount int
+
 	finish int32 // Atomic flag; set to 1 when closing connection
 }
 
@@ -248,6 +251,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 					if 4 < len(msgAuthoritativeEngineID) && len(msgAuthoritativeEngineID) < 32 {
 						// RFC3414 3.2.3a: continue processing
 					} else {
+						t.usmStatsUnknownEngineIDsCount++
 						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
 						if err != nil {
 							t.Params.Logger.Printf("TrapListener: %s\n", err)
@@ -304,8 +308,8 @@ func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineI
 	reportPacket.SecurityParameters = newSecurityParams
 	reportPacket.Variables = []SnmpPDU{
 		{
-			Name:  ".1.3.6.1.6.3.15.1.1.4.0",
-			Value: 1,
+			Name:  usmStatsUnknownEngineIDs,
+			Value: t.usmStatsUnknownEngineIDsCount,
 			Type:  Integer,
 		},
 	}
