@@ -248,9 +248,11 @@ func (t *TrapListener) listenUDP(addr string) error {
 				snmpEngineID := securityParams.AuthoritativeEngineID
 				msgAuthoritativeEngineID := packetSecurityParams.AuthoritativeEngineID
 				if msgAuthoritativeEngineID != snmpEngineID {
-					if 4 < len(msgAuthoritativeEngineID) && len(msgAuthoritativeEngineID) < 32 {
-						// RFC3414 3.2.3a: continue processing
-					} else {
+					if len(msgAuthoritativeEngineID) < 5 || len(msgAuthoritativeEngineID) > 32 {
+						// RFC3411 section 5. – SnmpEngineID definition.
+						// SnmpEngineID is an OCTET STRING which size should be between 5 and 32
+						// According to RFC3414 3.2.3b: stop processing and report
+						// the listener authoritative engine ID
 						t.usmStatsUnknownEngineIDsCount++
 						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
 						if err != nil {
@@ -258,6 +260,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 						}
 						continue
 					}
+					// RFC3414 3.2.3a: Continue processing
 				}
 			}
 			// Here we assume that t.OnNewTrap will not alter the contents

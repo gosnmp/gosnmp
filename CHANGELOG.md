@@ -1,6 +1,8 @@
 ## unreleased
 
-NOTE:
+NOTE: The signature of UnmarshalTrap now returns an additional error: #394
+
+* [ENHANCEMENT] Support authoritative engineID discovery when listening for traps #394
 
 * [CHANGE]
 * [FEATURE]
