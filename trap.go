@@ -115,7 +115,7 @@ type TrapListener struct {
 	proto string
 
 	// Total number of packets received referencing an unknown snmpEngineID
-	usmStatsUnknownEngineIDsCount int
+	usmStatsUnknownEngineIDsCount uint32
 
 	finish int32 // Atomic flag; set to 1 when closing connection
 }
@@ -253,7 +253,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 						// SnmpEngineID is an OCTET STRING which size should be between 5 and 32
 						// According to RFC3414 3.2.3b: stop processing and report
 						// the listener authoritative engine ID
-						t.usmStatsUnknownEngineIDsCount++
+						atomic.AddUint32(&t.usmStatsUnknownEngineIDsCount, 1)
 						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
 						if err != nil {
 							t.Params.Logger.Printf("TrapListener: %s\n", err)
@@ -312,7 +312,7 @@ func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineI
 	reportPacket.Variables = []SnmpPDU{
 		{
 			Name:  usmStatsUnknownEngineIDs,
-			Value: t.usmStatsUnknownEngineIDsCount,
+			Value: int(atomic.LoadUint32(&t.usmStatsUnknownEngineIDsCount)),
 			Type:  Integer,
 		},
 	}
