@@ -1,6 +1,6 @@
 ## unreleased
 
-NOTE: The signature of UnmarshalTrap now returns an additional error: #394
+NOTE: The UnmarshalTrap now returns both an SnmpPacket and an error (#394)
 
 * [ENHANCEMENT] Support authoritative engineID discovery when listening for traps #394
 
