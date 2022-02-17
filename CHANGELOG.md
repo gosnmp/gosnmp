@@ -2,7 +2,7 @@
 
 NOTE: The UnmarshalTrap now returns both an SnmpPacket and an error (#394)
 
-* [ENHANCEMENT] Support authoritative engineID discovery when listening for traps #394
+* [CHANGE] Support authoritative engineID discovery when listening for traps #394
 
 * [CHANGE]
 * [FEATURE]
