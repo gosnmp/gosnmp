@@ -254,23 +254,6 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 	return nil
 }
 
-func marshalUvarInt(x uint32) []byte {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, x)
-	i := 0
-	for ; i < 3; i++ {
-		if buf[i] != 0 {
-			break
-		}
-	}
-	buf = buf[i:]
-	// if the highest bit in buf is set and x is not negative - prepend a byte to make it positive
-	if len(buf) > 0 && buf[0]&0x80 > 0 {
-		buf = append([]byte{0}, buf...)
-	}
-	return buf
-}
-
 func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
 	if n == 0 {
 		err = out.WriteByte(0)
@@ -348,8 +331,6 @@ func marshalUint64(v interface{}) ([]byte, error) {
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
 func marshalUint32(v interface{}) ([]byte, error) {
-	bs := make([]byte, 4)
-
 	var source uint32
 	switch val := v.(type) {
 	case uint32:
@@ -358,24 +339,27 @@ func marshalUint32(v interface{}) ([]byte, error) {
 		source = uint32(val)
 	case uint8:
 		source = uint32(val)
+	case SNMPError:
+		source = uint32(val)
 	// We could do others here, but coercing from anything else is dangerous.
 	// Even uint could be 64 bits, though in practice nothing we work with is.
 	default:
 		return nil, fmt.Errorf("unable to marshal %T to uint32", v)
 	}
-
-	binary.BigEndian.PutUint32(bs, source) // will panic on failure
-	// truncate leading zeros. Cleaner technique?
-	if source < 0x80 {
-		return bs[3:], nil
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, source)
+	var i int
+	for i = 0; i < 3; i++ {
+		if buf[i] != 0 {
+			break
+		}
 	}
-	if source < 0x8000 {
-		return bs[2:], nil
+	buf = buf[i:]
+	// if the highest bit in buf is set and x is not negative - prepend a byte to make it positive
+	if len(buf) > 0 && buf[0]&0x80 > 0 {
+		buf = append([]byte{0}, buf...)
 	}
-	if source < 0x800000 {
-		return bs[1:], nil
-	}
-	return bs, nil
+	return buf, nil
 }
 
 func marshalFloat32(v interface{}) ([]byte, error) {

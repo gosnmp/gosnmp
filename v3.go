@@ -258,7 +258,10 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	if packet.MsgMaxSize != 0 {
 		maxBufSize = packet.MsgMaxSize
 	}
-	maxmsgsize := marshalUvarInt(maxBufSize)
+	maxmsgsize, err := marshalUint32(maxBufSize)
+	if err != nil {
+		return nil, err
+	}
 	buf.Write([]byte{byte(Integer), byte(len(maxmsgsize))})
 	buf.Write(maxmsgsize)
 	packet.Logger.Printf("MarshalV3Header maxmsgsize len=%v", buf.Len()-oldLen)

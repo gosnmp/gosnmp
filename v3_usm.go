@@ -861,12 +861,18 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	buf.WriteString(sp.AuthoritativeEngineID)
 
 	// msgAuthoritativeEngineBoots
-	msgAuthoritativeEngineBoots := marshalUvarInt(sp.AuthoritativeEngineBoots)
+	msgAuthoritativeEngineBoots, err := marshalUint32(sp.AuthoritativeEngineBoots)
+	if err != nil {
+		return nil, err
+	}
 	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineBoots))})
 	buf.Write(msgAuthoritativeEngineBoots)
 
 	// msgAuthoritativeEngineTime
-	msgAuthoritativeEngineTime := marshalUvarInt(sp.AuthoritativeEngineTime)
+	msgAuthoritativeEngineTime, err := marshalUint32(sp.AuthoritativeEngineTime)
+	if err != nil {
+		return nil, err
+	}
 	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineTime))})
 	buf.Write(msgAuthoritativeEngineTime)
 

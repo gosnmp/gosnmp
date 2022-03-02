@@ -564,7 +564,7 @@ func (packet *SnmpPacket) marshalSNMPV1TrapHeader() ([]byte, error) {
 	buf.Write(specificTrapBytes)
 
 	// marshal timeTicks
-	timeTickBytes, err := marshalUint32(uint32(packet.Timestamp))
+	timeTickBytes, err := marshalUint32(packet.Timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("unable to Timestamp: %w", err)
 	}
@@ -627,7 +627,7 @@ func (packet *SnmpPacket) marshalPDU() ([]byte, error) {
 		}
 
 		// error status
-		errorStatus, err := marshalUint32(uint8(packet.Error))
+		errorStatus, err := marshalUint32(packet.Error)
 		if err != nil {
 			return nil, fmt.Errorf("marshalPDU: unable to marshal errorStatus to uint32: %w", err)
 		}
@@ -770,7 +770,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 				return nil, fmt.Errorf("error marshalling PDU Uinteger32 type from uint32: %w", err)
 			}
 		case uint:
-			if intBytes, err = marshalUint32(uint32(value)); err != nil {
+			if intBytes, err = marshalUint32(value); err != nil {
 				return nil, fmt.Errorf("error marshalling PDU Uinteger32 type from uint: %w", err)
 			}
 		default:
