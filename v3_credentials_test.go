@@ -10,7 +10,7 @@ var authenticationCredentials = map[string][]string{
 	MD5.String() + NoPriv.String(): {"authMD5OnlyUser", "testingpass0123456789", ""},
 	MD5.String() + DES.String():    {"authMD5PrivDESUser", "testingpass9876543210", "testingpass9876543210"},
 	MD5.String() + AES.String():    {"authMD5PrivAESUser", "AEStestingpass9876543210", "AEStestingpass9876543210"},
-	// MD5.String() + AES192.String():		{ "authMD5PrivAES192BlmtUser", "authkey1", "privkey1" },
+	MD5.String() + AES192.String(): {"authMD5PrivAES192BlmtUser", "authkey1", "privkey1"},
 	// MD5.String() + AES192C.String():	{ "authMD5PrivAES192User", "authkey1", "privkey1" },
 	// MD5.String() + AES256.String():		{ "authMD5PrivAES256BlmtUser", "authkey1", "privkey1" },
 	// MD5.String() + AES256C.String():	{ "authMD5PrivAES256User", "authkey1", "privkey1" },

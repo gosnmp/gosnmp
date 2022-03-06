@@ -23,6 +23,8 @@ createUser authSHA256PrivAESUser SHA256 testingpass7223456 AES
 createUser authSHA384PrivAESUser SHA384 testingpass7323456 AES
 createUser authSHA512PrivAESUser SHA512 testingpass7423456 AES
 
+createUser authMD5PrivAES192BlmtUser MD5 "authkey1" AES-192 "privkey1"
+
 rouser   noAuthNoPrivUser noauth
 rouser   authMD5OnlyUser auth
 rouser   authSHAOnlyUser auth
@@ -44,6 +46,8 @@ rouser   authSHA224PrivAESUser authPriv
 rouser   authSHA256PrivAESUser authPriv
 rouser   authSHA384PrivAESUser authPriv
 rouser   authSHA512PrivAESUser authPriv
+
+rouser   authMD5PrivAES192BlmtUser authPriv
 EOF
 
 # enable ipv6 TODO restart fails - need to enable ipv6 on interface; spin up a Linux instance to check this
