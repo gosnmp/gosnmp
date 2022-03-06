@@ -356,6 +356,8 @@ func (x *GoSNMP) validateParameters() error {
 	}
 
 	if x.Version == Version3 {
+		// TODO: setting the Reportable flag violates rfc3412#6.4 if PDU is of type SNMPv2Trap.
+		// See if we can do this smarter and remove bitclear fix from trap.go:57
 		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
 
 		err := x.validateParametersV3()
