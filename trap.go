@@ -49,6 +49,16 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 		// Default to a v2 trap.
 		pdutype = SNMPv2Trap
 
+		switch x.MsgFlags {
+		// as per https://www.rfc-editor.org/rfc/rfc3412.html#section-6.4
+		// The reportableFlag MUST always be zero when the message contains
+		// a PDU from the Unconfirmed Class such as an SNMPv2-trap PDU
+		case 0x4, 0x5, 0x7:
+			// .. therefor bitclear the Reportable flag from the MsgFlags
+			// that we inherited from validateParameters()
+			x.MsgFlags = (x.MsgFlags &^ Reportable)
+		}
+
 		// If it's an inform, do that instead.
 		if trap.IsInform {
 			pdutype = InformRequest
