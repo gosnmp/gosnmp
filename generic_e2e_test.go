@@ -660,7 +660,6 @@ func TestSnmpV3AuthSHA512NoPrivGet(t *testing.T) {
 }
 
 func TestSnmpV3AuthSHA512PrivAES192Get(t *testing.T) {
-	t.Skip("AES-192 Blumenthal is currently known to have issues.")
 	Default.Version = Version3
 	Default.MsgFlags = AuthPriv
 	Default.SecurityModel = UserSecurityModel

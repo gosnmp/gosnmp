@@ -484,7 +484,7 @@ func extendKeyBlumenthal(authProtocol SnmpV3AuthProtocol, password string, engin
 	var key []byte
 	var err error
 
-	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, ""), password, engineID)
+	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, password), password, engineID)
 
 	if err != nil {
 		return nil, err

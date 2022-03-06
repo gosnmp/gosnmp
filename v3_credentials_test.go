@@ -50,7 +50,7 @@ var authenticationCredentials = map[string][]string{
 	SHA512.String() + NoPriv.String(): {"authSHA512OnlyUser", "testingpass5423456", ""},
 	SHA512.String() + DES.String():    {"authSHA512PrivDESUser", "testingpass6423456", "testingpass6423456"},
 	SHA512.String() + AES.String():    {"authSHA512PrivAESUser", "testingpass7423456", "testingpass7423456"},
-	// SHA512.String() + AES192.String():	{ "authSHA512PrivAES192BlmtUser", "authkey1", "privkey1" },
+	SHA512.String() + AES192.String(): {"authSHA512PrivAES192BlmtUser", "authkey1", "privkey1"},
 	// SHA512.String() + AES192C.String():	{ "authSHA512PrivAES192User", "authkey1", "privkey1" },
 	// SHA512.String() + AES256.String():	{ "authSHA512PrivAES256BlmtUser", "authkey1", "privkey1" },
 	// SHA512.String() + AES256C.String():	{ "authSHA512PrivAES256User", "authkey1", "privkey1" },
