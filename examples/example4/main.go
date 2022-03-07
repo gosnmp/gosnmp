@@ -1,3 +1,7 @@
+// Copyright 2012 The GoSNMP Authors. All rights reserved.  Use of this
+// source code is governed by a BSD-style license that can be found in the
+// LICENSE file.
+
 package main
 
 import (
@@ -27,7 +31,7 @@ func main() {
 		log.Fatalf("Connect() err: %v", err)
 	}
 	defer Client.Conn.Close()
-	var mySnmpPDU = []g.SnmpPDU{g.SnmpPDU{
+	var mySnmpPDU = []g.SnmpPDU{{
 		Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.15",
 		Type:  g.Integer,
 		Value: On,
