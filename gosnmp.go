@@ -17,6 +17,7 @@ import (
 	"net"
 	"strconv"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -119,6 +120,14 @@ type GoSNMP struct {
 	// from the address it received the requests on. To work around that,
 	// we open unconnected UDP socket and use sendto/recvfrom.
 	UseUnconnectedUDPSocket bool
+
+	// If Control is not nil, it is called after creating the network
+	// connection but before actually dialing.
+	//
+	// Can be used when UseUnconnectedUDPSocket is set to false or when using TCP
+	// in scenario where specific options on the underlying socket are nedded.
+	// Refer to https://pkg.go.dev/net#Dialer
+	Control func(network, address string, c syscall.RawConn) error
 
 	// LocalAddr is the local address in the format "address:port" to use when connecting an Target address.
 	// If the port parameter is empty or "0", as in
@@ -339,7 +348,7 @@ func (x *GoSNMP) netConnect() error {
 			x.Transport = "tcp4"
 		}
 	}
-	dialer := net.Dialer{Timeout: x.Timeout, LocalAddr: localAddr}
+	dialer := net.Dialer{Timeout: x.Timeout, LocalAddr: localAddr, Control: x.Control}
 	x.Conn, err = dialer.DialContext(x.Context, x.Transport, addr)
 	return err
 }
