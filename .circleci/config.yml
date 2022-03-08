@@ -42,6 +42,7 @@ jobs:
 
     steps:
     - checkout
+    - run: sudo sed -i 's/focal/impish/g' /etc/apt/sources.list
     - run: sudo apt-get update
     - run: sudo apt-get -y install snmpd
     - run: sudo ./snmp_users.sh
