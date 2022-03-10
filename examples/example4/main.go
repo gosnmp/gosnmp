@@ -6,10 +6,10 @@ package main
 
 import (
 	"fmt"
-	g "github.com/gosnmp/gosnmp"
 	"log"
 	"os"
 	"time"
+	g "github.com/gosnmp/gosnmp"
 )
 
 const (
