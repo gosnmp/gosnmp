@@ -1,3 +1,7 @@
+// Copyright 2012 The GoSNMP Authors. All rights reserved.  Use of this
+// source code is governed by a BSD-style license that can be found in the
+// LICENSE file.
+
 package main
 
 import (
@@ -33,14 +37,14 @@ func main() {
 			value := variable.Value.([]byte)
 			if strings.Contains(strconv.Quote(string(value)), "\\x") {
 				tmp := ""
-				for i := 0;i < len(value);i ++ {
+                for i := 0; i < len(value); i++ {
 					tmp += fmt.Sprintf("%v", value[i])
 					if i != (len(value) - 1) {
 						tmp += " "
 					}
 				}
 				fmt.Printf("Hex-String: %s\n", tmp)
-			}	else {
+			} else {
 				fmt.Printf("string: %s\n", string(variable.Value.([]byte)))
 			}
 		default:
