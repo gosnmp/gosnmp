@@ -31,7 +31,6 @@ func main() {
 
 	for i, variable := range result.Variables {
 		fmt.Printf("%d: oid: %s ", i, variable.Name)
-
 		switch variable.Type {
 		case g.OctetString:
 			value := variable.Value.([]byte)
