@@ -455,7 +455,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		if decrypted {
 			// truncate padding that might have been included with
 			// the encrypted PDU
-			if cursor+tlength > len(packet) {
+			if tlength < 0 || cursor+tlength > len(packet) {
 				return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 			}
 			packet = packet[:cursor+tlength]
