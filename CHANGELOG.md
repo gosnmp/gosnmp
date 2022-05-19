@@ -4,6 +4,7 @@ NOTE: The UnmarshalTrap now returns both an SnmpPacket and an error (#394)
 
 * [BUGFIX] SendTrap: do not set Reportable MsgFlags for v3 #398
 * [CHANGE] Support authoritative engineID discovery when listening for traps #394
+* [CHANGE] Require Go 1.17+
 * [ENHANCEMENT] marshalUint32: Values above 2^31-1 encodes in 5 bytes #377
 
 * [CHANGE]
