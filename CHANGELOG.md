@@ -1,17 +1,22 @@
 ## unreleased
 
-NOTE: The UnmarshalTrap now returns both an SnmpPacket and an error (#394)
-
-* [BUGFIX] SendTrap: do not set Reportable MsgFlags for v3 #398
-* [CHANGE] Support authoritative engineID discovery when listening for traps #394
-* [CHANGE] Require Go 1.17+
-* [ENHANCEMENT] marshalUint32: Values above 2^31-1 encodes in 5 bytes #377
-
 * [CHANGE]
 * [FEATURE]
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## v1.35.0
+
+This release now requires Go 1.17 or higher.
+
+NOTE: The UnmarshalTrap now returns both an SnmpPacket and an error (#394)
+
+* [BUGFIX] gosnmp.Set(): permit ObjectIdentifier PDU Type #378
+* [BUGFIX] SendTrap: do not set Reportable MsgFlags for v3 #398
+* [CHANGE] Support authoritative engineID discovery when listening for traps #394
+* [CHANGE] Require Go 1.17+
+* [ENHANCEMENT] marshalUint32: Values above 2^31-1 encodes in 5 bytes #377
+* [ENHANCEMENT] Add Control function to GoSNMP dialer parameters #397
 
 ## v1.34.0
 
