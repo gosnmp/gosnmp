@@ -4,15 +4,15 @@ version: 2.1
 executors:
   golang:
     docker:
-    - image: cimg/go:1.17
+    - image: cimg/go:1.18
 
 jobs:
   generate:
     executor: golang
     steps:
     - checkout
-    - run: cd /tmp && go get golang.org/x/tools/cmd/stringer
-    - run: cd /tmp && go get github.com/golang/mock/mockgen
+    - run: go install golang.org/x/tools/cmd/stringer@latest
+    - run: go install github.com/golang/mock/mockgen@latest
     - run: go generate
     - run: git diff --exit-code
 
@@ -73,8 +73,5 @@ workflows:
             - "amd64"
             - "386"
             goversion:
-            - "1.13"
-            - "1.14"
-            - "1.15"
-            - "1.16"
             - "1.17"
+            - "1.18"
