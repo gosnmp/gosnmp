@@ -117,13 +117,14 @@ type SnmpV3PrivProtocol uint8
 // NoPriv, DES implemented, AES planned
 // Changed: AES192, AES256, AES192C, AES256C added
 const (
-	NoPriv  SnmpV3PrivProtocol = 1
-	DES     SnmpV3PrivProtocol = 2
-	AES     SnmpV3PrivProtocol = 3
-	AES192  SnmpV3PrivProtocol = 4 // Blumenthal-AES192
-	AES256  SnmpV3PrivProtocol = 5 // Blumenthal-AES256
-	AES192C SnmpV3PrivProtocol = 6 // Reeder-AES192
-	AES256C SnmpV3PrivProtocol = 7 // Reeder-AES256
+	NoPriv    SnmpV3PrivProtocol = 1
+	DES       SnmpV3PrivProtocol = 2
+	AES       SnmpV3PrivProtocol = 3
+	AES192    SnmpV3PrivProtocol = 4 // Blumenthal-AES192
+	AES256    SnmpV3PrivProtocol = 5 // Blumenthal-AES256
+	AES192C   SnmpV3PrivProtocol = 6 // Reeder-AES192
+	AES256C   SnmpV3PrivProtocol = 7 // Reeder-AES256
+	TripleDES SnmpV3PrivProtocol = 8 // added 3DES
 )
 
 //go:generate stringer -type=SnmpV3PrivProtocol
@@ -199,6 +200,8 @@ func (sp *UsmSecurityParameters) Description() string {
 		sb.WriteString(",priv=AES192C")
 	case AES256C:
 		sb.WriteString(",priv=AES256C")
+	case TripleDES:
+		sb.WriteString(",priv=TripleDES")
 	}
 	sb.WriteString(",privPass=")
 	sb.WriteString(sp.PrivacyPassphrase)
@@ -259,7 +262,7 @@ func (sp *UsmSecurityParameters) initSecurityKeysNoLock() error {
 	if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
 		switch sp.PrivacyProtocol {
 		// Changed: The Output of SHA1 is a 20 octets array, therefore for AES128 (16 octets) either key extension algorithm can be used.
-		case AES, AES192, AES256, AES192C, AES256C:
+		case AES, AES192, AES256, AES192C, AES256C, TripleDES:
 			// Use abstract AES key localization algorithms.
 			sp.PrivacyKey, err = genlocalPrivKey(sp.PrivacyProtocol, sp.AuthenticationProtocol,
 				sp.PrivacyPassphrase,
@@ -356,7 +359,7 @@ func (sp *UsmSecurityParameters) init(log Logger) error {
 			return fmt.Errorf("error creating a cryptographically secure salt: %w", err)
 		}
 		sp.localAESSalt = binary.BigEndian.Uint64(salt)
-	case DES:
+	case DES, TripleDES:
 		salt := make([]byte, 4)
 		_, err = crand.Read(salt)
 		if err != nil {
@@ -506,7 +509,7 @@ func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthPro
 		keylen = 16
 	case AES192, AES192C:
 		keylen = 24
-	case AES256, AES256C:
+	case AES256, AES256C, TripleDES:
 		keylen = 32
 	}
 
@@ -516,7 +519,8 @@ func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthPro
 
 	case AES192, AES256:
 		localPrivKey, err = extendKeyBlumenthal(authProtocol, password, engineID)
-
+	case TripleDES:
+		localPrivKey, err = genTripleDeslocalkey(authProtocol, password, engineID)
 	default:
 		localPrivKey, err = genlocalkey(authProtocol, password, engineID)
 	}
@@ -542,6 +546,26 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 	if err != nil {
 		return []byte{}, err
 	}
+
+	return secretKey, nil
+}
+
+func genTripleDeslocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) ([]byte, error) {
+	var secretKey []byte
+	var err error
+
+	key, err := hMAC(authProtocol.HashType(), cacheKey(authProtocol, passphrase), passphrase, engineID)
+
+	if err != nil {
+		return []byte{}, err
+	}
+
+	key1, err := hMAC(authProtocol.HashType(), cacheKey(authProtocol, string(key)), string(key), engineID)
+
+	if err != nil {
+		return []byte{}, err
+	}
+	secretKey = append(key, key1...)
 
 	return secretKey, nil
 }
@@ -772,6 +796,32 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		}
 		b = append([]byte{byte(OctetString)}, pduLen...)
 		scopedPdu = append(b, ciphertext...) //nolint:gocritic
+	case TripleDES:
+		// The last 8 octets of the 32-octet secret(private privacy key) are used as pre-IV
+		preiv := sp.PrivacyKey[24:]
+
+		// calc iv
+		var iv [8]byte
+		for i := 0; i < len(iv); i++ {
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
+		}
+		block, err := des.NewTripleDESCipher(sp.PrivacyKey[:24]) //nolint:gosec
+		if err != nil {
+			return nil, err
+		}
+		mode := cipher.NewCBCEncrypter(block, iv[:])
+
+		pad := make([]byte, des.BlockSize-len(scopedPdu)%des.BlockSize)
+		scopedPdu = append(scopedPdu, pad...)
+
+		ciphertext := make([]byte, len(scopedPdu))
+		mode.CryptBlocks(ciphertext, scopedPdu)
+		pduLen, err := marshalLength(len(ciphertext))
+		if err != nil {
+			return nil, err
+		}
+		b = append([]byte{byte(OctetString)}, pduLen...)
+		scopedPdu = append(b, ciphertext...) //nolint:gocritic
 	default:
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
@@ -825,6 +875,27 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		plaintext := make([]byte, len(packet[cursorTmp:]))
 		stream.XORKeyStream(plaintext, packet[cursorTmp:])
 		copy(packet[cursor:], plaintext)
+		packet = packet[:cursor+len(plaintext)]
+	case TripleDES:
+		if len(packet[cursorTmp:])%des.BlockSize != 0 {
+			return nil, errors.New("error decrypting ScopedPDU: not multiple of des block size")
+		}
+		preiv := sp.PrivacyKey[24:]
+		var iv [8]byte
+		for i := 0; i < len(iv); i++ {
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
+		}
+		block, err := des.NewTripleDESCipher(sp.PrivacyKey[:24]) //nolint:gosec
+		if err != nil {
+			return nil, err
+		}
+		mode := cipher.NewCBCDecrypter(block, iv[:])
+
+		plaintext := make([]byte, len(packet[cursorTmp:]))
+		mode.CryptBlocks(plaintext, packet[cursorTmp:])
+		copy(packet[cursor:], plaintext)
+		// truncate packet to remove extra space caused by the
+		// octetstring/length header that was just replaced
 		packet = packet[:cursor+len(plaintext)]
 	default:
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
