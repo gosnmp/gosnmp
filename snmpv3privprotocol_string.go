@@ -15,11 +15,12 @@ func _() {
 	_ = x[AES256-5]
 	_ = x[AES192C-6]
 	_ = x[AES256C-7]
+	_ = x[TripleDES-8]
 }
 
-const _SnmpV3PrivProtocol_name = "NoPrivDESAESAES192AES256AES192CAES256C"
+const _SnmpV3PrivProtocol_name = "NoPrivDESAESAES192AES256AES192CAES256CTripleDES"
 
-var _SnmpV3PrivProtocol_index = [...]uint8{0, 6, 9, 12, 18, 24, 31, 38}
+var _SnmpV3PrivProtocol_index = [...]uint8{0, 6, 9, 12, 18, 24, 31, 38, 47}
 
 func (i SnmpV3PrivProtocol) String() string {
 	i -= 1
