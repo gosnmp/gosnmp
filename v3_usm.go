@@ -551,7 +551,6 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 }
 
 func genTripleDeslocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID string) ([]byte, error) {
-	var secretKey []byte
 	var err error
 
 	key, err := hMAC(authProtocol.HashType(), cacheKey(authProtocol, passphrase), passphrase, engineID)
@@ -565,9 +564,9 @@ func genTripleDeslocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, en
 	if err != nil {
 		return []byte{}, err
 	}
-	secretKey = append(key, key1...)
+	key = append(key, key1...)
 
-	return secretKey, nil
+	return key[:32], nil
 }
 
 // http://tools.ietf.org/html/rfc2574#section-8.1.1.1
