@@ -1,5 +1,5 @@
-gosnmp
-======
+# gosnmp
+
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#networking)
 
 [![Build Status](https://circleci.com/gh/gosnmp/gosnmp.svg?style=shield)](https://circleci.com/gh/gosnmp/gosnmp/tree/master)
@@ -7,7 +7,7 @@ gosnmp
 
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
 GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
-IPv6, using __SNMPv1__, __SNMPv2c__ or __SNMPv3__. Builds are tested against
+IPv6, using **SNMPv1**, **SNMPv2c** or **SNMPv3**. Builds are tested against
 linux/amd64 and linux/386.
 
 # About
@@ -24,30 +24,30 @@ For support and help, join us in the #snmp channel of
 
 GoSNMP has the following SNMP functions:
 
-* **Get** (single or multiple OIDs)
-* **GetNext**
-* **GetBulk** (SNMPv2c and SNMPv3 only)
-* **Walk** - retrieves a subtree of values using GETNEXT.
-* **BulkWalk** - retrieves a subtree of values using GETBULK (SNMPv2c and
+- **Get** (single or multiple OIDs)
+- **GetNext**
+- **GetBulk** (SNMPv2c and SNMPv3 only)
+- **Walk** - retrieves a subtree of values using GETNEXT.
+- **BulkWalk** - retrieves a subtree of values using GETBULK (SNMPv2c and
   SNMPv3 only).
-* **BulkWalkAll** - similar to BulkWalk but returns a filled array of all values rather than using a callback function to stream results.
-* **Set** - supports Integers and OctetStrings.
-* **SendTrap** - send SNMP TRAPs.
-* **Listen** - act as an NMS for receiving TRAPs.
+- **BulkWalkAll** - similar to BulkWalk but returns a filled array of all values rather than using a callback function to stream results.
+- **Set** - supports Integers and OctetStrings.
+- **SendTrap** - send SNMP TRAPs.
+- **Listen** - act as an NMS for receiving TRAPs.
 
 GoSNMP has the following **helper** functions:
 
-* **ToBigInt** - treat returned values as `*big.Int`
-* **Partition** - facilitates dividing up large slices of OIDs
+- **ToBigInt** - treat returned values as `*big.Int`
+- **Partition** - facilitates dividing up large slices of OIDs
 
 **gosnmp/gosnmp** has completely diverged from **alouca/gosnmp**, your code
 will require modification in these (and other) locations:
 
-* the **Get** function has a different method signature
-* the **NewGoSNMP** function has been removed, use **Connect** instead
+- the **Get** function has a different method signature
+- the **NewGoSNMP** function has been removed, use **Connect** instead
   (see Usage below). `Connect` uses the `GoSNMP` struct;
   `gosnmp.Default` is provided for you to build on.
-* GoSNMP no longer relies on **alouca/gologger** - you can use your
+- GoSNMP no longer relies on **alouca/gologger** - you can use your
   logger if it conforms to the `gosnmp.LoggerInterface` interface; otherwise
   debugging will disabled.
 
@@ -57,12 +57,15 @@ type LoggerInterface interface {
     Printf(format string, v ...interface{})
 }
 ```
-To enable logging, you must call gosnmp.NewLogger() function, and pass a pointer to your logging interface, for example with standard *log.Logger:
+
+To enable logging, you must call gosnmp.NewLogger() function, and pass a pointer to your logging interface, for example with standard \*log.Logger:
 
 ```go
 gosnmp.Default.Logger = gosnmp.NewLogger(log.New(os.Stdout, "", 0))
 ```
+
 or
+
 ```go
 g := &gosnmp.GoSNMP{
     ...
@@ -70,10 +73,13 @@ g := &gosnmp.GoSNMP{
 }
 
 ```
+
 You can completely remove the logging code from your application using the golang build tag "gosnmp_nodebug", for example:
+
 ```
 go build -tags gosnmp_nodebug
 ```
+
 This will completely disable the logging of the gosnmp library, even if the logger interface is specified in the code. This provides a small performance improvement.
 
 # Installation
@@ -132,11 +138,11 @@ Running this example gives the following output (from my printer):
 1: oid: 1.3.6.1.2.1.1.7.0 number: 104
 ```
 
-* `examples/example2.go` is similar to `example.go`, however it uses a
+- `examples/example2.go` is similar to `example.go`, however it uses a
   custom `&GoSNMP` rather than `g.Default`
-* `examples/walkexample.go` demonstrates using `BulkWalk`
-* `examples/example3.go` demonstrates `SNMPv3`
-* `examples/trapserver.go` demonstrates writing an SNMP v2c trap server
+- `examples/walkexample.go` demonstrates using `BulkWalk`
+- `examples/example3.go` demonstrates `SNMPv3`
+- `examples/trapserver.go` demonstrates writing an SNMP v2c trap server
 
 # MIB Parser
 
@@ -178,6 +184,111 @@ A packet capture, obtained while running the snmpget. For example:
 sudo tcpdump -s 0 -i eth0 -w foo.pcap host 203.50.251.17 and port 161
 ```
 
+# Working on Traps
+
+## Getting started
+
+```
+$ sudo aptitude -y install snmp-mibs-downloader snmp snmpd snmp-mibs-downloader
+```
+
+In the file `/etc/snmp/snmp.conf`
+
+```
+mibs +ALL
+```
+
+In the file `/etc/snmp/snmpd.conf`
+
+```
+comment out:
+    agentAddress  udp:127.0.0.1:161
+
+uncomment:
+    agentAddress udp:161,udp6:[::1]:161
+
+comment out:
+    rocommunity public  default    -V systemonly
+
+uncomment:
+    rocommunity public 10.0.0.0/16
+
+comment out:
+    trapsink     localhost public
+
+uncomment:
+    trap2sink    localhost public
+```
+
+Create the file `~/.snmp/snmp.conf` with the contents:
+
+```
+# ~ expansion fails
+persistentDir /home/sonia/.snmp_persist
+```
+
+```
+$ sudo /etc/init.d/snmpd restart
+```
+
+## Testing
+
+```
+snmptrap -v 2c -c public 192.168.1.10 '' SNMPv2-MIB::system SNMPv2-MIB::sysDescr.0 s "red laptop" SNMPv2-MIB::sysServices.0 i "5" SNMPv2-MIB::sysObjectID o "1.3.6.1.4.1.2.3.4.5"
+```
+
+## tshark, wireshark
+
+```
+sudo aptitude -y install wireshark tshark
+sudo dpkg-reconfigure wireshark-common # allow captures
+sudo usermod -a -G wireshark sonia
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap
+sudo getcap /usr/bin/dumpcap
+# still 'Couldn't run /usr/bin/dumpcap in child process', so nuke it
+sudo chmod 777 /usr/bin/dumpcap
+```
+
+Logout, login to apply wireshark and tshark permissions
+
+In a second terminal, run:
+
+```
+tshark -i eth0 -f "port 161" -w trap.pcap
+```
+
+## snmptrap and MIBs
+
+```
+The TYPE is a single character, one of:
+       i  INTEGER                   INTEGER
+       u  UNSIGNED
+       c  COUNTER32
+       s  STRING                    DisplayString
+       x  HEX STRING
+       d  DECIMAL STRING
+       n  NULLOBJ
+       o  OBJID                     OBJECT IDENTIFIER
+       t  TIMETICKS
+       a  IPADDRESS
+       b  BITS
+```
+
+## Finding MIBs
+
+Look in the file `/usr/share/mibs/ietf/SNMPv2-MIB`. Here are some
+example lines:
+
+```
+line:77     sysDescr
+line:88     sysObjectID
+line:146    sysServices
+```
+
+For a gui MIB browser:
+
+https://l3net.wordpress.com/2013/05/12/installing-net-snmp-mibs-on-ubuntu-and-debian/
+
 # Bugs
 
 Rane's document [SNMP: Simple? Network Management
@@ -192,31 +303,32 @@ missing/faulty BER type.
 
 The following BER types have been implemented:
 
-* 0x00 UnknownType
-* 0x01 Boolean
-* 0x02 Integer
-* 0x03 BitString
-* 0x04 OctetString
-* 0x05 Null
-* 0x06 ObjectIdentifier
-* 0x07 ObjectDescription
-* 0x40 IPAddress (IPv4 & IPv6)
-* 0x41 Counter32
-* 0x42 Gauge32
-* 0x43 TimeTicks
-* 0x44 Opaque (Float & Double)
-* 0x45 NsapAddress
-* 0x46 Counter64
-* 0x47 Uinteger32
-* 0x78 OpaqueFloat
-* 0x79 OpaqueDouble
-* 0x80 NoSuchObject
-* 0x81 NoSuchInstance
-* 0x82 EndOfMibView
+- 0x00 UnknownType
+- 0x01 Boolean
+- 0x02 Integer
+- 0x03 BitString
+- 0x04 OctetString
+- 0x05 Null
+- 0x06 ObjectIdentifier
+- 0x07 ObjectDescription
+- 0x40 IPAddress (IPv4 & IPv6)
+- 0x41 Counter32
+- 0x42 Gauge32
+- 0x43 TimeTicks
+- 0x44 Opaque (Float & Double)
+- 0x45 NsapAddress
+- 0x46 Counter64
+- 0x47 Uinteger32
+- 0x78 OpaqueFloat
+- 0x79 OpaqueDouble
+- 0x80 NoSuchObject
+- 0x81 NoSuchInstance
+- 0x82 EndOfMibView
 
 # Running the Tests
 
 Local testing in Docker
+
 ```shell
 docker build -t gosnmp/gosnmp:latest .
 docker run -it gosnmp/gosnmp:latest
@@ -237,13 +349,13 @@ go test -v -tags helper     # for example
 
 Tests are grouped as follows:
 
-* Unit tests (validating data packing and marshalling):
-   * `marshal_test.go`
-   * `misc_test.go`
-* Public API consistency tests:
-   * `gosnmp_api_test.go`
-* End-to-end integration tests:
-   * `generic_e2e_test.go`
+- Unit tests (validating data packing and marshalling):
+  - `marshal_test.go`
+  - `misc_test.go`
+- Public API consistency tests:
+  - `gosnmp_api_test.go`
+- End-to-end integration tests:
+  - `generic_e2e_test.go`
 
 The generic end-to-end integration test `generic_e2e_test.go` should
 work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
@@ -277,7 +389,6 @@ go get github.com/axw/gocov/gocov
 go get github.com/matm/gocov-html
 gocov test github.com/gosnmp/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
 ```
-
 
 # License
 
