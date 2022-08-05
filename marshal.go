@@ -1338,7 +1338,7 @@ func (x *GoSNMP) receive() ([]byte, error) {
 	if err == io.EOF {
 		return nil, err
 	} else if err != nil {
-		return nil, fmt.Errorf("error reading from socket: %w", err)
+		return nil, fmt.Errorf("Failed to read from socket: %s", err.Error())
 	}
 
 	if n == rxBufSize {
