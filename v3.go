@@ -420,6 +420,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
 	}
 
+	x.bkGetSecurityParameters(packet, cursor, response)
 	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
 	if err != nil {
 		return 0, err
@@ -496,4 +497,30 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		return nil, 0, errors.New("error parsing SNMPV3 scoped PDU")
 	}
 	return packet, cursor, nil
+}
+
+func (x *GoSNMP) bkGetSecurityParameters(packet []byte, cursor int, response *SnmpPacket) {
+	if len(x.BkUsmMap.usmMap) == 0 {
+		return
+	}
+	cpSp := response.SecurityParameters.Copy()
+	cpPacket := packet
+	cpCusrsor := cursor
+	_, err := cpSp.unmarshal(NoAuthNoPriv, cpPacket, cpCusrsor)
+	if err != nil {
+		x.Logger.Printf("bk parse username error %v", err)
+	}
+	username := cpSp.(*UsmSecurityParameters).UserName
+	engineID := cpSp.(*UsmSecurityParameters).AuthoritativeEngineID
+	if username != "" && engineID != "" {
+		bkUsm := x.BkUsmMap.GetBkUsmByUserNameEngineID(username, engineID)
+		if bkUsm == nil {
+			x.Logger.Printf("can not match username[%s] engineID[%s] in bkusmmap", username, engineID)
+			return
+		}
+		bkUsm.Logger = x.Logger
+		response.MsgFlags = bkUsm.MsgFlag
+		response.SecurityParameters = bkUsm.UsmSecurityParameters
+		//x.SecurityParameters = bkUsm.UsmSecurityParameters
+	}
 }

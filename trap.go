@@ -106,6 +106,12 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 // GoSNMP.unmarshal() currently only handles SNMPv2Trap
 //
 
+type MsgData struct {
+	data   []byte
+	remote *net.UDPAddr
+	err    error
+}
+
 // A TrapListener defines parameters for running a SNMP Trap receiver.
 // nil values will be replaced by default values.
 type TrapListener struct {
@@ -115,6 +121,8 @@ type TrapListener struct {
 
 	// Params is a reference to the TrapListener's "parent" GoSNMP instance.
 	Params *GoSNMP
+
+	Concurrency int
 
 	// OnNewTrap handles incoming Trap and Inform PDUs.
 	OnNewTrap TrapHandlerFunc
@@ -149,8 +157,9 @@ type TrapHandlerFunc func(s *SnmpPacket, u *net.UDPAddr)
 // NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
 func NewTrapListener() *TrapListener {
 	tl := &TrapListener{
-		finish: 0,
-		done:   make(chan bool),
+		Concurrency: 1,
+		finish:      0,
+		done:        make(chan bool),
 		// Buffered because one doesn't have to block on it.
 		listening: make(chan bool, 1),
 	}
@@ -219,6 +228,74 @@ func (t *TrapListener) listenUDP(addr string) error {
 
 	defer t.conn.Close()
 
+	dataChan := make(chan *MsgData, t.Concurrency*1000)
+	wg := new(sync.WaitGroup)
+	for i := 0; i < t.Concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for msgData := range dataChan {
+				if msgData.err != nil {
+					if atomic.LoadInt32(&t.finish) == 1 {
+						// err most likely comes from reading from a closed connection
+						continue
+					}
+					t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
+					continue
+				}
+				traps, err := t.Params.UnmarshalTrap(msgData.data, true)
+				if err != nil {
+					t.Params.Logger.Printf("TrapListener: error in msgData unmarshall %s\n", err)
+				}
+				if traps != nil {
+					// Here we assume that t.OnNewTrap will not alter the contents
+					// of the PDU (per documentation, because Go does not have
+					// compile-time const checking).  We don't pass a copy because
+					// the SnmpPacket type is somewhat large, but we could without
+					// violating any implicit or explicit spec.
+					t.OnNewTrap(traps, msgData.remote)
+
+					// If it was an Inform request, we need to send a response.
+					if traps.PDUType == InformRequest { //nolint:whitespace
+
+						// Reuse the packet, since we're supposed to send it back
+						// with the exact same variables unless there's an error.
+						// Change the PDUType to the response, though.
+						traps.PDUType = GetResponse
+
+						// If the response can be sent, the error-status is
+						// supposed to be set to noError and the error-index set to
+						// zero.
+						traps.Error = NoError
+						traps.ErrorIndex = 0
+
+						// TODO: Check that the message marshalled is not too large
+						// for the originator to accept and if so, send a tooBig
+						// error PDU per RFC3416 section 4.2.7.  This maximum size,
+						// however, does not have a well-defined mechanism in the
+						// RFC other than using the path MTU (which is difficult to
+						// determine), so it's left to future implementations.
+						ob, err := traps.marshalMsg()
+						if err != nil {
+							return
+						}
+
+						// Send the return packet back.
+						count, err := t.conn.WriteTo(ob, msgData.remote)
+						if err != nil {
+							return
+						}
+
+						// This isn't fatal, but should be logged.
+						if count != len(ob) {
+							t.Params.Logger.Printf("Failed to send all bytes of INFORM response!\n")
+						}
+					}
+				}
+			}
+		}()
+	}
+
 	// Mark that we are listening now.
 	t.listening <- true
 
@@ -231,79 +308,10 @@ func (t *TrapListener) listenUDP(addr string) error {
 		default:
 			var buf [4096]byte
 			rlen, remote, err := t.conn.ReadFromUDP(buf[:])
-			if err != nil {
-				if atomic.LoadInt32(&t.finish) == 1 {
-					// err most likely comes from reading from a closed connection
-					continue
-				}
-				t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
-				continue
-			}
-
-			msg := buf[:rlen]
-			trap, err := t.Params.UnmarshalTrap(msg, false)
-			if err != nil {
-				t.Params.Logger.Printf("TrapListener: error in UnmarshalTrap %s\n", err)
-				continue
-			}
-			if trap.Version == Version3 && trap.SecurityModel == UserSecurityModel && t.Params.SecurityModel == UserSecurityModel {
-				securityParams, ok := t.Params.SecurityParameters.(*UsmSecurityParameters)
-				if !ok {
-					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
-				}
-				packetSecurityParams, ok := trap.SecurityParameters.(*UsmSecurityParameters)
-				if !ok {
-					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
-				}
-				snmpEngineID := securityParams.AuthoritativeEngineID
-				msgAuthoritativeEngineID := packetSecurityParams.AuthoritativeEngineID
-				if msgAuthoritativeEngineID != snmpEngineID {
-					if len(msgAuthoritativeEngineID) < 5 || len(msgAuthoritativeEngineID) > 32 {
-						// RFC3411 section 5. – SnmpEngineID definition.
-						// SnmpEngineID is an OCTET STRING which size should be between 5 and 32
-						// According to RFC3414 3.2.3b: stop processing and report
-						// the listener authoritative engine ID
-						atomic.AddUint32(&t.usmStatsUnknownEngineIDsCount, 1)
-						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
-						if err != nil {
-							t.Params.Logger.Printf("TrapListener: %s\n", err)
-						}
-						continue
-					}
-					// RFC3414 3.2.3a: Continue processing
-				}
-			}
-			// Here we assume that t.OnNewTrap will not alter the contents
-			// of the PDU (per documentation, because Go does not have
-			// compile-time const checking).  We don't pass a copy because
-			// the SnmpPacket type is somewhat large, but we could without
-			// violating any implicit or explicit spec.
-			t.OnNewTrap(trap, remote)
-
-			// If it was an Inform request, we need to send a response.
-			if trap.PDUType == InformRequest { //nolint:whitespace
-
-				// Reuse the packet, since we're supposed to send it back
-				// with the exact same variables unless there's an error.
-				// Change the PDUType to the response, though.
-				trap.PDUType = GetResponse
-
-				// If the response can be sent, the error-status is
-				// supposed to be set to noError and the error-index set to
-				// zero.
-				trap.Error = NoError
-				trap.ErrorIndex = 0
-
-				// TODO: Check that the message marshalled is not too large
-				// for the originator to accept and if so, send a tooBig
-				// error PDU per RFC3416 section 4.2.7.  This maximum size,
-				// however, does not have a well-defined mechanism in the
-				// RFC other than using the path MTU (which is difficult to
-				// determine), so it's left to future implementations.
-				err := t.SendUDP(trap, remote)
-				if err != nil {
-					t.Params.Logger.Printf("TrapListener: %s\n", err)
-				}
+			dataChan <- &MsgData{
+				data:   buf[:rlen],
+				remote: remote,
+				err:    err,
 			}
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -167,9 +168,93 @@ type GoSNMP struct {
 
 	// Internal - we use to send packets if using unconnected socket.
 	uaddr *net.UDPAddr
+
+	// bk support for multi-user
+	BkUsmMap BkUsmMap
+}
+
+// bkUsm
+type BkUsm struct {
+	MsgFlag SnmpV3MsgFlags
+	*UsmSecurityParameters
+}
+
+func (b *BkUsm) initBkUsm() error {
+	err := b.initSecurityKeys()
+	if err != nil {
+		return err
+	}
+	err = b.validate(b.MsgFlag)
+	if err != nil {
+		return err
+	}
+	err = b.init(b.Logger)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// bkUsmMap
+type BkUsmMap struct {
+	mtx    *sync.RWMutex
+	usmMap map[string]*BkUsm
+}
+
+// get BkUsm By UserName And EngineID
+func (bm *BkUsmMap) GetBkUsmByUserNameEngineID(username, engineID string) *BkUsm {
+	if bm.usmMap == nil {
+		return nil
+	}
+	bm.mtx.Lock()
+	defer bm.mtx.Unlock()
+	key := username + bm.ParseEngineIDToStr(engineID)
+	return bm.usmMap[key]
+}
+
+// Add BkUsm to BkUsmMap
+func (bm *BkUsmMap) AddBkUsm(MsgFlag SnmpV3MsgFlags, sp *UsmSecurityParameters) error {
+	if bm.mtx == nil {
+		bm.mtx = new(sync.RWMutex)
+	}
+	bm.mtx.Lock()
+	defer bm.mtx.Unlock()
+	if bm.usmMap == nil {
+		bm.usmMap = make(map[string]*BkUsm)
+	}
+	// key := sp.UserName + bm.ParseEngineIDToStr(sp.AuthoritativeEngineID)
+	key := sp.UserName + sp.AuthoritativeEngineID
+	if MsgFlag == NoAuthNoPriv {
+		sp.AuthenticationProtocol = NoAuth
+		sp.PrivacyProtocol = NoPriv
+	}
+	if MsgFlag == AuthNoPriv {
+		sp.PrivacyProtocol = NoPriv
+	}
+	bkUsm := &BkUsm{
+		MsgFlag:               MsgFlag,
+		UsmSecurityParameters: sp,
+	}
+	err := bkUsm.initBkUsm()
+	if err != nil {
+		return err
+	}
+	bm.usmMap[key] = bkUsm
+	return nil
+}
+
+// string([]byte{0x80, 0x09, 0x03, 0xc2, 0x01, 0x33, 0xc7})(engine) => 800903c20133c7
+func (bm *BkUsmMap) ParseEngineIDToStr(engineID string) string {
+	var str string
+	bs := []byte(engineID)
+	for _, b := range bs {
+		str += fmt.Sprintf("%02x", b)
+	}
+	return str
 }
 
 // Default connection settings
+//
 //nolint:gochecknoglobals
 var Default = &GoSNMP{
 	Port:               161,
@@ -285,8 +370,9 @@ func (x *GoSNMP) ConnectIPv6() error {
 // connect to address addr on the given network
 //
 // https://golang.org/pkg/net/#Dial gives acceptable network values as:
-//   "tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),"udp6" (IPv6-only), "ip",
-//   "ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket"
+//
+//	"tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),"udp6" (IPv6-only), "ip",
+//	"ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket"
 func (x *GoSNMP) connect(networkSuffix string) error {
 	err := x.validateParameters()
 	if err != nil {
@@ -623,8 +709,8 @@ func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
 // the following values:
 //
 // 0  1  2  3  4  5  6  7
-//       T        T     T
 //
+//	T        T     T
 func Partition(currentPosition, partitionSize, sliceLength int) bool {
 	if currentPosition < 0 || currentPosition >= sliceLength {
 		return false
