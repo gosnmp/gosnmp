@@ -1117,8 +1117,8 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 		}
 
-		if maxRepetitions, ok := rawMaxRepetitions.(uint32); ok {
-			response.MaxRepetitions = (maxRepetitions & 0x7FFFFFFF)
+		if maxRepetitions, ok := rawMaxRepetitions.(int); ok {
+			response.MaxRepetitions = uint32(maxRepetitions & 0x7FFFFFFF)
 		}
 	} else {
 		// Parse Error-Status
