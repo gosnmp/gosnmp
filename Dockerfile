@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine3.13
+FROM golang:1.18-alpine3.16
 
 # Install deps
 RUN apk add --no-cache  \
