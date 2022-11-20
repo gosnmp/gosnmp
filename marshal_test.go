@@ -1209,7 +1209,8 @@ func ciscoGetnextRequestBytes() []byte {
 	}
 }
 
-/* cisco getbulk bytes corresponds to this snmpbulkget command:
+/*
+	cisco getbulk bytes corresponds to this snmpbulkget command:
 
 $ snmpbulkget -v2c -cpublic  127.0.0.1:161 1.3.6.1.2.1.1.9.1.3.52
 iso.3.6.1.2.1.1.9.1.4.1 = Timeticks: (21) 0:00:00.21
@@ -1222,7 +1223,6 @@ iso.3.6.1.2.1.1.9.1.4.7 = Timeticks: (23) 0:00:00.23
 iso.3.6.1.2.1.1.9.1.4.8 = Timeticks: (23) 0:00:00.23
 iso.3.6.1.2.1.2.1.0 = INTEGER: 3
 iso.3.6.1.2.1.2.2.1.1.1 = INTEGER: 1
-
 */
 func ciscoGetbulkRequestBytes() []byte {
 	return []byte{
@@ -1260,14 +1260,15 @@ func ciscoGetbulkResponseBytes() []byte {
 /*
 Issue 35, empty responses.
 Simple Network Management Protocol
-    version: v2c (1)
-    community: public
-    data: get-request (0)
-        get-request
-            request-id: 1883298028
-            error-status: noError (0)
-            error-index: 0
-            variable-bindings: 0 items
+
+	version: v2c (1)
+	community: public
+	data: get-request (0)
+	    get-request
+	        request-id: 1883298028
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 0 items
 */
 func emptyErrRequest() []byte {
 	return []byte{
@@ -1281,14 +1282,15 @@ func emptyErrRequest() []byte {
 Issue 35, empty responses.
 
 Simple Network Management Protocol
-    version: v2c (1)
-    community: public
-    data: get-response (2)
-        get-response
-            request-id: 1883298028
-            error-status: noError (0)
-            error-index: 0
-            variable-bindings: 0 items
+
+	version: v2c (1)
+	community: public
+	data: get-response (2)
+	    get-response
+	        request-id: 1883298028
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 0 items
 */
 func emptyErrResponse() []byte {
 	return []byte{
@@ -1302,17 +1304,18 @@ func emptyErrResponse() []byte {
 Issue 15, test Counter64.
 
 Simple Network Management Protocol
-    version: v2c (1)
-    community: public
-    data: get-response (2)
-        get-response
-            request-id: 190378322
-            error-status: noError (0)
-            error-index: 0
-            variable-bindings: 1 item
-                1.3.6.1.2.1.31.1.1.1.10.1: 1527943
-                    Object Name: 1.3.6.1.2.1.31.1.1.1.10.1 (iso.3.6.1.2.1.31.1.1.1.10.1)
-                    Value (Counter64): 1527943
+
+	version: v2c (1)
+	community: public
+	data: get-response (2)
+	    get-response
+	        request-id: 190378322
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 1 item
+	            1.3.6.1.2.1.31.1.1.1.10.1: 1527943
+	                Object Name: 1.3.6.1.2.1.31.1.1.1.10.1 (iso.3.6.1.2.1.31.1.1.1.10.1)
+	                Value (Counter64): 1527943
 */
 func counter64Response() []byte {
 	return []byte{
@@ -1328,17 +1331,18 @@ func counter64Response() []byte {
 Issue 370, test Opaque.
 
 Simple Network Management Protocol
-    version: 1 (1)
-    community: public
-    data: get-response (2)
-        get-response
-            request-id: 2033938493
-            error-status: noError (0)
-            error-index: 0
-            variable-bindings: 1 item
-                1.3.6.1.4.1.34187.74195.2.1.24590: 41f00000
-                    Object Name: 1.3.6.1.4.1.34187.74195.2.1.24590 (iso.3.6.1.4.1.34187.74195.2.1.24590)
-                    Value (Opaque): 41f00000
+
+	version: 1 (1)
+	community: public
+	data: get-response (2)
+	    get-response
+	        request-id: 2033938493
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 1 item
+	            1.3.6.1.4.1.34187.74195.2.1.24590: 41f00000
+	                Object Name: 1.3.6.1.4.1.34187.74195.2.1.24590 (iso.3.6.1.4.1.34187.74195.2.1.24590)
+	                Value (Opaque): 41f00000
 */
 func opaqueResponse() []byte {
 	return []byte{
@@ -1352,7 +1356,8 @@ func opaqueResponse() []byte {
 
 /*
 Opaque Float, observed from Synology NAS UPS MIB
- snmpget -v 2c -c public host 1.3.6.1.4.1.6574.4.2.12.1.0
+
+	snmpget -v 2c -c public host 1.3.6.1.4.1.6574.4.2.12.1.0
 */
 func opaqueFloatResponse() []byte {
 	return []byte{
@@ -1366,7 +1371,8 @@ func opaqueFloatResponse() []byte {
 
 /*
 Opaque Double, not observed, crafted based on description:
- https://tools.ietf.org/html/draft-perkins-float-00
+
+	https://tools.ietf.org/html/draft-perkins-float-00
 */
 func opaqueDoubleResponse() []byte {
 	return []byte{
