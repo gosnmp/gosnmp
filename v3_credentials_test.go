@@ -3,6 +3,7 @@ package gosnmp
 import "testing"
 
 // GO SNMP credentials table
+//
 //nolint:gochecknoglobals,unused
 var authenticationCredentials = map[string][]string{
 	NoAuth.String() + NoPriv.String(): {"noAuthNoPrivUser", "", ""},
@@ -57,6 +58,7 @@ var authenticationCredentials = map[string][]string{
 }
 
 // Credentials table for public demo.snmplabs.org
+//
 //nolint:unused,gochecknoglobals
 var authenticationCredentialsSnmpLabs = map[string][]string{
 	NoAuth.String() + NoPriv.String(): {"usr-none-none", "", ""},
@@ -128,7 +130,7 @@ func useSnmpLabs(use bool) {
 	useSnmpLabsCredentials = use
 }
 
-//nolint
+//nolint:misspell
 func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) []string {
 	var credentials []string
 	if useSnmpLabsCredentials {
