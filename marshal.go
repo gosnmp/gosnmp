@@ -101,6 +101,8 @@ const (
 	Report         PDUType = 0xa8 // v3
 )
 
+//go:generate stringer -type=PDUType
+
 // SNMPv3: User-based Security Model Report PDUs and
 // error types as per https://tools.ietf.org/html/rfc3414
 const (
@@ -152,6 +154,31 @@ func NewLogger(logger LoggerInterface) Logger {
 	return Logger{
 		logger: logger,
 	}
+}
+
+func (packet *SnmpPacket) SafeString() string {
+	sp := ""
+	if packet.SecurityParameters != nil {
+		sp = packet.SecurityParameters.SafeString()
+	}
+	return fmt.Sprintf("Version:%s, MsgFlags:%s, SecurityModel:%s, SecurityParameters:%s, ContextEngineID:%s, ContextName:%s, Community:%s, PDUType:%s, MsgID:%d, RequestID:%d, MsgMaxSize:%d, Error:%s, ErrorIndex:%d, NonRepeaters:%d, MaxRepetitions:%d, Variables:%v",
+		packet.Version,
+		packet.MsgFlags,
+		packet.SecurityModel,
+		sp,
+		packet.ContextEngineID,
+		packet.ContextName,
+		packet.Community,
+		packet.PDUType,
+		packet.MsgID,
+		packet.RequestID,
+		packet.MsgMaxSize,
+		packet.Error,
+		packet.ErrorIndex,
+		packet.NonRepeaters,
+		packet.MaxRepetitions,
+		packet.Variables,
+	)
 }
 
 // GoSNMP
@@ -238,7 +265,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 		if x.PreSend != nil {
 			x.PreSend(x)
 		}
-		x.Logger.Printf("SENDING PACKET: %#+v", *packetOut)
+		x.Logger.Printf("SENDING PACKET: %s", packetOut.SafeString())
 		// If using UDP and unconnected socket, send packet directly to stored address.
 		if uconn, ok := x.Conn.(net.PacketConn); ok && x.uaddr != nil {
 			_, err = uconn.WriteTo(outBuf, x.uaddr)
@@ -437,7 +464,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 	}
 
 	if result.Version == Version3 {
-		x.Logger.Printf("SEND STORE SECURITY PARAMS from result: %+v", result)
+		x.Logger.Printf("SEND STORE SECURITY PARAMS from result: %s", result.SecurityParameters.SafeString())
 		err = x.storeSecurityParameters(result)
 
 		if result.PDUType == Report && len(result.Variables) == 1 {

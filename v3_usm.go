@@ -206,11 +206,25 @@ func (sp *UsmSecurityParameters) Description() string {
 	return sb.String()
 }
 
+// SafeString returns a logging safe (no secrets) string of the UsmSecurityParameters
+func (sp *UsmSecurityParameters) SafeString() string {
+	return fmt.Sprintf("AuthoritativeEngineID:%s, AuthoritativeEngineBoots:%d, AuthoritativeEngineTimes:%d, UserName:%s, AuthenticationParameters:%s, PrivacyParameters:%v, AuthenticationProtocol:%s, PrivacyProtocol:%s",
+		sp.AuthoritativeEngineID,
+		sp.AuthoritativeEngineBoots,
+		sp.AuthoritativeEngineTime,
+		sp.UserName,
+		sp.AuthenticationParameters,
+		sp.PrivacyParameters,
+		sp.AuthenticationProtocol,
+		sp.PrivacyProtocol,
+	)
+}
+
 // Log logs security paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Log() {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
-	sp.Logger.Printf("SECURITY PARAMETERS:%+v", sp)
+	sp.Logger.Printf("SECURITY PARAMETERS:%s", sp.SafeString())
 }
 
 // Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
