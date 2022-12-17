@@ -8,7 +8,7 @@
 package gosnmp
 
 import (
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"reflect"
@@ -50,14 +50,14 @@ var testsUnmarshalTrap = []struct {
 				UserName:                 "myuser",
 				AuthenticationProtocol:   MD5,
 				AuthenticationPassphrase: "mypassword",
-				Logger:                   NewLogger(log.New(ioutil.Discard, "", 0)),
+				Logger:                   NewLogger(log.New(io.Discard, "", 0)),
 			},
 		},
 	},
 }
 
 func TestUnmarshalTrap(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 SANITY:
 	for i, test := range testsUnmarshalTrap {
@@ -107,7 +107,7 @@ func genericV3Trap() []byte {
 }
 
 func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 	return func(packet *SnmpPacket, addr *net.UDPAddr) {
 		//log.Printf("got trapdata from %s\n", addr.IP)
 		defer close(done)
@@ -194,7 +194,7 @@ func TestSendTrapBasic(t *testing.T) {
 		Timeout:   time.Duration(2) * time.Second,
 		Retries:   3,
 		MaxOids:   MaxOids,
-		Logger:    NewLogger(log.New(ioutil.Discard, "", 0)),
+		Logger:    NewLogger(log.New(io.Discard, "", 0)),
 	}
 
 	err := ts.Connect()

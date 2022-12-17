@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"reflect"
@@ -270,7 +270,7 @@ func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 // ie check each varbind is working, then the varbind list, etc
 
 func TestEnmarshalVarbind(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
@@ -287,7 +287,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 }
 
 func TestEnmarshalVBL(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -307,7 +307,7 @@ func TestEnmarshalVBL(t *testing.T) {
 }
 
 func TestEnmarshalPDU(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -328,7 +328,7 @@ func TestEnmarshalPDU(t *testing.T) {
 }
 
 func TestEnmarshalMsg(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -732,7 +732,7 @@ var testsUnmarshal = []struct {
 }
 
 func TestUnmarshal(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for i, test := range testsUnmarshal {
 		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
@@ -1389,7 +1389,7 @@ func TestUnmarshalEmptyPanic(t *testing.T) {
 }
 
 func TestV3USMInitialPacket(t *testing.T) {
-	logger := NewLogger(log.New(ioutil.Discard, "", 0))
+	logger := NewLogger(log.New(io.Discard, "", 0))
 	var emptyPdus []SnmpPDU
 	blankPacket := &SnmpPacket{
 		Version:            Version3,
