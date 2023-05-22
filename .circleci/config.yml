@@ -4,7 +4,7 @@ version: 2.1
 executors:
   golang:
     docker:
-    - image: cimg/go:1.19
+    - image: cimg/go:1.20
 
 jobs:
   generate:
@@ -76,3 +76,4 @@ workflows:
             - "1.17"
             - "1.18"
             - "1.19"
+            - "1.20"
