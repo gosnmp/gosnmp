@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// walks the specified oid.
+//
+//	note we set maxRepetitions to the DefaultMaxRepetitions (50) if it is zero
 func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) error {
 	if rootOid == "" || rootOid == "." {
 		rootOid = baseOid
@@ -22,7 +25,7 @@ func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) e
 	requests := 0
 	maxReps := x.MaxRepetitions
 	if maxReps == 0 {
-		maxReps = defaultMaxRepetitions
+		maxReps = DefaultMaxRepetitions
 	}
 
 	// AppOpt 'c: do not check returned OIDs are increasing'
