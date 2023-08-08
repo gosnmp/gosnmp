@@ -1022,7 +1022,7 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 	}
 
 	cursor += count
-	if cursor > len(packet) {
+	if cursor >= len(packet) {
 		return 0, fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
