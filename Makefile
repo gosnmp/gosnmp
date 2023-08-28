@@ -1,6 +1,6 @@
 .PHONY: test lint lint-all lint-examples tools
 
-GOLANGCI_LINT_VERSION ?= v1.51.2
+GOLANGCI_LINT_VERSION ?= v1.54.2
 
 test:
 	go test *.go
