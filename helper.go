@@ -31,6 +31,7 @@ type variable struct {
 var (
 	ErrBase128IntegerTooLarge  = errors.New("base 128 integer too large")
 	ErrBase128IntegerTruncated = errors.New("base 128 integer truncated")
+	ErrFloatBufferTooShort     = errors.New("float buffer too short")
 	ErrFloatTooLarge           = errors.New("float too large")
 	ErrIntegerTooLarge         = errors.New("integer too large")
 	ErrInvalidOidLength        = errors.New("invalid OID length")
@@ -509,6 +510,9 @@ func parseOpaque(logger Logger, data []byte, retVal *variable) error {
 			if length > len(data) {
 				return fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
 			}
+			if cursor > length {
+				return fmt.Errorf("invalid cursor position for OpaqueFloat %x (data %d length %d cursor %d)", data, len(data), length, cursor)
+			}
 			retVal.Type = OpaqueFloat
 			retVal.Value, err = parseFloat32(data[cursor:length])
 			if err != nil {
@@ -616,6 +620,10 @@ func parseLength(bytes []byte) (int, int, error) {
 				return 0, 0, ErrInvalidPacketLength
 			}
 			length += int(bytes[2+i])
+			if length < 0 {
+				// Invalid length due to overflow, return an error
+				return 0, 0, ErrInvalidPacketLength
+			}
 		}
 		length += 2 + numOctets
 		cursor += 2 + numOctets
@@ -669,6 +677,9 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		if length > len(data) {
 			return nil, 0, fmt.Errorf("not enough data for Integer (%d vs %d): %x", length, len(data), data)
 		}
+		if cursor > length {
+			return nil, 0, fmt.Errorf("invalid cursor position for Integer %x (data %d length %d cursor %d)", data, len(data), length, cursor)
+		}
 		i, err := parseInt(data[cursor:length])
 		if err != nil {
 			return nil, 0, fmt.Errorf("unable to parse raw INTEGER: %x err: %w", data, err)
@@ -682,6 +693,9 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		if length > len(data) {
 			return nil, 0, fmt.Errorf("not enough data for OctetString (%d vs %d): %x", length, len(data), data)
 		}
+		if cursor > length {
+			return nil, 0, fmt.Errorf("invalid cursor position for OctetString %x (data %d length %d cursor %d)", data, len(data), length, cursor)
+		}
 		return string(data[cursor:length]), length, nil
 	case ObjectIdentifier:
 		length, cursor, err := parseLength(data)
@@ -690,6 +704,9 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		if length > len(data) {
 			return nil, 0, fmt.Errorf("not enough data for OID (%d vs %d): %x", length, len(data), data)
+		}
+		if cursor > length {
+			return nil, 0, fmt.Errorf("invalid cursor position for OID %x (data %d length %d cursor %d)", data, len(data), length, cursor)
 		}
 		oid, err := parseObjectIdentifier(data[cursor:length])
 		return oid, length, err
@@ -720,6 +737,9 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		if length > len(data) {
 			return nil, 0, fmt.Errorf("not enough data for TimeTicks (%d vs %d): %x", length, len(data), data)
+		}
+		if cursor > length {
+			return nil, 0, fmt.Errorf("invalid cursor position for TimeTicks %x (data %d length %d cursor %d)", data, len(data), length, cursor)
 		}
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
@@ -774,6 +794,10 @@ func parseFloat32(bytes []byte) (float32, error) {
 		// We'll overflow a uint64 in this case.
 		return 0, ErrFloatTooLarge
 	}
+	if len(bytes) < 4 {
+		// We'll cause a panic in binary.BigEndian.Uint32() in this case
+		return 0, ErrFloatBufferTooShort
+	}
 	return math.Float32frombits(binary.BigEndian.Uint32(bytes)), nil
 }
 
@@ -781,6 +805,10 @@ func parseFloat64(bytes []byte) (float64, error) {
 	if len(bytes) > 8 {
 		// We'll overflow a uint64 in this case.
 		return 0, ErrFloatTooLarge
+	}
+	if len(bytes) < 8 {
+		// We'll cause a panic in binary.BigEndian.Uint64() in this case
+		return 0, ErrFloatBufferTooShort
 	}
 	return math.Float64frombits(binary.BigEndian.Uint64(bytes)), nil
 }
