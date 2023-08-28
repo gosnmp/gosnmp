@@ -1,6 +1,6 @@
 module github.com/gosnmp/gosnmp
 
-go 1.17
+go 1.20
 
 require (
 	github.com/golang/mock v1.6.0
