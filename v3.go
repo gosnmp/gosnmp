@@ -391,7 +391,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
-	if MsgFlags, ok := rawMsgFlags.(string); ok {
+	if MsgFlags, ok := rawMsgFlags.(string); ok && len(MsgFlags) > 0 {
 		response.MsgFlags = SnmpV3MsgFlags(MsgFlags[0])
 		x.Logger.Printf("parsed msg flags %s", MsgFlags)
 	}
@@ -401,7 +401,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("error parsing SNMPV3 msgSecModel: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor >= len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
@@ -438,7 +438,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 	var err error
 	var decrypted = false
 
-	if cursor > len(packet) {
+	if cursor >= len(packet) {
 		return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 	}
 
