@@ -23,6 +23,12 @@ jobs:
     - run: make tools
     - run: make lint
 
+  fuzz:
+    executor: golang
+    steps:
+    - checkout
+    - run: go test -fuzztime 60s -v -tags marshal -fuzz '^FuzzUnmarshal$'
+
   test:
     parameters:
       goarch:
@@ -66,6 +72,7 @@ workflows:
     jobs:
     - generate
     - lint
+    - fuzz
     - test:
         matrix:
           parameters:
