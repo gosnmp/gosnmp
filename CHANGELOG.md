@@ -5,6 +5,10 @@
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## v1.36.1
+
+* [BUGFIX] address panics, add tests, fuzzing #443
+
 ## v1.36.0
 
 This release now requires Go 1.20 or higher.
