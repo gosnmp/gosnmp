@@ -436,7 +436,7 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 	result = new(SnmpPacket)
 
 	if x.SecurityParameters != nil {
-		err = x.SecurityParameters.initSecurityKeys()
+		err = x.SecurityParameters.InitSecurityKeys()
 		if err != nil {
 			return nil, err
 		}

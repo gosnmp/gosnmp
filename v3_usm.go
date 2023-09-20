@@ -253,7 +253,8 @@ func (sp *UsmSecurityParameters) getDefaultContextEngineID() string {
 	return sp.AuthoritativeEngineID
 }
 
-func (sp *UsmSecurityParameters) initSecurityKeys() error {
+// InitSecurityKeys initializes the Priv and Auth keys if needed
+func (sp *UsmSecurityParameters) InitSecurityKeys() error {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 
@@ -602,7 +603,8 @@ func (sp *UsmSecurityParameters) usmSetSalt(newSalt interface{}) error {
 	return nil
 }
 
-func (sp *UsmSecurityParameters) initPacket(packet *SnmpPacket) error {
+// InitPacket ensures the enc salt is incremented for packets marked for AuthPriv
+func (sp *UsmSecurityParameters) InitPacket(packet *SnmpPacket) error {
 	// http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 	// localDESSalt needs to be incremented on every packet.
 	newSalt := sp.usmAllocateNewSalt()

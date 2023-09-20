@@ -45,9 +45,10 @@ type SnmpV3SecurityParameters interface {
 	Copy() SnmpV3SecurityParameters
 	Description() string
 	SafeString() string
+	InitPacket(packet *SnmpPacket) error
+	InitSecurityKeys() error
 	validate(flags SnmpV3MsgFlags) error
 	init(log Logger) error
-	initPacket(packet *SnmpPacket) error
 	discoveryRequired() *SnmpPacket
 	getDefaultContextEngineID() string
 	setSecurityParameters(in SnmpV3SecurityParameters) error
@@ -57,7 +58,6 @@ type SnmpV3SecurityParameters interface {
 	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
 	decryptPacket(packet []byte, cursor int) ([]byte, error)
-	initSecurityKeys() error
 }
 
 func (x *GoSNMP) validateParametersV3() error {
@@ -124,7 +124,7 @@ func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useRespon
 
 func (x *GoSNMP) initPacket(packetOut *SnmpPacket) error {
 	if x.MsgFlags&AuthPriv > AuthNoPriv {
-		return x.SecurityParameters.initPacket(packetOut)
+		return x.SecurityParameters.InitPacket(packetOut)
 	}
 
 	return nil
@@ -162,7 +162,7 @@ func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket) error
 			return err
 		}
 	} else {
-		err := packetOut.SecurityParameters.initSecurityKeys()
+		err := packetOut.SecurityParameters.InitSecurityKeys()
 		if err == nil {
 			return err
 		}
