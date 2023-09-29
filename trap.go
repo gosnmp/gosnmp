@@ -119,6 +119,9 @@ type TrapListener struct {
 	// OnNewTrap handles incoming Trap and Inform PDUs.
 	OnNewTrap TrapHandlerFunc
 
+	// CloseTimeout is the max wait time for the socket to gracefully signal its closure.
+	CloseTimeout time.Duration
+
 	// These unexported fields are for letting test cases
 	// know we are ready.
 	conn  *net.UDPConn
@@ -129,6 +132,9 @@ type TrapListener struct {
 
 	finish int32 // Atomic flag; set to 1 when closing connection
 }
+
+// Default timeout value for CloseTimeout of 3 seconds
+const defaultCloseTimeout = 3 * time.Second
 
 // TrapHandlerFunc is a callback function type which receives SNMP Trap and
 // Inform packets when they are received.  If this callback is null, Trap and
@@ -149,10 +155,10 @@ type TrapHandlerFunc func(s *SnmpPacket, u *net.UDPAddr)
 // NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
 func NewTrapListener() *TrapListener {
 	tl := &TrapListener{
-		finish: 0,
-		done:   make(chan bool),
-		// Buffered because one doesn't have to block on it.
-		listening: make(chan bool, 1),
+		finish:       0,
+		done:         make(chan bool),
+		listening:    make(chan bool, 1), // Buffered because one doesn't have to block on it.
+		CloseTimeout: defaultCloseTimeout,
 	}
 
 	return tl
@@ -169,19 +175,24 @@ func (t *TrapListener) Listening() <-chan bool {
 }
 
 // Close terminates the listening on TrapListener socket
-//
-// NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
 func (t *TrapListener) Close() {
-	// Prevent concurrent calls to Close
 	if atomic.CompareAndSwapInt32(&t.finish, 0, 1) {
-		// TODO there's bugs here
+		t.Lock()
+		defer t.Unlock()
+
 		if t.conn == nil {
 			return
 		}
-		if t.conn.LocalAddr().Network() == udp {
-			t.conn.Close()
+
+		if err := t.conn.Close(); err != nil {
+			t.Params.Logger.Printf("failed to Close() the TrapListener socket: %s", err)
 		}
-		<-t.done
+
+		select {
+		case <-t.done:
+		case <-time.After(t.CloseTimeout): // A timeout can prevent blocking forever
+			t.Params.Logger.Printf("timeout while awaiting done signal on TrapListener Close()")
+		}
 	}
 }
 
