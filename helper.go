@@ -365,14 +365,16 @@ func marshalUint32(v interface{}) ([]byte, error) {
 
 func marshalFloat32(v interface{}) ([]byte, error) {
 	source := v.(float32)
-	i32 := math.Float32bits(source)
-	return marshalUint32(i32)
+	out := bytes.NewBuffer(nil)
+	err := binary.Write(out, binary.BigEndian, source)
+	return out.Bytes(), err
 }
 
 func marshalFloat64(v interface{}) ([]byte, error) {
 	source := v.(float64)
-	i64 := math.Float64bits(source)
-	return marshalUint64(i64)
+	out := bytes.NewBuffer(nil)
+	err := binary.Write(out, binary.BigEndian, source)
+	return out.Bytes(), err
 }
 
 // marshalLength builds a byte representation of length
