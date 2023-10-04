@@ -78,12 +78,11 @@ func TestPDU(t *testing.T) {
 			Type:  IPAddress,
 			Value: "127.0.0.1",
 		},
-		// TODO need to figure out how to send this data to Net-SNMP
-		// {
-		//     Name:  ".1.3.6.1.4.1.23.2.5.1.1.1.4.2",
-		//     Type:  OctetString,
-		//     Value: []byte{0x00, 0x15, 0x99, 0x37, 0x76, 0x2b},
-		// },
+		{
+			Name:  ".1.3.6.1.4.1.6574.4.2.12.1.0",
+			Type:  OpaqueFloat,
+			Value: float32(10.0),
+		},
 	}
 	sess := Default
 	sess.Version = Version2c
