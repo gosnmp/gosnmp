@@ -83,6 +83,21 @@ func TestPDU(t *testing.T) {
 			Type:  OpaqueFloat,
 			Value: float32(10.0),
 		},
+		{
+			Name:  ".1.3.6.1.4.1.6574.4.2.12.1.1",
+			Type:  OpaqueFloat,
+			Value: float32(0.0),
+		},
+		{
+			Name:  ".1.3.6.1.4.1.6574.4.2.12.2.0",
+			Type:  OpaqueDouble,
+			Value: float64(10.0),
+		},
+		{
+			Name:  ".1.3.6.1.4.1.6574.4.2.12.2.1",
+			Type:  OpaqueDouble,
+			Value: float64(0.0),
+		},
 	}
 	sess := Default
 	sess.Version = Version2c

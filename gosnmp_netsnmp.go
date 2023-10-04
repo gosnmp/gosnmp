@@ -84,6 +84,8 @@ func berToSnmpValType(in Asn1BER) (C.char, error) {
 		return 'c', nil
 	case OpaqueFloat:
 		return 'F', nil
+	case OpaqueDouble:
+		return 'D', nil
 	default:
 		return 0, errors.New("unhandled asn1 ber type" + in.String())
 	}
