@@ -71,9 +71,9 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 	}
 
 	switch Asn1BER(data[0]) {
-	case Integer:
+	case Integer, Uinteger32:
 		// 0x02. signed
-		x.Logger.Print("decodeValue: type is Integer")
+		x.Logger.Printf("decodeValue: type is %s", Asn1BER(data[0]).String())
 		length, cursor, err := parseLength(data)
 		if err != nil {
 			return err
@@ -88,8 +88,14 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 			x.Logger.Printf("%v:", err)
 			return fmt.Errorf("bytes: % x err: %w", data, err)
 		}
-		retVal.Type = Integer
-		retVal.Value = ret
+		retVal.Type = Asn1BER(data[0])
+		switch Asn1BER(data[0]) {
+		case Uinteger32:
+			retVal.Value = uint32(ret)
+		default:
+			retVal.Value = ret
+		}
+
 	case OctetString:
 		// 0x04
 		x.Logger.Print("decodeValue: type is OctetString")

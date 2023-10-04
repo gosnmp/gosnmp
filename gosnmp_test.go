@@ -103,6 +103,21 @@ func TestPDU(t *testing.T) {
 			Type:  Counter32,
 			Value: uint32(271070065),
 		},
+		{
+			Name:  ".1.3.6.1.2.1.1.3.0",
+			Type:  TimeTicks,
+			Value: uint32(318870100),
+		},
+		{
+			Name:  ".1.3.6.1.2.1.1.3.1",
+			Type:  Uinteger32,
+			Value: uint32(math.MaxInt32),
+		},
+		{
+			Name:  ".1.3.6.1.2.1.1.3.2",
+			Type:  Counter64,
+			Value: uint64(math.MaxInt64),
+		},
 	}
 	sess := Default
 	sess.Version = Version2c
