@@ -431,7 +431,7 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	var packetOut *SnmpPacket
 	switch pdus[0].Type {
 	// TODO test Gauge32
-	case Integer, OctetString, Gauge32, IPAddress, ObjectIdentifier:
+	case Integer, OctetString, Gauge32, IPAddress, ObjectIdentifier, Counter32:
 		packetOut = x.mkSnmpPacket(SetRequest, pdus, 0, 0)
 	default:
 		return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers, IPAddress and OctetStrings")

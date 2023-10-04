@@ -98,6 +98,11 @@ func TestPDU(t *testing.T) {
 			Type:  OpaqueDouble,
 			Value: float64(0.0),
 		},
+		{
+			Name:  ".1.3.6.1.2.1.2.2.1.10.1",
+			Type:  Counter32,
+			Value: uint32(271070065),
+		},
 	}
 	sess := Default
 	sess.Version = Version2c
