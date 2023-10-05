@@ -328,12 +328,12 @@ func marshalInt32(value int) ([]byte, error) {
 	}
 }
 
-func marshalUint64(v interface{}) ([]byte, error) {
+func marshalUint64(v interface{}) []byte {
 	bs := make([]byte, 8)
 	source := v.(uint64)
 	binary.BigEndian.PutUint64(bs, source) // will panic on failure
 	// truncate leading zeros. Cleaner technique?
-	return bytes.TrimLeft(bs, "\x00"), nil
+	return bytes.TrimLeft(bs, "\x00")
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError

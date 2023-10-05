@@ -939,17 +939,10 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(tmpBuf.Bytes())
 
 	case Counter64:
-		converters := map[Asn1BER]func(interface{}) ([]byte, error){
-			Counter64: marshalUint64,
-		}
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
 		tmpBuf.WriteByte(byte(pdu.Type))
-		intBytes, err := converters[pdu.Type](pdu.Value)
-		if err != nil {
-			return nil, fmt.Errorf("error converting PDU value type %v to %v: %w", pdu.Value, pdu.Type, err)
-		}
-
+		intBytes := marshalUint64(pdu.Value)
 		tmpBuf.WriteByte(byte(len(intBytes)))
 		tmpBuf.Write(intBytes)
 		tmpBytes := tmpBuf.Bytes()
