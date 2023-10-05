@@ -4,7 +4,7 @@
 
 //go:build netsnmp
 
-package gosnmp
+package netsnmp
 
 /*
 #cgo LDFLAGS: -lnetsnmp
@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/gosnmp/gosnmp"
 )
 
 func isPlayback() bool {
@@ -68,49 +70,49 @@ case TYPE_INTEGER:
 	    type = 'o';
 	    break;
 */
-func berToSnmpValType(in Asn1BER) (C.char, error) {
+func berToSnmpValType(in gosnmp.Asn1BER) (C.char, error) {
 	switch in {
-	case Gauge32:
+	case gosnmp.Gauge32:
 		return 'u', nil
-	case Integer:
+	case gosnmp.Integer:
 		return 'i', nil
-	case OctetString:
+	case gosnmp.OctetString:
 		return 's', nil
-	case IPAddress:
+	case gosnmp.IPAddress:
 		return 'a', nil
-	case ObjectIdentifier:
+	case gosnmp.ObjectIdentifier:
 		return 'o', nil
-	case Counter32:
+	case gosnmp.Counter32:
 		return 'c', nil
-	case Counter64:
+	case gosnmp.Counter64:
 		return 'C', nil
-	case OpaqueFloat:
+	case gosnmp.OpaqueFloat:
 		return 'F', nil
-	case OpaqueDouble:
+	case gosnmp.OpaqueDouble:
 		return 'D', nil
-	case TimeTicks:
+	case gosnmp.TimeTicks:
 		return 't', nil
-	case Uinteger32:
+	case gosnmp.Uinteger32:
 		return '3', nil
 	default:
 		return 0, errors.New("unhandled asn1 ber type" + in.String())
 	}
 }
 
-func verToSnmpVer(in SnmpVersion) (C.int, error) {
+func verToSnmpVer(in gosnmp.SnmpVersion) (C.int, error) {
 	switch in {
-	case Version1:
+	case gosnmp.Version1:
 		return C.SNMP_VERSION_1, nil
-	case Version2c:
+	case gosnmp.Version2c:
 		return C.SNMP_VERSION_2c, nil
-	case Version3:
+	case gosnmp.Version3:
 		return C.SNMP_VERSION_3, nil
 	default:
 		return 0, errors.New("handled snmp version " + in.String())
 	}
 }
 
-func netSnmpPduPkt(fname string, gopdu SnmpPDU, gosess *GoSNMP, reqid uint32, verbose bool) ([]byte, error) {
+func netSnmpPduPkt(fname string, gopdu gosnmp.SnmpPDU, gosess *gosnmp.GoSNMP, reqid uint32, verbose bool) ([]byte, error) {
 
 	var errout *C.char
 	var err error
@@ -202,10 +204,10 @@ func oidStringToInts(in string) []int {
 	return out
 }
 
-func valToString(gopdu SnmpPDU) string {
+func valToString(gopdu gosnmp.SnmpPDU) string {
 	var val any
 	switch gopdu.Type {
-	case OctetString:
+	case gosnmp.OctetString:
 		b, ok := gopdu.Value.([]byte)
 		if ok {
 			val = string(b)

@@ -387,6 +387,10 @@ func (x *GoSNMP) validateParameters() error {
 	return nil
 }
 
+func (x *GoSNMP) MkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint32) *SnmpPacket {
+	return x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
+}
+
 func (x *GoSNMP) mkSnmpPacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters uint8, maxRepetitions uint32) *SnmpPacket {
 	var newSecParams SnmpV3SecurityParameters
 	if x.SecurityParameters != nil {
