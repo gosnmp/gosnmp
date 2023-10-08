@@ -71,9 +71,9 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 	}
 
 	switch Asn1BER(data[0]) {
-	case Integer:
+	case Integer, Uinteger32:
 		// 0x02. signed
-		x.Logger.Print("decodeValue: type is Integer")
+		x.Logger.Printf("decodeValue: type is %s", Asn1BER(data[0]).String())
 		length, cursor, err := parseLength(data)
 		if err != nil {
 			return err
@@ -88,8 +88,14 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 			x.Logger.Printf("%v:", err)
 			return fmt.Errorf("bytes: % x err: %w", data, err)
 		}
-		retVal.Type = Integer
-		retVal.Value = ret
+		retVal.Type = Asn1BER(data[0])
+		switch Asn1BER(data[0]) {
+		case Uinteger32:
+			retVal.Value = uint32(ret)
+		default:
+			retVal.Value = ret
+		}
+
 	case OctetString:
 		// 0x04
 		x.Logger.Print("decodeValue: type is OctetString")
@@ -322,12 +328,12 @@ func marshalInt32(value int) ([]byte, error) {
 	}
 }
 
-func marshalUint64(v interface{}) ([]byte, error) {
+func marshalUint64(v interface{}) []byte {
 	bs := make([]byte, 8)
 	source := v.(uint64)
 	binary.BigEndian.PutUint64(bs, source) // will panic on failure
 	// truncate leading zeros. Cleaner technique?
-	return bytes.TrimLeft(bs, "\x00"), nil
+	return bytes.TrimLeft(bs, "\x00")
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
@@ -365,14 +371,16 @@ func marshalUint32(v interface{}) ([]byte, error) {
 
 func marshalFloat32(v interface{}) ([]byte, error) {
 	source := v.(float32)
-	i32 := math.Float32bits(source)
-	return marshalUint32(i32)
+	out := bytes.NewBuffer(nil)
+	err := binary.Write(out, binary.BigEndian, source)
+	return out.Bytes(), err
 }
 
 func marshalFloat64(v interface{}) ([]byte, error) {
 	source := v.(float64)
-	i64 := math.Float64bits(source)
-	return marshalUint64(i64)
+	out := bytes.NewBuffer(nil)
+	err := binary.Write(out, binary.BigEndian, source)
+	return out.Bytes(), err
 }
 
 // marshalLength builds a byte representation of length
