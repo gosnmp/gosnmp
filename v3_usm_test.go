@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"io"
 	"log"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -231,9 +230,7 @@ func TestIsAuthenticaSHA512(t *testing.T) {
 }
 
 func BenchmarkSingleHash(b *testing.B) {
-	if len(os.Getenv("NOPWDCACHE")) > 0 {
-		PasswordCaching(false)
-	}
+	SetPwdCache()
 
 	engineID, _ := hex.DecodeString("80004fb805636c6f75644dab22cc")
 
