@@ -278,6 +278,14 @@ go get github.com/matm/gocov-html
 gocov test github.com/gosnmp/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
 ```
 
+To measure the performance of password hash caching:
+
+Password hash caching can be disabled during benchmark tests by using the golang build tag "gosnmp_nopwdcache", so:
+```
+go build -tags gosnmp_nopwdcache -bench=Benchmark.*Hash
+```
+will benchmark the code without password hash caching. Removing the tag will run the benchmark with caching enabled (default behavior of package).
+
 
 # License
 
