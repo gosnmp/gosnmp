@@ -228,3 +228,24 @@ func TestIsAuthenticaSHA512(t *testing.T) {
 	require.NoError(t, err, "Authentication check of key failed")
 	require.True(t, authentic, "Packet was not considered to be authentic")
 }
+
+func BenchmarkSingleHash(b *testing.B) {
+	SetPwdCache()
+
+	engineID, _ := hex.DecodeString("80004fb805636c6f75644dab22cc")
+
+	for i := MD5; i < SHA512; i++ {
+		b.Run(b.Name()+i.String(), func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				_, err := genlocalkey(i, "authkey1", string(engineID))
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+
+	passwordKeyHashMutex.RLock()
+	b.Logf("cache size %d", len(passwordKeyHashCache))
+	passwordKeyHashMutex.RUnlock()
+}

@@ -395,7 +395,22 @@ func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameter
 var (
 	passwordKeyHashCache = make(map[string][]byte) //nolint:gochecknoglobals
 	passwordKeyHashMutex sync.RWMutex              //nolint:gochecknoglobals
+	passwordCacheDisable atomic.Bool               //nolint:gochecknoglobals
 )
+
+// PasswordCaching is enabled by default for performance reason. If the cache was disabled then
+// re-enabled, the cache is reset.
+func PasswordCaching(enable bool) {
+	oldCacheEnable := !passwordCacheDisable.Load()
+	passwordKeyHashMutex.Lock()
+	if !enable { // if off
+		passwordKeyHashCache = nil
+	} else if !oldCacheEnable && enable { // if off then on
+		passwordKeyHashCache = make(map[string][]byte)
+	}
+	passwordCacheDisable.Store(!enable)
+	passwordKeyHashMutex.Unlock()
+}
 
 func hashPassword(hash hash.Hash, password string) ([]byte, error) {
 	if len(password) == 0 {
@@ -418,12 +433,15 @@ func hashPassword(hash hash.Hash, password string) ([]byte, error) {
 
 // Common passwordToKey algorithm, "caches" the result to avoid extra computation each reuse
 func cachedPasswordToKey(hash hash.Hash, cacheKey string, password string) ([]byte, error) {
-	passwordKeyHashMutex.RLock()
-	value := passwordKeyHashCache[cacheKey]
-	passwordKeyHashMutex.RUnlock()
+	cacheDisable := passwordCacheDisable.Load()
+	if !cacheDisable {
+		passwordKeyHashMutex.RLock()
+		value := passwordKeyHashCache[cacheKey]
+		passwordKeyHashMutex.RUnlock()
 
-	if value != nil {
-		return value, nil
+		if value != nil {
+			return value, nil
+		}
 	}
 
 	hashed, err := hashPassword(hash, password)
@@ -431,9 +449,11 @@ func cachedPasswordToKey(hash hash.Hash, cacheKey string, password string) ([]by
 		return nil, err
 	}
 
-	passwordKeyHashMutex.Lock()
-	passwordKeyHashCache[cacheKey] = hashed
-	passwordKeyHashMutex.Unlock()
+	if !cacheDisable {
+		passwordKeyHashMutex.Lock()
+		passwordKeyHashCache[cacheKey] = hashed
+		passwordKeyHashMutex.Unlock()
+	}
 
 	return hashed, nil
 }
@@ -465,6 +485,9 @@ func hMAC(hash crypto.Hash, cacheKey string, password string, engineID string) (
 }
 
 func cacheKey(authProtocol SnmpV3AuthProtocol, passphrase string) string {
+	if passwordCacheDisable.Load() {
+		return ""
+	}
 	var cacheKey = make([]byte, 1+len(passphrase))
 	cacheKey = append(cacheKey, 'h'+byte(authProtocol))
 	cacheKey = append(cacheKey, []byte(passphrase)...)
