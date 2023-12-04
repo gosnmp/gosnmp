@@ -39,9 +39,6 @@ const (
 
 //go:generate stringer -type=SnmpV3SecurityModel
 
-// UserSecurityParametersMap is a mapping of usernames to corresponding SNMP V3 Security Model parameters
-type UserSecurityParametersMap map[string]SnmpV3SecurityParameters
-
 // SnmpV3SecurityParameters is a generic interface type to contain various implementations of SnmpV3SecurityParameters
 type SnmpV3SecurityParameters interface {
 	Log()
@@ -61,6 +58,7 @@ type SnmpV3SecurityParameters interface {
 	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
 	decryptPacket(packet []byte, cursor int) ([]byte, error)
+	getIdentifier() string
 }
 
 func (x *GoSNMP) validateParametersV3() error {
@@ -428,11 +426,6 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
 	}
 
-	err = x.getSecurityParameters(packet, cursor, response)
-	if err != nil {
-		return 0, err
-	}
-
 	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
 	if err != nil {
 		return 0, err
@@ -440,28 +433,6 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	x.Logger.Printf("Parsed Security Parameters. now offset=%v,", cursor)
 
 	return cursor, nil
-}
-
-func (x *GoSNMP) getSecurityParameters(packet []byte, cursor int, response *SnmpPacket) error {
-	// if there are multiple users to get parameters for
-	if len(x.UserSecurityParametersMap) == 0 {
-		return nil
-	}
-	// copy the security params for getting the username
-	sp := response.SecurityParameters.Copy()
-	_, err := sp.unmarshal(NoAuthNoPriv, packet, cursor)
-	if err != nil {
-		return fmt.Errorf("Error unmarshalling to get security parameters: %v", err)
-	}
-	// use the username and update the security parameters for the response
-	username := sp.(*UsmSecurityParameters).UserName
-	sp, ok := x.UserSecurityParametersMap[username]
-	if ok {
-		response.SecurityParameters = sp
-	} else {
-		return fmt.Errorf("Error: No security parameters configured for username: %s", username)
-	}
-	return nil
 }
 
 func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) ([]byte, int, error) {

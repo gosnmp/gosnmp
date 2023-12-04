@@ -979,7 +979,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 
 // -- Unmarshalling Logic ------------------------------------------------------
 
-func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, error) {
+func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket) (int, error) {
 	if len(packet) < 2 {
 		return 0, fmt.Errorf("cannot unmarshal empty packet")
 	}
@@ -1020,6 +1020,14 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 	if version, ok := rawVersion.(int); ok {
 		response.Version = SnmpVersion(version)
 		x.Logger.Printf("Parsed version %d", version)
+	}
+	return cursor, err
+}
+
+func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, error) {
+	cursor, err := x.unmarshalVersionFromHeader(packet, response)
+	if err != nil {
+		return 0, err
 	}
 
 	if response.Version == Version3 {

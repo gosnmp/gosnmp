@@ -23,24 +23,32 @@ import (
 	g "github.com/gosnmp/gosnmp"
 )
 
-var (
-	sp = g.UsmSecurityParameters{
+var secParamsList = []*g.UsmSecurityParameters{
+	&g.UsmSecurityParameters{
 		UserName:                 "myuser",
 		AuthenticationProtocol:   g.MD5,
 		AuthenticationPassphrase: "mypassword",
 		PrivacyProtocol:          g.AES,
 		PrivacyPassphrase:        "myprivacy",
 		Logger:                   g.NewLogger(log.New(os.Stdout, "", 0)),
-	}
-	sp2 = g.UsmSecurityParameters{
+	},
+	&g.UsmSecurityParameters{
 		UserName:                 "myuser2",
 		AuthenticationProtocol:   g.SHA,
 		AuthenticationPassphrase: "mypassword2",
 		PrivacyProtocol:          g.DES,
 		PrivacyPassphrase:        "myprivacy2",
 		Logger:                   g.NewLogger(log.New(os.Stdout, "", 0)),
-	}
-)
+	},
+	&g.UsmSecurityParameters{
+		UserName:                 "myuser2",
+		AuthenticationProtocol:   g.MD5,
+		AuthenticationPassphrase: "mypassword2",
+		PrivacyProtocol:          g.AES,
+		PrivacyPassphrase:        "myprivacy2",
+		Logger:                   g.NewLogger(log.New(os.Stdout, "", 0)),
+	},
+}
 
 func main() {
 	flag.Usage = func() {
@@ -52,20 +60,20 @@ func main() {
 	tl := g.NewTrapListener()
 	tl.OnNewTrap = myTrapHandler
 
-	usmMap := make(map[string]g.SnmpV3SecurityParameters)
-	usmMap["myuser"] = &sp
-	usmMap["myuser2"] = &sp2
+	usmMap := g.NewSnmpV3SecurityParametersMap()
+	for _, sp := range secParamsList {
+		usmMap.AddEntry(sp.UserName, sp)
+	}
 
 	gs := &g.GoSNMP{
-		Port:                      161,
-		Transport:                 "udp",
-		Version:                   g.Version3, // Always using version3 for traps, only option that works with all SNMP versions simultaneously
-		SecurityModel:             g.UserSecurityModel,
-		SecurityParameters:        &sp,
-		UserSecurityParametersMap: usmMap,
+		Port:                  161,
+		Transport:             "udp",
+		Version:               g.Version3, // Always using version3 for traps, only option that works with all SNMP versions simultaneously
+		SecurityModel:         g.UserSecurityModel,
+		SecurityParameters:    secParamsList[0],
+		SecurityParametersMap: usmMap,
 	}
 	tl.Params = gs
-
 	tl.Params.Logger = g.NewLogger(log.New(os.Stdout, "", 0))
 
 	err := tl.Listen("0.0.0.0:9162")

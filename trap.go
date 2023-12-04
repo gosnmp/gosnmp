@@ -443,11 +443,49 @@ func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 // UnmarshalTrap unpacks the SNMP Trap.
 //
 // NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
-func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) (result *SnmpPacket, err error) {
-	result = new(SnmpPacket)
+func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) (*SnmpPacket, error) {
+	result := new(SnmpPacket)
+	// Get only the version from the header of the trap
+	_, err := x.unmarshalVersionFromHeader(trap, result)
+	if err != nil {
+		x.Logger.Printf("UnmarshalTrap version unmarshal: %s\n", err)
+		return nil, err
+	}
+	// If there are multiple users configured and the SNMP trap is v3, see which user has valid credentials
+	// by iterating through the list and seeing which credentials are authentic / can be used to decrypt
+	if len(x.SecurityParametersMap) > 0 && result.Version == Version3 {
+		secParamsList, err := x.getSecParamsList(trap)
+		for _, secParams := range secParamsList {
+			// Copy the trap and re-initialize the packet with new security parameters to unmarshal with
+			cpTrap := make([]byte, len(trap))
+			copy(cpTrap, trap)
+			result = new(SnmpPacket)
+			e := secParams.InitSecurityKeys()
+			if e != nil {
+				return nil, err
+			}
+			result.SecurityParameters = secParams.Copy()
+			result, e = x.UnmarshalTrapBase(cpTrap, result, true)
+			if result != nil {
+				return result, e
+			}
+		}
+		return nil, fmt.Errorf("No credentials successfully unmarshaled trap")
+	}
+	return x.UnmarshalTrapBase(trap, result, useResponseSecurityParameters)
+}
 
-	if x.SecurityParameters != nil {
-		err = x.SecurityParameters.InitSecurityKeys()
+func (x *GoSNMP) getSecParamsList(trap []byte) ([]SnmpV3SecurityParameters, error) {
+	// Initialize a packet with no auth/priv to retrieve ID/key for security parameters to use
+	cpResult := new(SnmpPacket)
+	cpResult.MsgFlags = NoAuthNoPriv
+	_, _ = x.unmarshalHeader(trap, cpResult)
+	return x.SecurityParametersMap.getEntry(cpResult.SecurityParameters.getIdentifier())
+}
+
+func (x *GoSNMP) UnmarshalTrapBase(trap []byte, result *SnmpPacket, useResponseSecurityParameters bool) (*SnmpPacket, error) {
+	if x.SecurityParameters != nil && result.SecurityParameters == nil {
+		err := x.SecurityParameters.InitSecurityKeys()
 		if err != nil {
 			return nil, err
 		}
