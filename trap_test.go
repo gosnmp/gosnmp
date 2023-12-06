@@ -36,6 +36,39 @@ const (
 	trapTestTimestamp     = 300
 )
 
+var secParamsList = []*UsmSecurityParameters{
+	&UsmSecurityParameters{
+		UserName:                 "myuser",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "mypassword",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	},
+	&UsmSecurityParameters{
+		UserName:                 "myuser1",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "mypassword1",
+		PrivacyProtocol:          AES,
+		PrivacyPassphrase:        "myprivacy1",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	},
+	&UsmSecurityParameters{
+		UserName:                 "myuser2",
+		AuthenticationProtocol:   SHA,
+		AuthenticationPassphrase: "mypassword2",
+		PrivacyProtocol:          DES,
+		PrivacyPassphrase:        "myprivacy2",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	},
+	&UsmSecurityParameters{
+		UserName:                 "myuser2",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "mypassword2",
+		PrivacyProtocol:          AES,
+		PrivacyPassphrase:        "myprivacy2",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	},
+}
+
 var testsUnmarshalTrap = []struct {
 	in  func() []byte
 	out *SnmpPacket
@@ -50,6 +83,23 @@ var testsUnmarshalTrap = []struct {
 				UserName:                 "myuser",
 				AuthenticationProtocol:   MD5,
 				AuthenticationPassphrase: "mypassword",
+				Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+			},
+		},
+	},
+	{
+		snmpv3Trap,
+		&SnmpPacket{
+			Version:   3,
+			PDUType:   SNMPv2Trap,
+			RequestID: 1318065890,
+			MsgFlags:  AuthPriv,
+			SecurityParameters: &UsmSecurityParameters{
+				UserName:                 "myuser2",
+				AuthenticationProtocol:   MD5,
+				AuthenticationPassphrase: "mypassword2",
+				PrivacyProtocol:          AES,
+				PrivacyPassphrase:        "myprivacy2",
 				Logger:                   NewLogger(log.New(io.Discard, "", 0)),
 			},
 		},
@@ -72,7 +122,7 @@ SANITY:
 			continue SANITY
 		}
 
-		// test enough fields fields to ensure unmarshalling was successful.
+		// test enough fields to ensure unmarshalling was successful.
 		// full unmarshal testing is performed in TestUnmarshal
 		if res.Version != test.out.Version {
 			t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
@@ -80,6 +130,36 @@ SANITY:
 		if res.RequestID != test.out.RequestID {
 			t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
 		}
+	}
+}
+
+func TestUnmarshalTrapWithMultipleUsers(t *testing.T) {
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
+	usmMap := NewSnmpV3SecurityParametersMap()
+	for _, sp := range secParamsList {
+		usmMap.AddEntry(sp.UserName, sp)
+	}
+SANITY:
+	for i, test := range testsUnmarshalTrap {
+		Default.SecurityParametersMap = usmMap
+		Default.Version = Version3
+		var buf = test.in()
+		res, err := Default.UnmarshalTrap(buf, true)
+		require.NoError(t, err, "unmarshalTrap failed")
+		if res == nil {
+			t.Errorf("#%d, UnmarshalTrap returned nil", i)
+			continue SANITY
+		}
+
+		// test enough fields to ensure unmarshalling was successful.
+		// full unmarshal testing is performed in TestUnmarshal
+		if res.Version != test.out.Version {
+			t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
+		}
+		if res.RequestID != test.out.RequestID {
+			t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
+		}
+		Default.SecurityParametersMap = nil
 	}
 }
 
@@ -104,6 +184,29 @@ func genericV3Trap() []byte {
 		0x00, 0x02, 0x01, 0x05, 0x30, 0x14, 0x06, 0x07, 0x2b, 0x06, 0x01, 0x02,
 		0x01, 0x01, 0x02, 0x06, 0x09, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x02, 0x03,
 		0x04, 0x05}
+}
+
+/*
+snmptrap -v3 -l authPriv -u myuser2 -a MD5 -A mypassword2 -x AES -X myprivacy2 127.0.0.1:9162 ”  1.3.6.1.4.1.8072.2.3.0.1 1.3.6.1.4.1.8072.2.3.2.1 i 60
+*/
+func snmpv3Trap() []byte {
+	return []byte{
+		0x30, 0x81, 0xbb, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x3a, 0x1c,
+		0xf4, 0xf7, 0x02, 0x03, 0x00, 0xff, 0xe3, 0x04, 0x01, 0x03, 0x02, 0x01,
+		0x03, 0x04, 0x3c, 0x30, 0x3a, 0x04, 0x11, 0x80, 0x00, 0x1f, 0x88, 0x80,
+		0x6b, 0x8f, 0xad, 0x3b, 0x07, 0xc2, 0x70, 0x65, 0x00, 0x00, 0x00, 0x00,
+		0x02, 0x01, 0x01, 0x02, 0x01, 0x00, 0x04, 0x07, 0x6d, 0x79, 0x75, 0x73,
+		0x65, 0x72, 0x32, 0x04, 0x0c, 0xa8, 0xe2, 0xf4, 0xab, 0x3c, 0xd5, 0x9c,
+		0x22, 0x5e, 0x0a, 0x12, 0xdd, 0x04, 0x08, 0x95, 0x7b, 0xdc, 0x33, 0x6a,
+		0xf4, 0x3c, 0x8f, 0x04, 0x65, 0x70, 0x64, 0xbd, 0xcf, 0x4b, 0xa8, 0x19,
+		0xda, 0xf4, 0x0d, 0x09, 0x8f, 0x7a, 0x28, 0xa6, 0x82, 0x00, 0xe0, 0xbd,
+		0x96, 0x76, 0xf8, 0xc2, 0xa3, 0xe3, 0xb0, 0x92, 0x00, 0x82, 0x2d, 0xba,
+		0xce, 0x34, 0x2f, 0x53, 0x19, 0x18, 0xba, 0xfc, 0xe5, 0xf5, 0x0e, 0x9a,
+		0xba, 0x52, 0xaf, 0x6b, 0x67, 0xaa, 0x20, 0x23, 0xb5, 0x17, 0x04, 0x7e,
+		0x17, 0x08, 0xb8, 0xc6, 0x67, 0x14, 0xb5, 0x91, 0x4d, 0x6b, 0xd8, 0xbf,
+		0x94, 0x24, 0x22, 0x0f, 0x21, 0x4f, 0xde, 0x6f, 0x41, 0x51, 0xa6, 0x10,
+		0x86, 0xf2, 0x01, 0xd1, 0xd6, 0xa9, 0x3c, 0x88, 0xea, 0x41, 0x25, 0x25,
+		0xbc, 0x12, 0x12, 0xa6, 0xd6, 0x8f, 0x55, 0x6a, 0x55, 0xcb}
 }
 
 func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
