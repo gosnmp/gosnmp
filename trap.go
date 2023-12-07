@@ -452,9 +452,18 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 		return nil, err
 	}
 	// If there are multiple users configured and the SNMP trap is v3, see which user has valid credentials
-	// by iterating through the list and seeing which credentials are authentic / can be used to decrypt
-	if len(x.SecurityParametersMap) > 0 && result.Version == Version3 {
-		secParamsList, err := x.getSecParamsList(trap)
+	// by iterating through the list matching the identifier and seeing which credentials are authentic / can be used to decrypt
+	if x.SecurityParametersTable != nil && result.Version == Version3 {
+		identifier, err := x.getTrapIdentifier(trap)
+		if err != nil {
+			x.Logger.Printf("UnmarshalTrap V3 get trap identifier: %s\n", err)
+			return nil, err
+		}
+		secParamsList, err := x.SecurityParametersTable.Get(identifier)
+		if err != nil {
+			x.Logger.Printf("UnmarshalTrap V3 get security parameters from table: %s\n", err)
+			return nil, err
+		}
 		for _, secParams := range secParamsList {
 			// Copy the trap and re-initialize the packet with new security parameters to unmarshal with
 			cpTrap := make([]byte, len(trap))
@@ -470,17 +479,20 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 				return result, e
 			}
 		}
-		return nil, fmt.Errorf("No credentials successfully unmarshaled trap")
+		return nil, fmt.Errorf("no credentials successfully unmarshaled trap")
 	}
 	return x.UnmarshalTrapBase(trap, result, useResponseSecurityParameters)
 }
 
-func (x *GoSNMP) getSecParamsList(trap []byte) ([]SnmpV3SecurityParameters, error) {
-	// Initialize a packet with no auth/priv to retrieve ID/key for security parameters to use
-	cpResult := new(SnmpPacket)
-	cpResult.MsgFlags = NoAuthNoPriv
-	_, _ = x.unmarshalHeader(trap, cpResult)
-	return x.SecurityParametersMap.getEntry(cpResult.SecurityParameters.getIdentifier())
+func (x *GoSNMP) getTrapIdentifier(trap []byte) (string, error) {
+	// Initialize a packet with no auth/priv to unmarshal ID/key for security parameters to use
+	packet := new(SnmpPacket)
+	_, err := x.unmarshalHeader(trap, packet)
+	// Return err if no identifier was able to be parsed after unmarshaling
+	if err != nil && packet.SecurityParameters.getIdentifier() == "" {
+		return "", err
+	}
+	return packet.SecurityParameters.getIdentifier(), nil
 }
 
 func (x *GoSNMP) UnmarshalTrapBase(trap []byte, result *SnmpPacket, useResponseSecurityParameters bool) (*SnmpPacket, error) {

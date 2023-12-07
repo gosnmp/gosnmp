@@ -88,7 +88,7 @@ var testsUnmarshalTrap = []struct {
 		},
 	},
 	{
-		snmpv3Trap,
+		snmpV3AuthPrivTrap,
 		&SnmpPacket{
 			Version:   3,
 			PDUType:   SNMPv2Trap,
@@ -135,13 +135,13 @@ SANITY:
 
 func TestUnmarshalTrapWithMultipleUsers(t *testing.T) {
 	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
-	usmMap := NewSnmpV3SecurityParametersMap()
+	usmMap := NewSnmpV3SecurityParametersTable()
 	for _, sp := range secParamsList {
-		usmMap.AddEntry(sp.UserName, sp)
+		usmMap.Add(sp.UserName, sp)
 	}
 SANITY:
 	for i, test := range testsUnmarshalTrap {
-		Default.SecurityParametersMap = usmMap
+		Default.SecurityParametersTable = usmMap
 		Default.Version = Version3
 		var buf = test.in()
 		res, err := Default.UnmarshalTrap(buf, true)
@@ -159,7 +159,7 @@ SANITY:
 		if res.RequestID != test.out.RequestID {
 			t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
 		}
-		Default.SecurityParametersMap = nil
+		Default.SecurityParametersTable = nil
 	}
 }
 
@@ -189,7 +189,7 @@ func genericV3Trap() []byte {
 /*
 snmptrap -v3 -l authPriv -u myuser2 -a MD5 -A mypassword2 -x AES -X myprivacy2 127.0.0.1:9162 ”  1.3.6.1.4.1.8072.2.3.0.1 1.3.6.1.4.1.8072.2.3.2.1 i 60
 */
-func snmpv3Trap() []byte {
+func snmpV3AuthPrivTrap() []byte {
 	return []byte{
 		0x30, 0x81, 0xbb, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x3a, 0x1c,
 		0xf4, 0xf7, 0x02, 0x03, 0x00, 0xff, 0xe3, 0x04, 0x01, 0x03, 0x02, 0x01,

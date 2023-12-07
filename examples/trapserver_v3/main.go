@@ -60,18 +60,18 @@ func main() {
 	tl := g.NewTrapListener()
 	tl.OnNewTrap = myTrapHandler
 
-	usmMap := g.NewSnmpV3SecurityParametersMap()
+	usmTable := g.NewSnmpV3SecurityParametersTable()
 	for _, sp := range secParamsList {
-		usmMap.AddEntry(sp.UserName, sp)
+		usmTable.Add(sp.UserName, sp)
 	}
 
 	gs := &g.GoSNMP{
-		Port:                  161,
-		Transport:             "udp",
-		Version:               g.Version3, // Always using version3 for traps, only option that works with all SNMP versions simultaneously
-		SecurityModel:         g.UserSecurityModel,
-		SecurityParameters:    secParamsList[0],
-		SecurityParametersMap: usmMap,
+		Port:                    161,
+		Transport:               "udp",
+		Version:                 g.Version3, // Always using version3 for traps, only option that works with all SNMP versions simultaneously
+		SecurityModel:           g.UserSecurityModel,
+		SecurityParameters:      &g.UsmSecurityParameters{AuthoritativeEngineID: "12345"}, // Use for server's engine ID
+		SecurityParametersTable: usmTable,
 	}
 	tl.Params = gs
 	tl.Params.Logger = g.NewLogger(log.New(os.Stdout, "", 0))

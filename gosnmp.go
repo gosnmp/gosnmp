@@ -156,8 +156,8 @@ type GoSNMP struct {
 	// SecurityParameters is an SNMPV3 Security Model parameters struct.
 	SecurityParameters SnmpV3SecurityParameters
 
-	// SecurityParametersMap is a mapping of identifiers to corresponding SNMP V3 Security Model parameters
-	SecurityParametersMap SnmpV3SecurityParametersMap
+	// SecurityParametersTable is a mapping of identifiers to corresponding SNMP V3 Security Model parameters
+	SecurityParametersTable *SnmpV3SecurityParametersTable
 
 	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU.
 	ContextEngineID string

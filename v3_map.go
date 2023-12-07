@@ -8,21 +8,35 @@
 
 package gosnmp
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
-// SnmpV3SecurityParametersMap is a mapping of usernames to corresponding SNMP V3 Security Model parameters
-type SnmpV3SecurityParametersMap map[string][]SnmpV3SecurityParameters
-
-func NewSnmpV3SecurityParametersMap() SnmpV3SecurityParametersMap {
-	return make(map[string][]SnmpV3SecurityParameters)
+// SnmpV3SecurityParametersTable is a mapping of identifiers to corresponding SNMP V3 Security Model parameters
+type SnmpV3SecurityParametersTable struct {
+	table map[string][]SnmpV3SecurityParameters
+	mu    sync.RWMutex
 }
 
-func (uspm SnmpV3SecurityParametersMap) AddEntry(key string, sp SnmpV3SecurityParameters) {
-	uspm[key] = append(uspm[key], sp)
+func NewSnmpV3SecurityParametersTable() *SnmpV3SecurityParametersTable {
+	return &SnmpV3SecurityParametersTable{
+		table: make(map[string][]SnmpV3SecurityParameters),
+	}
 }
 
-func (uspm SnmpV3SecurityParametersMap) getEntry(key string) ([]SnmpV3SecurityParameters, error) {
-	if sp, ok := uspm[key]; ok {
+func (spm *SnmpV3SecurityParametersTable) Add(key string, sp SnmpV3SecurityParameters) {
+	spm.mu.Lock()
+	defer spm.mu.Unlock()
+
+	spm.table[key] = append(spm.table[key], sp)
+}
+
+func (spm *SnmpV3SecurityParametersTable) Get(key string) ([]SnmpV3SecurityParameters, error) {
+	spm.mu.RLock()
+	defer spm.mu.RUnlock()
+
+	if sp, ok := spm.table[key]; ok {
 		return sp, nil
 	}
 	return nil, fmt.Errorf("No security parameters found for the key %s", key)
