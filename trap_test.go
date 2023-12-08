@@ -153,12 +153,9 @@ SANITY:
 
 		// test enough fields to ensure unmarshalling was successful.
 		// full unmarshal testing is performed in TestUnmarshal
-		if res.Version != test.out.Version {
-			t.Errorf("#%d Version result: %v, test: %v", i, res.Version, test.out.Version)
-		}
-		if res.RequestID != test.out.RequestID {
-			t.Errorf("#%d RequestID result: %v, test: %v", i, res.RequestID, test.out.RequestID)
-		}
+		require.Equal(t, test.out.Version, res.Version)
+		require.Equal(t, test.out.RequestID, res.RequestID)
+
 		Default.SecurityParametersTable = nil
 	}
 }

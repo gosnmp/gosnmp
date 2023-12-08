@@ -441,12 +441,10 @@ func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 }
 
 // UnmarshalTrap unpacks the SNMP Trap.
-//
-// NOTE: the trap code is currently unreliable when working with snmpv3 - pull requests welcome
-func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) (*SnmpPacket, error) {
-	result := new(SnmpPacket)
+func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) (result *SnmpPacket, err error) {
+	result = new(SnmpPacket)
 	// Get only the version from the header of the trap
-	_, err := x.unmarshalVersionFromHeader(trap, result)
+	_, err = x.unmarshalVersionFromHeader(trap, result)
 	if err != nil {
 		x.Logger.Printf("UnmarshalTrap version unmarshal: %s\n", err)
 		return nil, err
@@ -469,19 +467,18 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 			cpTrap := make([]byte, len(trap))
 			copy(cpTrap, trap)
 			result = new(SnmpPacket)
-			e := secParams.InitSecurityKeys()
-			if e != nil {
+			if err = secParams.InitSecurityKeys(); err != nil {
 				return nil, err
 			}
 			result.SecurityParameters = secParams.Copy()
-			result, e = x.UnmarshalTrapBase(cpTrap, result, true)
-			if result != nil {
-				return result, e
+			err = x.UnmarshalTrapBase(cpTrap, result, true)
+			if err == nil {
+				return result, err
 			}
 		}
-		return nil, fmt.Errorf("no credentials successfully unmarshaled trap")
+		return nil, fmt.Errorf("no credentials successfully unmarshaled trap: %w", err)
 	}
-	return x.UnmarshalTrapBase(trap, result, useResponseSecurityParameters)
+	return result, x.UnmarshalTrapBase(trap, result, useResponseSecurityParameters)
 }
 
 func (x *GoSNMP) getTrapIdentifier(trap []byte) (string, error) {
@@ -495,11 +492,11 @@ func (x *GoSNMP) getTrapIdentifier(trap []byte) (string, error) {
 	return packet.SecurityParameters.getIdentifier(), nil
 }
 
-func (x *GoSNMP) UnmarshalTrapBase(trap []byte, result *SnmpPacket, useResponseSecurityParameters bool) (*SnmpPacket, error) {
+func (x *GoSNMP) UnmarshalTrapBase(trap []byte, result *SnmpPacket, useResponseSecurityParameters bool) error {
 	if x.SecurityParameters != nil && result.SecurityParameters == nil {
 		err := x.SecurityParameters.InitSecurityKeys()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		result.SecurityParameters = x.SecurityParameters.Copy()
 	}
@@ -507,7 +504,7 @@ func (x *GoSNMP) UnmarshalTrapBase(trap []byte, result *SnmpPacket, useResponseS
 	cursor, err := x.unmarshalHeader(trap, result)
 	if err != nil {
 		x.Logger.Printf("UnmarshalTrap: %s\n", err)
-		return nil, err
+		return err
 	}
 
 	if result.Version == Version3 {
@@ -515,20 +512,20 @@ func (x *GoSNMP) UnmarshalTrapBase(trap []byte, result *SnmpPacket, useResponseS
 			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
 				x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
-				return nil, err
+				return err
 			}
 		}
 
 		trap, cursor, err = x.decryptPacket(trap, cursor, result)
 		if err != nil {
 			x.Logger.Printf("UnmarshalTrap v3 decrypt: %s\n", err)
-			return nil, err
+			return err
 		}
 	}
 	err = x.unmarshalPayload(trap, cursor, result)
 	if err != nil {
 		x.Logger.Printf("UnmarshalTrap: %s\n", err)
-		return nil, err
+		return err
 	}
-	return result, nil
+	return nil
 }
