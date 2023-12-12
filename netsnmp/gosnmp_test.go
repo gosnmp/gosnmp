@@ -137,7 +137,7 @@ func TestPDU(t *testing.T) {
 
 			if *rec {
 				pktrec := base64.StdEncoding.EncodeToString(exp)
-				if err = os.WriteFile(fname, []byte(pktrec), 0644); err != nil {
+				if err = os.WriteFile(fname, []byte(pktrec), 0600); err != nil {
 					t.Logf("error writing record file: %s", err)
 				}
 			}
