@@ -36,8 +36,7 @@ func TestPDU(t *testing.T) {
 
 	recdir := filepath.Join("testdata", t.Name())
 	if *rec && !isPlayback() {
-		err := os.MkdirAll(recdir, 0777)
-		if err != nil {
+		if err := os.MkdirAll(recdir, 0755); err != nil {
 			t.Fatalf("error creating record dir: %s", err)
 		}
 	} else if *rec {
@@ -47,8 +46,7 @@ func TestPDU(t *testing.T) {
 	pcapdir := ""
 	if *pcap != "" {
 		pcapdir = filepath.Join(*pcap, t.Name())
-		err := os.MkdirAll(pcapdir, 0777)
-		if err != nil {
+		if err := os.MkdirAll(pcapdir, 0755); err != nil {
 			t.Fatalf("error creating pcap dir: %s", err)
 		}
 	}
@@ -139,8 +137,7 @@ func TestPDU(t *testing.T) {
 
 			if *rec {
 				pktrec := base64.StdEncoding.EncodeToString(exp)
-				err = os.WriteFile(fname, []byte(pktrec), 0600)
-				if err != nil {
+				if err = os.WriteFile(fname, []byte(pktrec), 0600); err != nil {
 					t.Logf("error writing record file: %s", err)
 				}
 			}
@@ -164,7 +161,7 @@ func TestPDU(t *testing.T) {
 func writePcap(fn string, payload []byte) error {
 	fn += ".pcap"
 
-	f, err := os.OpenFile(fn, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0777)
+	f, err := os.OpenFile(fn, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
