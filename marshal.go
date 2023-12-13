@@ -979,12 +979,12 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 
 // -- Unmarshalling Logic ------------------------------------------------------
 
-func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket) (int, error) {
+func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket) (int, SnmpVersion, error) {
 	if len(packet) < 2 {
-		return 0, fmt.Errorf("cannot unmarshal empty packet")
+		return 0, 0, fmt.Errorf("cannot unmarshal empty packet")
 	}
 	if response == nil {
-		return 0, fmt.Errorf("cannot unmarshal response into nil packet reference")
+		return 0, 0, fmt.Errorf("cannot unmarshal response into nil packet reference")
 	}
 
 	response.Variables = make([]SnmpPDU, 0, 5)
@@ -994,41 +994,42 @@ func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket)
 
 	// First bytes should be 0x30
 	if PDUType(packet[0]) != Sequence {
-		return 0, fmt.Errorf("invalid packet header")
+		return 0, 0, fmt.Errorf("invalid packet header")
 	}
 
 	length, cursor, err := parseLength(packet)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if len(packet) != length {
-		return 0, fmt.Errorf("error verifying packet sanity: Got %d Expected: %d", len(packet), length)
+		return 0, 0, fmt.Errorf("error verifying packet sanity: Got %d Expected: %d", len(packet), length)
 	}
 	x.Logger.Printf("Packet sanity verified, we got all the bytes (%d)", length)
 
 	// Parse SNMP Version
 	rawVersion, count, err := parseRawField(x.Logger, packet[cursor:], "version")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMP packet version: %w", err)
+		return 0, 0, fmt.Errorf("error parsing SNMP packet version: %w", err)
 	}
 
 	cursor += count
 	if cursor >= len(packet) {
-		return 0, fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
+		return 0, 0, fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
 	if version, ok := rawVersion.(int); ok {
-		response.Version = SnmpVersion(version)
 		x.Logger.Printf("Parsed version %d", version)
+		return cursor, SnmpVersion(version), nil
 	}
-	return cursor, err
+	return cursor, 0, err
 }
 
 func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, error) {
-	cursor, err := x.unmarshalVersionFromHeader(packet, response)
+	cursor, version, err := x.unmarshalVersionFromHeader(packet, response)
 	if err != nil {
 		return 0, err
 	}
+	response.Version = version
 
 	if response.Version == Version3 {
 		oldcursor := cursor

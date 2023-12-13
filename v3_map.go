@@ -25,11 +25,14 @@ func NewSnmpV3SecurityParametersTable() *SnmpV3SecurityParametersTable {
 	}
 }
 
-func (spm *SnmpV3SecurityParametersTable) Add(key string, sp SnmpV3SecurityParameters) {
+func (spm *SnmpV3SecurityParametersTable) Add(key string, sp SnmpV3SecurityParameters) error {
 	spm.mu.Lock()
 	defer spm.mu.Unlock()
-
+	if err := sp.InitSecurityKeys(); err != nil {
+		return err
+	}
 	spm.table[key] = append(spm.table[key], sp)
+	return nil
 }
 
 func (spm *SnmpV3SecurityParametersTable) Get(key string) ([]SnmpV3SecurityParameters, error) {
