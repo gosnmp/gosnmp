@@ -442,9 +442,8 @@ func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 
 // UnmarshalTrap unpacks the SNMP Trap.
 func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) (result *SnmpPacket, err error) {
-	result = new(SnmpPacket)
 	// Get only the version from the header of the trap
-	_, version, err := x.unmarshalVersionFromHeader(trap, result)
+	version, _, err := x.unmarshalVersionFromHeader(trap, new(SnmpPacket))
 	if err != nil {
 		x.Logger.Printf("UnmarshalTrap version unmarshal: %s\n", err)
 		return nil, err
