@@ -135,7 +135,7 @@ SANITY:
 
 func TestUnmarshalTrapWithMultipleUsers(t *testing.T) {
 	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
-	usmMap := NewSnmpV3SecurityParametersTable()
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
 	for _, sp := range secParamsList {
 		usmMap.Add(sp.UserName, sp)
 	}

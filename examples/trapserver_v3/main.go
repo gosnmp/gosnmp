@@ -24,29 +24,26 @@ import (
 )
 
 var secParamsList = []*g.UsmSecurityParameters{
-	&g.UsmSecurityParameters{
+	{
 		UserName:                 "myuser",
 		AuthenticationProtocol:   g.MD5,
 		AuthenticationPassphrase: "mypassword",
 		PrivacyProtocol:          g.AES,
 		PrivacyPassphrase:        "myprivacy",
-		Logger:                   g.NewLogger(log.New(os.Stdout, "", 0)),
 	},
-	&g.UsmSecurityParameters{
+	{
 		UserName:                 "myuser2",
 		AuthenticationProtocol:   g.SHA,
 		AuthenticationPassphrase: "mypassword2",
 		PrivacyProtocol:          g.DES,
 		PrivacyPassphrase:        "myprivacy2",
-		Logger:                   g.NewLogger(log.New(os.Stdout, "", 0)),
 	},
-	&g.UsmSecurityParameters{
+	{
 		UserName:                 "myuser2",
 		AuthenticationProtocol:   g.MD5,
 		AuthenticationPassphrase: "mypassword2",
 		PrivacyProtocol:          g.AES,
 		PrivacyPassphrase:        "myprivacy2",
-		Logger:                   g.NewLogger(log.New(os.Stdout, "", 0)),
 	},
 }
 
@@ -60,11 +57,11 @@ func main() {
 	tl := g.NewTrapListener()
 	tl.OnNewTrap = myTrapHandler
 
-	usmTable := g.NewSnmpV3SecurityParametersTable()
+	usmTable := g.NewSnmpV3SecurityParametersTable(g.NewLogger(log.New(os.Stdout, "", 0)))
 	for _, sp := range secParamsList {
 		err := usmTable.Add(sp.UserName, sp)
 		if err != nil {
-			sp.Logger.Print(err)
+			usmTable.Logger.Print(err)
 		}
 	}
 

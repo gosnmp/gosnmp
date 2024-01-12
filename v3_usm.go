@@ -158,6 +158,14 @@ func (sp *UsmSecurityParameters) getIdentifier() string {
 	return sp.UserName
 }
 
+func (sp *UsmSecurityParameters) getLogger() Logger {
+	return sp.Logger
+}
+
+func (sp *UsmSecurityParameters) setLogger(log Logger) {
+	sp.Logger = log
+}
+
 // Description logs authentication paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Description() string {
 	var sb strings.Builder
