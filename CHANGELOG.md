@@ -1,15 +1,54 @@
 ## unreleased
 
-NOTE:
-
 * [CHANGE]
 * [FEATURE]
 * [ENHANCEMENT]
 * [BUGFIX]
 
-## Unreleased
+## v1.36.0
 
+This release now requires Go 1.20 or higher.
+
+* [ENHANCEMENT] Allow sending v1 traps that have no varbinds #426
+* [BUGFIX] Fix getBulk SnmpPacket MaxRepetitions value #413
+* [BUGFIX] Refactor security logger #422
+* [BUGFIX] Add privacy passphrase in extendKeyBlumenthal cacheKey call #425
+* [BUGFIX] unmarshal: fix panic from reading beyond slice #441
+
+## v1.35.0
+
+This release now requires Go 1.17 or higher.
+
+NOTE: The UnmarshalTrap now returns both an SnmpPacket and an error (#394)
+
+* [BUGFIX] gosnmp.Set(): permit ObjectIdentifier PDU Type #378
+* [BUGFIX] SendTrap: do not set Reportable MsgFlags for v3 #398
+* [CHANGE] Support authoritative engineID discovery when listening for traps #394
+* [CHANGE] Require Go 1.17+
+* [ENHANCEMENT] marshalUint32: Values above 2^31-1 encodes in 5 bytes #377
+* [ENHANCEMENT] Add Control function to GoSNMP dialer parameters #397
+
+## v1.34.0
+
+NOTE: marshalInt32 now always encodes an integer value in the smallest possible
+number of octets as per ITU-T Rec. X.690 (07/2002).
+
+* [ENHANCEMENT] gosnmp/marshalInt32: adhere to ITU-T Rec. X.690 integer encoding #372
+* [ENHANCEMENT] parseInt64: throw error on zero length as per X690 #373
+* [ENHANCEMENT] helper.go: Interpreting the value of an Opaque type as binary data if the Opaque sub-type cannot be recognized #374
+* [ENHANCEMENT] helper.go: Implemented Opaque type marshaling #374
+* [BUGFIX] marshal.go: Fixed invalid OpaqueFloat and OpaqueDouble marshaling in marshalVarbind() function #374
+* [BUGFIX] marshal.go: stricter cursor bounds checking in unmarshalPayload #384
+
+## v1.33.0
+
+* [BUGFIX] parseLength: avoid OOB read, prevent panic #354
+* [BUGFIX] Detect negative lengths in parseLength, prevent panic #369
 * [FEATURE] Add LocalAddr setting to bind source address of SNMP queries #342
+* [ENHANCEMENT] Validate SNMPv3 Auth/Priv Protocol for incoming trap message #351
+* [ENHANCEMENT] helper.go: add error handling to parseLength #358
+* [ENHANCEMENT] Rename v3_testing_credentials to avoid testing import in prod builds #360
+* [ENHANCEMENT] helper.go: Improved decodeValue() function #340
 
 ## v1.32.0
 

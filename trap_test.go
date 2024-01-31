@@ -8,12 +8,14 @@
 package gosnmp
 
 import (
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -48,14 +50,14 @@ var testsUnmarshalTrap = []struct {
 				UserName:                 "myuser",
 				AuthenticationProtocol:   MD5,
 				AuthenticationPassphrase: "mypassword",
-				Logger:                   NewLogger(log.New(ioutil.Discard, "", 0)),
+				Logger:                   NewLogger(log.New(io.Discard, "", 0)),
 			},
 		},
 	},
 }
 
 func TestUnmarshalTrap(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 SANITY:
 	for i, test := range testsUnmarshalTrap {
@@ -63,7 +65,8 @@ SANITY:
 		Default.SecurityParameters = test.out.SecurityParameters.Copy()
 		Default.Version = Version3
 		var buf = test.in()
-		var res = Default.UnmarshalTrap(buf, true)
+		res, err := Default.UnmarshalTrap(buf, true)
+		require.NoError(t, err, "unmarshalTrap failed")
 		if res == nil {
 			t.Errorf("#%d, UnmarshalTrap returned nil", i)
 			continue SANITY
@@ -104,7 +107,7 @@ func genericV3Trap() []byte {
 }
 
 func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 	return func(packet *SnmpPacket, addr *net.UDPAddr) {
 		//log.Printf("got trapdata from %s\n", addr.IP)
 		defer close(done)
@@ -191,7 +194,7 @@ func TestSendTrapBasic(t *testing.T) {
 		Timeout:   time.Duration(2) * time.Second,
 		Retries:   3,
 		MaxOids:   MaxOids,
-		Logger:    NewLogger(log.New(ioutil.Discard, "", 0)),
+		Logger:    NewLogger(log.New(io.Discard, "", 0)),
 	}
 
 	err := ts.Connect()
@@ -1229,4 +1232,77 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 		t.Fatal("timed out waiting for trap to be received")
 	}
 
+}
+
+func TestSendV3EngineIdDiscovery(t *testing.T) {
+	tl := NewTrapListener()
+	defer tl.Close()
+	authorativeEngineID := string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04})
+	unknownEngineID := string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x05})
+	sp := &UsmSecurityParameters{
+		UserName:                 "test",
+		AuthenticationProtocol:   SHA,
+		AuthenticationPassphrase: "password",
+		PrivacyProtocol:          AES256,
+		PrivacyPassphrase:        "password",
+		AuthoritativeEngineBoots: 1,
+		AuthoritativeEngineTime:  1,
+		AuthoritativeEngineID:    authorativeEngineID,
+	}
+	tl.Params = Default
+	tl.Params.Version = Version3
+	tl.Params.SecurityParameters = sp
+	tl.Params.SecurityModel = UserSecurityModel
+	tl.Params.MsgFlags = AuthPriv
+
+	// listener goroutine
+	errch := make(chan error)
+	go func() {
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		if err != nil {
+			errch <- err
+		}
+	}()
+
+	// Wait until the listener is ready.
+	select {
+	case <-tl.Listening():
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
+	}
+
+	ts := &GoSNMP{
+		Target: trapTestAddress,
+		Port:   trapTestPort,
+		//Community: "public",
+		Version:            Version3,
+		Timeout:            time.Duration(2) * time.Second,
+		Retries:            3,
+		MaxOids:            MaxOids,
+		SecurityModel:      UserSecurityModel,
+		SecurityParameters: sp,
+		MsgFlags:           AuthPriv,
+	}
+
+	err := ts.Connect()
+	if err != nil {
+		t.Fatalf("Connect() err: %v", err)
+	}
+	defer ts.Conn.Close()
+
+	getEngineIDRequest := SnmpPacket{
+		Version:            Version3,
+		MsgFlags:           Reportable,
+		SecurityModel:      UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{},
+		ContextEngineID:    unknownEngineID,
+		PDUType:            GetRequest,
+		MsgID:              1824792385,
+		RequestID:          1411852680,
+		MsgMaxSize:         65507,
+	}
+	result, err := ts.sendOneRequest(&getEngineIDRequest, true)
+	require.NoError(t, err, "sendOneRequest failed")
+	require.Equal(t, result.SecurityParameters.(*UsmSecurityParameters).AuthoritativeEngineID, authorativeEngineID, "invalid authoritativeEngineID")
+	require.Equal(t, result.PDUType, Report, "invalid received PDUType")
 }

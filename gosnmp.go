@@ -17,6 +17,7 @@ import (
 	"net"
 	"strconv"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -37,8 +38,9 @@ const (
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
 
-	// "udp" is used regularly, prevent 'goconst' complaints
+	// "udp" and "tcp" are used regularly, prevent 'goconst' complaints
 	udp = "udp"
+	tcp = "tcp"
 )
 
 // GoSNMP represents GoSNMP library state.
@@ -119,6 +121,14 @@ type GoSNMP struct {
 	// we open unconnected UDP socket and use sendto/recvfrom.
 	UseUnconnectedUDPSocket bool
 
+	// If Control is not nil, it is called after creating the network
+	// connection but before actually dialing.
+	//
+	// Can be used when UseUnconnectedUDPSocket is set to false or when using TCP
+	// in scenario where specific options on the underlying socket are nedded.
+	// Refer to https://pkg.go.dev/net#Dialer
+	Control func(network, address string, c syscall.RawConn) error
+
 	// LocalAddr is the local address in the format "address:port" to use when connecting an Target address.
 	// If the port parameter is empty or "0", as in
 	// "127.0.0.1:" or "[::1]:0", a port number is automatically (random) chosen.
@@ -160,6 +170,7 @@ type GoSNMP struct {
 }
 
 // Default connection settings
+//
 //nolint:gochecknoglobals
 var Default = &GoSNMP{
 	Port:               161,
@@ -174,19 +185,20 @@ var Default = &GoSNMP{
 
 // SnmpPDU will be used when doing SNMP Set's
 type SnmpPDU struct {
+	// The value to be set by the SNMP set, or the value when
+	// sending a trap
+	Value interface{}
+
 	// Name is an oid in string format eg ".1.3.6.1.4.9.27"
 	Name string
 
 	// The type of the value eg Integer
 	Type Asn1BER
-
-	// The value to be set by the SNMP set, or the value when
-	// sending a trap
-	Value interface{}
 }
 
-// AsnExtensionID mask to identify types > 30 in subsequent byte
+const AsnContext = 0x80
 const AsnExtensionID = 0x1F
+const AsnExtensionTag = (AsnContext | AsnExtensionID) // 0x9F
 
 //go:generate stringer -type Asn1BER
 
@@ -274,8 +286,9 @@ func (x *GoSNMP) ConnectIPv6() error {
 // connect to address addr on the given network
 //
 // https://golang.org/pkg/net/#Dial gives acceptable network values as:
-//   "tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),"udp6" (IPv6-only), "ip",
-//   "ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket"
+//
+//	"tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),"udp6" (IPv6-only), "ip",
+//	"ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket"
 func (x *GoSNMP) connect(networkSuffix string) error {
 	err := x.validateParameters()
 	if err != nil {
@@ -337,7 +350,7 @@ func (x *GoSNMP) netConnect() error {
 			x.Transport = "tcp4"
 		}
 	}
-	dialer := net.Dialer{Timeout: x.Timeout, LocalAddr: localAddr}
+	dialer := net.Dialer{Timeout: x.Timeout, LocalAddr: localAddr, Control: x.Control}
 	x.Conn, err = dialer.DialContext(x.Context, x.Transport, addr)
 	return err
 }
@@ -354,6 +367,8 @@ func (x *GoSNMP) validateParameters() error {
 	}
 
 	if x.Version == Version3 {
+		// TODO: setting the Reportable flag violates rfc3412#6.4 if PDU is of type SNMPv2Trap.
+		// See if we can do this smarter and remove bitclear fix from trap.go:57
 		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
 
 		err := x.validateParametersV3()
@@ -402,9 +417,9 @@ func (x *GoSNMP) Get(oids []string) (result *SnmpPacket, err error) {
 			oidCount, x.MaxOids)
 	}
 	// convert oids slice to pdu slice
-	var pdus []SnmpPDU
+	pdus := make([]SnmpPDU, 0, oidCount)
 	for _, oid := range oids {
-		pdus = append(pdus, SnmpPDU{oid, Null, nil})
+		pdus = append(pdus, SnmpPDU{Name: oid, Type: Null, Value: nil})
 	}
 	// build up SnmpPacket
 	packetOut := x.mkSnmpPacket(GetRequest, pdus, 0, 0)
@@ -416,7 +431,7 @@ func (x *GoSNMP) Set(pdus []SnmpPDU) (result *SnmpPacket, err error) {
 	var packetOut *SnmpPacket
 	switch pdus[0].Type {
 	// TODO test Gauge32
-	case Integer, OctetString, Gauge32, IPAddress:
+	case Integer, OctetString, Gauge32, IPAddress, ObjectIdentifier:
 		packetOut = x.mkSnmpPacket(SetRequest, pdus, 0, 0)
 	default:
 		return nil, fmt.Errorf("ERR:gosnmp currently only supports SNMP SETs for Integers, IPAddress and OctetStrings")
@@ -433,9 +448,9 @@ func (x *GoSNMP) GetNext(oids []string) (result *SnmpPacket, err error) {
 	}
 
 	// convert oids slice to pdu slice
-	var pdus []SnmpPDU
+	pdus := make([]SnmpPDU, 0, oidCount)
 	for _, oid := range oids {
-		pdus = append(pdus, SnmpPDU{oid, Null, nil})
+		pdus = append(pdus, SnmpPDU{Name: oid, Type: Null, Value: nil})
 	}
 
 	// Marshal and send the packet
@@ -458,9 +473,9 @@ func (x *GoSNMP) GetBulk(oids []string, nonRepeaters uint8, maxRepetitions uint3
 	}
 
 	// convert oids slice to pdu slice
-	var pdus []SnmpPDU
+	pdus := make([]SnmpPDU, 0, oidCount)
 	for _, oid := range oids {
-		pdus = append(pdus, SnmpPDU{oid, Null, nil})
+		pdus = append(pdus, SnmpPDU{Name: oid, Type: Null, Value: nil})
 	}
 
 	// Marshal and send the packet
@@ -610,8 +625,8 @@ func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
 // the following values:
 //
 // 0  1  2  3  4  5  6  7
-//       T        T     T
 //
+//	T        T     T
 func Partition(currentPosition, partitionSize, sliceLength int) bool {
 	if currentPosition < 0 || currentPosition >= sliceLength {
 		return false

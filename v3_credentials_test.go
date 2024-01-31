@@ -1,8 +1,13 @@
+// Copyright 2021 The GoSNMP Authors. All rights reserved.  Use of this
+// source code is governed by a BSD-style license that can be found in the
+// LICENSE file.
+
 package gosnmp
 
 import "testing"
 
 // GO SNMP credentials table
+//
 //nolint:gochecknoglobals,unused
 var authenticationCredentials = map[string][]string{
 	NoAuth.String() + NoPriv.String(): {"noAuthNoPrivUser", "", ""},
@@ -57,6 +62,7 @@ var authenticationCredentials = map[string][]string{
 }
 
 // Credentials table for public demo.snmplabs.org
+//
 //nolint:unused,gochecknoglobals
 var authenticationCredentialsSnmpLabs = map[string][]string{
 	NoAuth.String() + NoPriv.String(): {"usr-none-none", "", ""},
@@ -119,18 +125,16 @@ const cIdxUserName = 0
 const cIdxAuthKey = 1
 const cIdxPrivKey = 2
 
-//nolint
 func isUsingSnmpLabs() bool {
 	return useSnmpLabsCredentials
 }
 
 // conveniently enable demo.snmplabs.com for a one test
-//nolint
 func useSnmpLabs(use bool) {
 	useSnmpLabsCredentials = use
 }
 
-//nolint
+//nolint:misspell
 func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) []string {
 	var credentials []string
 	if useSnmpLabsCredentials {
@@ -146,7 +150,6 @@ func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol 
 	return credentials
 }
 
-//nolint
 func getUserName(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
 	return getCredentials(t, authProtocol, privProtocol)[cIdxUserName]
 }

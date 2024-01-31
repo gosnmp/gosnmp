@@ -27,6 +27,8 @@ const (
 	Reportable   SnmpV3MsgFlags = 0x4 // Report PDU must be sent.
 )
 
+//go:generate stringer -type=SnmpV3MsgFlags
+
 // SnmpV3SecurityModel describes the security model used by a SnmpV3 connection
 type SnmpV3SecurityModel uint8
 
@@ -35,11 +37,14 @@ const (
 	UserSecurityModel SnmpV3SecurityModel = 3
 )
 
+//go:generate stringer -type=SnmpV3SecurityModel
+
 // SnmpV3SecurityParameters is a generic interface type to contain various implementations of SnmpV3SecurityParameters
 type SnmpV3SecurityParameters interface {
 	Log()
 	Copy() SnmpV3SecurityParameters
 	Description() string
+	SafeString() string
 	validate(flags SnmpV3MsgFlags) error
 	init(log Logger) error
 	initPacket(packet *SnmpPacket) error
@@ -258,7 +263,10 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	if packet.MsgMaxSize != 0 {
 		maxBufSize = packet.MsgMaxSize
 	}
-	maxmsgsize := marshalUvarInt(maxBufSize)
+	maxmsgsize, err := marshalUint32(maxBufSize)
+	if err != nil {
+		return nil, err
+	}
 	buf.Write([]byte{byte(Integer), byte(len(maxmsgsize))})
 	buf.Write(maxmsgsize)
 	packet.Logger.Printf("MarshalV3Header maxmsgsize len=%v", buf.Len()-oldLen)
@@ -337,7 +345,10 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("invalid SNMPV3 Header")
 	}
 
-	_, cursorTmp := parseLength(packet[cursor:])
+	_, cursorTmp, err := parseLength(packet[cursor:])
+	if err != nil {
+		return 0, err
+	}
 	cursor += cursorTmp
 	if cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
@@ -402,7 +413,10 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	if PDUType(packet[cursor]) != PDUType(OctetString) {
 		return 0, errors.New("invalid SNMPV3 Security Parameters")
 	}
-	_, cursorTmp = parseLength(packet[cursor:])
+	_, cursorTmp, err = parseLength(packet[cursor:])
+	if err != nil {
+		return 0, err
+	}
 	cursor += cursorTmp
 	if cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
@@ -439,7 +453,10 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		fallthrough
 	case Sequence:
 		// pdu is plaintext or has been decrypted
-		tlength, cursorTmp := parseLength(packet[cursor:])
+		tlength, cursorTmp, err := parseLength(packet[cursor:])
+		if err != nil {
+			return nil, 0, err
+		}
 		if decrypted {
 			// truncate padding that might have been included with
 			// the encrypted PDU

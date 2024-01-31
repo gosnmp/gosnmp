@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"reflect"
@@ -235,7 +235,7 @@ var testsEnmarshal = []testsEnmarshalT{
 // vbPosPdus returns a slice of oids in the given test
 func vbPosPdus(test testsEnmarshalT) (pdus []SnmpPDU) {
 	for _, vbp := range test.vbPositions {
-		pdu := SnmpPDU{vbp.oid, vbp.pduType, vbp.pduValue}
+		pdu := SnmpPDU{Name: vbp.oid, Type: vbp.pduType, Value: vbp.pduValue}
 		pdus = append(pdus, pdu)
 	}
 	return
@@ -270,11 +270,11 @@ func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 // ie check each varbind is working, then the varbind list, etc
 
 func TestEnmarshalVarbind(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
-			snmppdu := &SnmpPDU{test2.oid, test2.pduType, test2.pduValue}
+			snmppdu := &SnmpPDU{Name: test2.oid, Type: test2.pduType, Value: test2.pduValue}
 			testBytes, err := marshalVarbind(snmppdu)
 			if err != nil {
 				t.Errorf("#%s:%d:%s err returned: %v",
@@ -287,7 +287,7 @@ func TestEnmarshalVarbind(t *testing.T) {
 }
 
 func TestEnmarshalVBL(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -307,7 +307,7 @@ func TestEnmarshalVBL(t *testing.T) {
 }
 
 func TestEnmarshalPDU(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -328,7 +328,7 @@ func TestEnmarshalPDU(t *testing.T) {
 }
 
 func TestEnmarshalMsg(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
@@ -366,6 +366,14 @@ func TestEnmarshalMsg(t *testing.T) {
 }
 
 // -- Unmarshal -----------------------------------------------------------------
+
+var testsUnmarshalErr = []struct {
+	in func() []byte
+}{
+	{
+		panicUnmarshalHeader,
+	},
+}
 
 var testsUnmarshal = []struct {
 	in  func() []byte
@@ -667,6 +675,23 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
+	{opaqueResponse,
+		&SnmpPacket{
+			Version:    Version1,
+			Community:  "public",
+			PDUType:    GetResponse,
+			RequestID:  2033938493,
+			Error:      0,
+			ErrorIndex: 0,
+			Variables: []SnmpPDU{
+				{
+					Name:  ".1.3.6.1.4.1.34187.74195.2.1.24590",
+					Type:  Opaque,
+					Value: []byte{0x41, 0xf0, 0x00, 0x00},
+				},
+			},
+		},
+	},
 	{opaqueDoubleResponse,
 		&SnmpPacket{
 			Version:    Version2c,
@@ -714,8 +739,27 @@ var testsUnmarshal = []struct {
 	},
 }
 
+func TestUnmarshalErrors(t *testing.T) {
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
+
+	for i, test := range testsUnmarshalErr {
+		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
+		splitedFuncName := strings.Split(funcName, ".")
+		funcName = splitedFuncName[len(splitedFuncName)-1]
+		t.Run(fmt.Sprintf("%v-%v", i, funcName), func(t *testing.T) {
+			vhandle := GoSNMP{}
+			vhandle.Logger = Default.Logger
+			testBytes := test.in()
+			_, err := vhandle.SnmpDecodePacket(testBytes)
+			if err == nil {
+				t.Errorf("#%s: SnmpDecodePacket() err expected, but not returned", funcName)
+			}
+		})
+	}
+}
+
 func TestUnmarshal(t *testing.T) {
-	Default.Logger = NewLogger(log.New(ioutil.Discard, "", 0))
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for i, test := range testsUnmarshal {
 		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
@@ -772,7 +816,7 @@ func TestUnmarshal(t *testing.T) {
 						if vbval.Cmp(vbrval) != 0 {
 							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 						}
-					case OctetString:
+					case OctetString, Opaque:
 						if !bytes.Equal(vb.Value.([]byte), vbr.Value.([]byte)) {
 							t.Errorf("#%d:%d Value result: %v, test: %v", i, n, vbr.Value, vb.Value)
 						}
@@ -815,6 +859,27 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+func TestUnmarshalBounds(t *testing.T) {
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
+
+	for _, test := range testsEnmarshal {
+		x := &SnmpPacket{
+			Community: test.community,
+			Version:   test.version,
+			PDUType:   test.requestType,
+			RequestID: test.requestid,
+			Variables: vbPosPdus(test),
+		}
+
+		testBytes, err := x.marshalPDU()
+		if err != nil {
+			t.Errorf("#%s: marshalPDU() err returned: %v", test.funcName, err)
+		}
+
+		checkByteEquality(t, test, testBytes, test.pduStart, test.finish)
+	}
+}
+
 // -----------------------------------------------------------------------------
 
 /*
@@ -824,6 +889,14 @@ func TestUnmarshal(t *testing.T) {
 
 * Frame, Ethernet II, IP and UDP layers removed from generated bytes
 */
+
+/*
+panicUnmarshalHeader tests a boundary condition that results in a panic
+when unmarshalling the SNMP header (see also https://github.com/gosnmp/gosnmp/issues/440)
+*/
+func panicUnmarshalHeader() []byte {
+	return []byte("0\x04\x02\x020\x03")
+}
 
 /*
 kyoceraResponseBytes corresponds to the response section of this snmpget
@@ -1192,7 +1265,8 @@ func ciscoGetnextRequestBytes() []byte {
 	}
 }
 
-/* cisco getbulk bytes corresponds to this snmpbulkget command:
+/*
+	cisco getbulk bytes corresponds to this snmpbulkget command:
 
 $ snmpbulkget -v2c -cpublic  127.0.0.1:161 1.3.6.1.2.1.1.9.1.3.52
 iso.3.6.1.2.1.1.9.1.4.1 = Timeticks: (21) 0:00:00.21
@@ -1205,7 +1279,6 @@ iso.3.6.1.2.1.1.9.1.4.7 = Timeticks: (23) 0:00:00.23
 iso.3.6.1.2.1.1.9.1.4.8 = Timeticks: (23) 0:00:00.23
 iso.3.6.1.2.1.2.1.0 = INTEGER: 3
 iso.3.6.1.2.1.2.2.1.1.1 = INTEGER: 1
-
 */
 func ciscoGetbulkRequestBytes() []byte {
 	return []byte{
@@ -1243,14 +1316,15 @@ func ciscoGetbulkResponseBytes() []byte {
 /*
 Issue 35, empty responses.
 Simple Network Management Protocol
-    version: v2c (1)
-    community: public
-    data: get-request (0)
-        get-request
-            request-id: 1883298028
-            error-status: noError (0)
-            error-index: 0
-            variable-bindings: 0 items
+
+	version: v2c (1)
+	community: public
+	data: get-request (0)
+	    get-request
+	        request-id: 1883298028
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 0 items
 */
 func emptyErrRequest() []byte {
 	return []byte{
@@ -1264,14 +1338,15 @@ func emptyErrRequest() []byte {
 Issue 35, empty responses.
 
 Simple Network Management Protocol
-    version: v2c (1)
-    community: public
-    data: get-response (2)
-        get-response
-            request-id: 1883298028
-            error-status: noError (0)
-            error-index: 0
-            variable-bindings: 0 items
+
+	version: v2c (1)
+	community: public
+	data: get-response (2)
+	    get-response
+	        request-id: 1883298028
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 0 items
 */
 func emptyErrResponse() []byte {
 	return []byte{
@@ -1285,17 +1360,18 @@ func emptyErrResponse() []byte {
 Issue 15, test Counter64.
 
 Simple Network Management Protocol
-    version: v2c (1)
-    community: public
-    data: get-response (2)
-        get-response
-            request-id: 190378322
-            error-status: noError (0)
-            error-index: 0
-            variable-bindings: 1 item
-                1.3.6.1.2.1.31.1.1.1.10.1: 1527943
-                    Object Name: 1.3.6.1.2.1.31.1.1.1.10.1 (iso.3.6.1.2.1.31.1.1.1.10.1)
-                    Value (Counter64): 1527943
+
+	version: v2c (1)
+	community: public
+	data: get-response (2)
+	    get-response
+	        request-id: 190378322
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 1 item
+	            1.3.6.1.2.1.31.1.1.1.10.1: 1527943
+	                Object Name: 1.3.6.1.2.1.31.1.1.1.10.1 (iso.3.6.1.2.1.31.1.1.1.10.1)
+	                Value (Counter64): 1527943
 */
 func counter64Response() []byte {
 	return []byte{
@@ -1308,8 +1384,36 @@ func counter64Response() []byte {
 }
 
 /*
+Issue 370, test Opaque.
+
+Simple Network Management Protocol
+
+	version: 1 (1)
+	community: public
+	data: get-response (2)
+	    get-response
+	        request-id: 2033938493
+	        error-status: noError (0)
+	        error-index: 0
+	        variable-bindings: 1 item
+	            1.3.6.1.4.1.34187.74195.2.1.24590: 41f00000
+	                Object Name: 1.3.6.1.4.1.34187.74195.2.1.24590 (iso.3.6.1.4.1.34187.74195.2.1.24590)
+	                Value (Opaque): 41f00000
+*/
+func opaqueResponse() []byte {
+	return []byte{
+		0x30, 0x35, 0x02, 0x01, 0x00, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
+		0x63, 0xa2, 0x28, 0x02, 0x04, 0x79, 0x3b, 0x70, 0x3d, 0x02, 0x01, 0x00,
+		0x02, 0x01, 0x00, 0x30, 0x1a, 0x30, 0x18, 0x06, 0x10, 0x2b, 0x06, 0x01,
+		0x04, 0x01, 0x82, 0x8b, 0x0b, 0x84, 0xc3, 0x53, 0x02, 0x01, 0x81, 0xc0,
+		0x0e, 0x44, 0x04, 0x41, 0xf0, 0x00, 0x00,
+	}
+}
+
+/*
 Opaque Float, observed from Synology NAS UPS MIB
- snmpget -v 2c -c public host 1.3.6.1.4.1.6574.4.2.12.1.0
+
+	snmpget -v 2c -c public host 1.3.6.1.4.1.6574.4.2.12.1.0
 */
 func opaqueFloatResponse() []byte {
 	return []byte{
@@ -1323,13 +1427,14 @@ func opaqueFloatResponse() []byte {
 
 /*
 Opaque Double, not observed, crafted based on description:
- https://tools.ietf.org/html/draft-perkins-float-00
+
+	https://tools.ietf.org/html/draft-perkins-float-00
 */
 func opaqueDoubleResponse() []byte {
 	return []byte{
 		0x30, 0x38, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69,
 		0x63, 0xa2, 0x2b, 0x02, 0x04, 0x23, 0xd5, 0xd7, 0x05, 0x02, 0x01, 0x00,
-		0x02, 0x01, 0x00, 0x30, 0x1d, 0x30, 0x17, 0x06, 0x0c, 0x2b, 0x06, 0x01,
+		0x02, 0x01, 0x00, 0x30, 0x1d, 0x30, 0x1b, 0x06, 0x0c, 0x2b, 0x06, 0x01,
 		0x04, 0x01, 0xb3, 0x2e, 0x04, 0x02, 0x0c, 0x01, 0x00, 0x44, 0x0b, 0x9f,
 		0x79, 0x08, 0x40, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	}
@@ -1346,7 +1451,7 @@ func TestUnmarshalEmptyPanic(t *testing.T) {
 }
 
 func TestV3USMInitialPacket(t *testing.T) {
-	logger := NewLogger(log.New(ioutil.Discard, "", 0))
+	logger := NewLogger(log.New(io.Discard, "", 0))
 	var emptyPdus []SnmpPDU
 	blankPacket := &SnmpPacket{
 		Version:            Version3,
@@ -1533,7 +1638,7 @@ func withUnconnectedSocket(t *testing.T, enable bool) {
 	if err := x.Connect(); err != nil {
 		t.Fatalf("error connecting: %s", err)
 	}
-    defer x.Conn.Close()
+	defer x.Conn.Close()
 
 	go func() {
 		buf := make([]byte, 256)

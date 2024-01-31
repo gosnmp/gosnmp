@@ -206,11 +206,25 @@ func (sp *UsmSecurityParameters) Description() string {
 	return sb.String()
 }
 
+// SafeString returns a logging safe (no secrets) string of the UsmSecurityParameters
+func (sp *UsmSecurityParameters) SafeString() string {
+	return fmt.Sprintf("AuthoritativeEngineID:%s, AuthoritativeEngineBoots:%d, AuthoritativeEngineTimes:%d, UserName:%s, AuthenticationParameters:%s, PrivacyParameters:%v, AuthenticationProtocol:%s, PrivacyProtocol:%s",
+		sp.AuthoritativeEngineID,
+		sp.AuthoritativeEngineBoots,
+		sp.AuthoritativeEngineTime,
+		sp.UserName,
+		sp.AuthenticationParameters,
+		sp.PrivacyParameters,
+		sp.AuthenticationProtocol,
+		sp.PrivacyProtocol,
+	)
+}
+
 // Log logs security paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Log() {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
-	sp.Logger.Printf("SECURITY PARAMETERS:%+v", sp)
+	sp.Logger.Printf("SECURITY PARAMETERS:%s", sp.SafeString())
 }
 
 // Copy method for UsmSecurityParameters used to copy a SnmpV3SecurityParameters without knowing it's implementation
@@ -479,12 +493,12 @@ func extendKeyReeder(authProtocol SnmpV3AuthProtocol, password string, engineID 
 // https://tools.ietf.org/html/draft-blumenthal-aes-usm-04#page-7
 // Not many vendors use this algorithm.
 // Previously implemented in the net-snmp and pysnmp libraries.
-// Not tested
+// TODO: Not tested
 func extendKeyBlumenthal(authProtocol SnmpV3AuthProtocol, password string, engineID string) ([]byte, error) {
 	var key []byte
 	var err error
 
-	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, ""), password, engineID)
+	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, password), password, engineID)
 
 	if err != nil {
 		return nil, err
@@ -801,7 +815,10 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 }
 
 func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byte, error) {
-	_, cursorTmp := parseLength(packet[cursor:])
+	_, cursorTmp, err := parseLength(packet[cursor:])
+	if err != nil {
+		return nil, err
+	}
 	cursorTmp += cursor
 	if cursorTmp > len(packet) {
 		return nil, errors.New("error decrypting ScopedPDU: truncated packet")
@@ -858,12 +875,18 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	buf.WriteString(sp.AuthoritativeEngineID)
 
 	// msgAuthoritativeEngineBoots
-	msgAuthoritativeEngineBoots := marshalUvarInt(sp.AuthoritativeEngineBoots)
+	msgAuthoritativeEngineBoots, err := marshalUint32(sp.AuthoritativeEngineBoots)
+	if err != nil {
+		return nil, err
+	}
 	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineBoots))})
 	buf.Write(msgAuthoritativeEngineBoots)
 
 	// msgAuthoritativeEngineTime
-	msgAuthoritativeEngineTime := marshalUvarInt(sp.AuthoritativeEngineTime)
+	msgAuthoritativeEngineTime, err := marshalUint32(sp.AuthoritativeEngineTime)
+	if err != nil {
+		return nil, err
+	}
 	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineTime))})
 	buf.Write(msgAuthoritativeEngineTime)
 
@@ -907,7 +930,10 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	if PDUType(packet[cursor]) != Sequence {
 		return 0, errors.New("error parsing SNMPV3 User Security Model parameters")
 	}
-	_, cursorTmp := parseLength(packet[cursor:])
+	_, cursorTmp, err := parseLength(packet[cursor:])
+	if err != nil {
+		return 0, err
+	}
 	cursor += cursorTmp
 	if cursorTmp > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 User Security Model parameters: truncated packet")
@@ -972,6 +998,11 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	// blank msgAuthenticationParameters to prepare for authentication check later
 	if flags&AuthNoPriv > 0 {
+		// In case if the authentication protocol is not configured or set to NoAuth, then the packet cannot
+		// be processed further
+		if sp.AuthenticationProtocol <= NoAuth {
+			return 0, errors.New("error parsing SNMPv3 User Security Model: authentication parameters are not configured to parse incoming authenticated message")
+		}
 		copy(packet[cursor+2:cursor+len(macVarbinds[sp.AuthenticationProtocol])], macVarbinds[sp.AuthenticationProtocol][2:])
 	}
 	cursor += count
@@ -984,6 +1015,11 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
 		sp.PrivacyParameters = []byte(msgPrivacyParameters)
 		sp.Logger.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
+		if flags&AuthPriv >= AuthPriv {
+			if sp.PrivacyProtocol <= NoPriv {
+				return 0, errors.New("error parsing SNMPv3 User Security Model: privacy parameters are not configured to parse incoming encrypted message")
+			}
+		}
 	}
 
 	return cursor, nil
