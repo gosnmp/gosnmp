@@ -904,6 +904,27 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+func TestUnmarshalBounds(t *testing.T) {
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
+
+	for _, test := range testsEnmarshal {
+		x := &SnmpPacket{
+			Community: test.community,
+			Version:   test.version,
+			PDUType:   test.requestType,
+			RequestID: test.requestid,
+			Variables: vbPosPdus(test),
+		}
+
+		testBytes, err := x.marshalPDU()
+		if err != nil {
+			t.Errorf("#%s: marshalPDU() err returned: %v", test.funcName, err)
+		}
+
+		checkByteEquality(t, test, testBytes, test.pduStart, test.finish)
+	}
+}
+
 // -----------------------------------------------------------------------------
 
 /*
