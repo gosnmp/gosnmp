@@ -111,10 +111,6 @@ type GoSNMP struct {
 	// See comments in https://github.com/gosnmp/gosnmp/issues/100
 	MaxRepetitions uint32
 
-	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*.
-	// (default: 0 as per RFC 1905)
-	NonRepeaters int
-
 	// UseUnconnectedUDPSocket if set, changes net.Conn to be unconnected UDP socket.
 	// Some multi-homed network gear isn't smart enough to send SNMP responses
 	// from the address it received the requests on. To work around that,
