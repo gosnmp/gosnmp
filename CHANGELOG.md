@@ -5,6 +5,20 @@
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## v1.38.0
+
+* [CHANGE] Refactor netsnmp playback function to use an io.Reader #459
+* [FEATURE] Support multiple security parameters for receiving SNMP V3 traps #457
+* [ENHANCEMENT] netsnmp tests: tame overzealous file / dir permissions #458
+
+## v1.37.0
+
+* [CHANGE] Refactor TrapListener's Close Method #449
+* [FEATURE] Allow global password cache to be turned off #454
+* [ENHANCEMENT] Make InitPacket and InitSecurityKeys public #447
+* [ENHANCEMENT] Add net-snmp validation testing #452
+* [BUGFIX] Allow RequestID to be shrunk if possible #451
+
 ## v1.36.1
 
 * [BUGFIX] address panics, add tests, fuzzing #443
