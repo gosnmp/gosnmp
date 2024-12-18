@@ -3,7 +3,7 @@ gosnmp
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#networking)
 
 [![Build Status](https://circleci.com/gh/gosnmp/gosnmp.svg?style=shield)](https://circleci.com/gh/gosnmp/gosnmp/tree/master)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/gosnmp/gosnmp)](https://pkg.go.dev/github.com/gosnmp/gosnmp)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/Rakortx/gosnmp)](https://pkg.go.dev/github.com/Rakortx/gosnmp)
 
 GoSNMP is an SNMP client library fully written in Go. It provides Get,
 GetNext, GetBulk, Walk, BulkWalk, Set and Traps. It supports IPv4 and
@@ -15,7 +15,7 @@ linux/amd64 and linux/386.
 **gosnmp** was started by [Andreas Louca](https://github.com/alouca), then
 completely rewritten by [Sonia Hamilton](https://github.com/soniah)
 (2012-2020), and now ownership has been transferred to the community at
-[gosnmp/gosnmp](https://github.com/gosnmp/gosnmp).
+[gosnmp/gosnmp](https://github.com/Rakortx/gosnmp).
 
 For support and help, join us in the #snmp channel of
 [Gophers Slack](https://invite.slack.golangbridge.org/).
@@ -79,12 +79,12 @@ This will completely disable the logging of the gosnmp library, even if the logg
 # Installation
 
 ```shell
-go get github.com/gosnmp/gosnmp
+go get github.com/Rakortx/gosnmp
 ```
 
 # Documentation
 
-https://pkg.go.dev/github.com/gosnmp/gosnmp
+https://pkg.go.dev/github.com/Rakortx/gosnmp
 
 # Usage
 
@@ -150,9 +150,9 @@ below).
 
 If you've never contributed to a Go project before, here is an example workflow.
 
-1. [fork this repo on the GitHub webpage](https://github.com/gosnmp/gosnmp/fork)
-1. `go get github.com/gosnmp/gosnmp`
-1. `cd $GOPATH/src/github.com/gosnmp/gosnmp`
+1. [fork this repo on the GitHub webpage](https://github.com/Rakortx/gosnmp/fork)
+1. `go get github.com/Rakortx/gosnmp`
+1. `cd $GOPATH/src/github.com/Rakortx/gosnmp`
 1. `git remote rename origin upstream`
 1. `git remote add origin git@github.com:<your-github-username>/gosnmp.git`
 1. `git checkout -b development`
@@ -184,7 +184,7 @@ Rane's document [SNMP: Simple? Network Management
 Protocol](https://www.ranecommercial.com/legacy/note161.html) was useful when learning the SNMP
 protocol.
 
-Please create an [issue](https://github.com/gosnmp/gosnmp/issues) on
+Please create an [issue](https://github.com/Rakortx/gosnmp/issues) on
 Github with packet captures (upload capture to Google Drive, Dropbox, or
 similar) containing samples of missing BER types, or of any other bugs
 you find. If possible, please include 2 or 3 examples of the
@@ -275,7 +275,7 @@ To check test coverage:
 ```shell
 go get github.com/axw/gocov/gocov
 go get github.com/matm/gocov-html
-gocov test github.com/gosnmp/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
+gocov test github.com/Rakortx/gosnmp | gocov-html > gosnmp.html && firefox gosnmp.html &
 ```
 
 To measure the performance of password hash caching:

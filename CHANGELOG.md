@@ -109,7 +109,7 @@ NOTE: This release returns the OctetString []byte behavior for v1.26.0 and earli
 ## v1.28.0
 
 This release updates the Go import path from `github.com/soniah/gosnmp`
-to `github.com/gosnmp/gosnmp`.
+to `github.com/Rakortx/gosnmp`.
 
 * [CHANGE] Update project path #257
 * [ENHANCEMENT] Improve SNMPv3 trap support #253
@@ -145,7 +145,7 @@ to `github.com/gosnmp/gosnmp`.
 
 ## v1.23.0
 
-* BREAKING CHANGE: The mocks have been moved to `github.com/gosnmp/gosnmp/mocks`.
+* BREAKING CHANGE: The mocks have been moved to `github.com/Rakortx/gosnmp/mocks`.
   If you use them, you will need to adjust your imports.
 * bug fix: issue 170: No results when performing a walk starting on a leaf OID
 * bug fix: issue 210: Set function fails if value is an Integer

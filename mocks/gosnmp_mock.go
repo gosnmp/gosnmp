@@ -8,8 +8,8 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
-	gosnmp "github.com/gosnmp/gosnmp"
+	gosnmp "github.com/Rakortx/gosnmp"
+	
 )
 
 // MockHandler is a mock of Handler interface.

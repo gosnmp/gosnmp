@@ -13,7 +13,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/gosnmp/gosnmp"
+	"github.com/Rakortx/gosnmp"
 )
 
 func isPlayback() bool {

@@ -916,7 +916,7 @@ func TestUnmarshal(t *testing.T) {
 
 /*
 panicUnmarshalHeader tests a boundary condition that results in a panic
-when unmarshalling the SNMP header (see also https://github.com/gosnmp/gosnmp/issues/440)
+when unmarshalling the SNMP header (see also https://github.com/Rakortx/gosnmp/issues/440)
 */
 func panicUnmarshalHeader() []byte {
 	return []byte("0\x04\x02\x020\x03")
