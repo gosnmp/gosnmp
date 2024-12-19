@@ -33,7 +33,6 @@ func TestAPIConfigTypes(t *testing.T) {
 	g.Retries = 0
 	g.MaxOids = 0
 	g.MaxRepetitions = 0
-	g.NonRepeaters = 0
 	g.Logger = gosnmp.NewLogger(log.New(io.Discard, "", 0))
 	var c net.Conn
 	c = g.Conn
