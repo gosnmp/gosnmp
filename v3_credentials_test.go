@@ -121,20 +121,7 @@ var useSnmpLabsCredentials = false
 
 // TODO get above credentials into snmpsimd, so *all* tests can be run. Combine with settings in `snmp_users.sh`
 
-const cIdxUserName = 0
-const cIdxAuthKey = 1
-const cIdxPrivKey = 2
-
-func isUsingSnmpLabs() bool {
-	return useSnmpLabsCredentials
-}
-
-// conveniently enable demo.snmplabs.com for a one test
-func useSnmpLabs(use bool) {
-	useSnmpLabsCredentials = use
-}
-
-//nolint:misspell
+//nolint:unused,misspell
 func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) []string {
 	var credentials []string
 	if useSnmpLabsCredentials {
@@ -150,16 +137,20 @@ func getCredentials(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol 
 	return credentials
 }
 
+//nolint:unused
 func getUserName(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
+	const cIdxUserName = 0
 	return getCredentials(t, authProtocol, privProtocol)[cIdxUserName]
 }
 
-//nolint:unused,deadcode
+//nolint:unused
 func getAuthKey(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
+	const cIdxAuthKey = 1
 	return getCredentials(t, authProtocol, privProtocol)[cIdxAuthKey]
 }
 
-//nolint:unused,deadcode
+//nolint:unused
 func getPrivKey(t *testing.T, authProtocol SnmpV3AuthProtocol, privProtocol SnmpV3PrivProtocol) string {
+	const cIdxPrivKey = 2
 	return getCredentials(t, authProtocol, privProtocol)[cIdxPrivKey]
 }

@@ -4,7 +4,7 @@ version: 2.1
 executors:
   golang:
     docker:
-    - image: cimg/go:1.21
+    - image: cimg/go:1.24
 
 jobs:
   generate:
@@ -20,7 +20,6 @@ jobs:
     executor: golang
     steps:
     - checkout
-    - run: make tools
     - run: make lint
 
   fuzz:
@@ -80,5 +79,6 @@ workflows:
             - "amd64"
             - "386"
             goversion:
-            - "1.20"
-            - "1.21"
+            - "1.22"
+            - "1.23"
+            - "1.24"

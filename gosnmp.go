@@ -309,7 +309,7 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 		if err != nil {
 			return fmt.Errorf("error occurred while generating random: %w", err)
 		}
-		x.random = uint32(n.Uint64())
+		x.random = uint32(n.Uint64()) //nolint:gosec
 	}
 	// http://tools.ietf.org/html/rfc3412#section-6 - msgID only uses the first 31 bits
 	// msgID INTEGER (0..2147483647)
@@ -672,7 +672,7 @@ func ToBigInt(value interface{}) *big.Int {
 	case int64:
 		val = value
 	case uint:
-		val = int64(value)
+		val = int64(value) //nolint:gosec
 	case uint8:
 		val = int64(value)
 	case uint16:
