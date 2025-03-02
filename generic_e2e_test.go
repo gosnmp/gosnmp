@@ -23,6 +23,15 @@ import (
 	"time"
 )
 
+func isUsingSnmpLabs() bool {
+	return useSnmpLabsCredentials
+}
+
+// conveniently enable demo.snmplabs.com for a one test
+func useSnmpLabs(use bool) {
+	useSnmpLabsCredentials = use
+}
+
 func getTarget(t *testing.T) (string, uint16) {
 	var envTarget string
 	var envPort string
