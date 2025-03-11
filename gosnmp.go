@@ -28,9 +28,6 @@ const (
 	// to change this in the GoSNMP struct
 	MaxOids = 60
 
-	// Base OID for MIB-2 defined SNMP variables
-	baseOid = ".1"
-
 	// Max oid sub-identifier value
 	// https://tools.ietf.org/html/rfc2578#section-7.1.3
 	MaxObjectSubIdentifierValue = 4294967295
@@ -100,6 +97,9 @@ type GoSNMP struct {
 
 	// OnFinish is called when the request completed.
 	OnFinish func(*GoSNMP)
+
+	// Base OID for MIB-2 defined SNMP variables
+	BaseOid string
 
 	// MaxOids is the maximum number of oids allowed in a Get().
 	// (default: MaxOids)
@@ -174,6 +174,7 @@ type GoSNMP struct {
 }
 
 // Default connection settings
+// BaseOid is .1.3.6.1.2.1. When walking a MIB, results may be limited.
 //
 //nolint:gochecknoglobals
 var Default = &GoSNMP{
@@ -183,6 +184,7 @@ var Default = &GoSNMP{
 	Version:            Version2c,
 	Timeout:            time.Duration(2) * time.Second,
 	Retries:            3,
+	BaseOid:            ".1.3.6.1.2.1",
 	ExponentialTimeout: true,
 	MaxOids:            MaxOids,
 }
