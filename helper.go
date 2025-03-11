@@ -469,7 +469,7 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 		}
 		i++
 	}
-	if i < 2 || i > 128 {
+	if i < 1 || i > 128 {
 		return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 	}
 

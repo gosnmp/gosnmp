@@ -29,7 +29,7 @@ const (
 	MaxOids = 60
 
 	// Base OID for MIB-2 defined SNMP variables
-	baseOid = ".1.3.6.1.2.1"
+	baseOid = ".1"
 
 	// Max oid sub-identifier value
 	// https://tools.ietf.org/html/rfc2578#section-7.1.3
