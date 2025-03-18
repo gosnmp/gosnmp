@@ -794,6 +794,12 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 	if packetSecParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
 		return false, err
 	}
+
+	// Verify the username
+	if packetSecParams.UserName != sp.UserName {
+		return false, nil
+	}
+
 	// TODO: investigate call chain to determine if this is really the best spot for this
 	if msgDigest, err = calcPacketDigest(packetBytes, packetSecParams); err != nil {
 		return false, err

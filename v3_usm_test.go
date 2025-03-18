@@ -53,6 +53,46 @@ func packetSHA224AuthenticationParams(t *testing.T) string {
 	return string(params)
 }
 
+func TestIsAuthenticWrongUsername(t *testing.T) {
+	var err error
+
+	sp := UsmSecurityParameters{
+		localAESSalt:             0,
+		localDESSalt:             0,
+		AuthoritativeEngineBoots: 43,
+		AuthoritativeEngineID:    authorativeEngineID(t),
+		AuthoritativeEngineTime:  2113189,
+		UserName:                 "usr-sha224-none",
+		AuthenticationParameters: packetSHA224AuthenticationParams(t),
+		PrivacyParameters:        nil,
+		AuthenticationProtocol:   SHA224,
+		PrivacyProtocol:          0,
+		AuthenticationPassphrase: "authkey1",
+		PrivacyPassphrase:        "",
+		SecretKey:                nil,
+		PrivacyKey:               nil,
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
+		sp.AuthenticationPassphrase,
+		sp.AuthoritativeEngineID)
+
+	require.NoError(t, err, "Generation of key failed")
+	require.Equal(t, correctKeySHA224(t), sp.SecretKey, "Wrong key generated")
+
+	srcPacket := packetSHA224NoAuthentication(t)
+
+	snmpPacket := SnmpPacket{
+		SecurityParameters: sp.Copy(),
+	}
+	snmpPacket.SecurityParameters.(*UsmSecurityParameters).UserName = "foo"
+
+	authentic, err := sp.isAuthentic(srcPacket, &snmpPacket)
+	require.NoError(t, err, "Authentication check of key failed")
+	require.False(t, authentic, "Packet was considered to be authentic")
+}
+
 func TestAuthenticationSHA224(t *testing.T) {
 	var err error
 

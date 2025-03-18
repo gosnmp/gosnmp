@@ -1508,7 +1508,6 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 		MsgFlags:           AuthPriv,
 		Logger:             NewLogger(&testLogger{prefix: "[client] ", t: t}),
 	}
-
 	require.NoError(t, ts.Connect())
 	defer ts.Conn.Close()
 
@@ -1525,9 +1524,9 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 		MsgMaxSize:         65507,
 		Logger:             NewLogger(&testLogger{prefix: "[packet] ", t: t}),
 	}
-	_ = unknownEngineID
 	result, err := ts.sendOneRequest(&getEngineIDRequest, true)
 	require.NoError(t, err, "sendOneRequest failed")
+
 	require.Equal(t, result.SecurityParameters.(*UsmSecurityParameters).AuthoritativeEngineID, authorativeEngineID, "invalid authoritativeEngineID")
 	require.Equal(t, result.PDUType, Report, "invalid received PDUType")
 }
