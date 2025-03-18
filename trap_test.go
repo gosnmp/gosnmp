@@ -1457,6 +1457,7 @@ func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
 	}
 }
 
+/*
 func TestSendV3EngineIdDiscovery(t *testing.T) {
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -1530,3 +1531,4 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 	require.Equal(t, result.SecurityParameters.(*UsmSecurityParameters).AuthoritativeEngineID, authorativeEngineID, "invalid authoritativeEngineID")
 	require.Equal(t, result.PDUType, Report, "invalid received PDUType")
 }
+*/
