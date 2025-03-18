@@ -88,7 +88,7 @@ func TestAuthenticationSHA224(t *testing.T) {
 	require.Equal(t, packetSHA224Authenticated(t), srcPacket, "Wrong message authentication parameters.")
 }
 
-func TestIsAuthenticaSHA224(t *testing.T) {
+func TestIsAuthenticSHA224(t *testing.T) {
 	var err error
 
 	sp := UsmSecurityParameters{
@@ -190,7 +190,7 @@ func TestAuthenticationSHA512(t *testing.T) {
 	require.Equal(t, packetSHA512Authenticated(t), srcPacket, "Wrong message authentication parameters.")
 }
 
-func TestIsAuthenticaSHA512(t *testing.T) {
+func TestIsAuthenticSHA512(t *testing.T) {
 	var err error
 
 	sp := UsmSecurityParameters{
