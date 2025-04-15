@@ -1457,7 +1457,6 @@ func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
 	}
 }
 
-/*
 func TestSendV3EngineIdDiscovery(t *testing.T) {
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -1475,10 +1474,9 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 	}
 	tl.Params = Default
 	tl.Params.Version = Version3
-	tl.Params.SecurityParameters = sp.Copy()
+	tl.Params.SecurityParameters = sp
 	tl.Params.SecurityModel = UserSecurityModel
 	tl.Params.MsgFlags = AuthPriv
-	tl.Params.Logger = NewLogger(&testLogger{prefix: "[server] ", t: t})
 
 	// listener goroutine
 	errch := make(chan error)
@@ -1496,6 +1494,8 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 		t.Fatalf("error in listen: %v", err)
 	}
 
+	clientParams := sp.Copy()
+	clientParams.(*UsmSecurityParameters).AuthoritativeEngineID = ""
 	ts := &GoSNMP{
 		Target:             trapTestAddress,
 		Port:               trapTestPort,
@@ -1504,25 +1504,22 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 		Retries:            3,
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp.Copy(),
+		SecurityParameters: clientParams,
 		MsgFlags:           AuthPriv,
-		Logger:             NewLogger(&testLogger{prefix: "[client] ", t: t}),
 	}
 	require.NoError(t, ts.Connect())
 	defer ts.Conn.Close()
 
-	packetParams := &UsmSecurityParameters{Logger: NewLogger(&testLogger{t: t})}
 	getEngineIDRequest := SnmpPacket{
 		Version:            Version3,
-		MsgFlags:           Reportable | NoAuthNoPriv,
+		MsgFlags:           Reportable,
 		SecurityModel:      UserSecurityModel,
-		SecurityParameters: packetParams,
+		SecurityParameters: &UsmSecurityParameters{},
 		ContextEngineID:    unknownEngineID,
 		PDUType:            GetRequest,
 		MsgID:              1824792385,
 		RequestID:          1411852680,
 		MsgMaxSize:         65507,
-		Logger:             NewLogger(&testLogger{prefix: "[packet] ", t: t}),
 	}
 	result, err := ts.sendOneRequest(&getEngineIDRequest, true)
 	require.NoError(t, err, "sendOneRequest failed")
@@ -1530,4 +1527,3 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 	require.Equal(t, result.SecurityParameters.(*UsmSecurityParameters).AuthoritativeEngineID, authorativeEngineID, "invalid authoritativeEngineID")
 	require.Equal(t, result.PDUType, Report, "invalid received PDUType")
 }
-*/

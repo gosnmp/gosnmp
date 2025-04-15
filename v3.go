@@ -106,6 +106,17 @@ func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useRespon
 		msgFlags = result.MsgFlags
 	}
 
+	// Special case for Engine Discovery (RFC3414 section 4) where we should
+	// skip authentication for the discovery packet with the special settings
+	// described in the RFC. The discovery package requires
+	msgSecParams := result.SecurityParameters.(*UsmSecurityParameters)
+	if msgFlags&NoAuthNoPriv == 0 && // NoAuthNoPriv method
+		msgSecParams.UserName == "" && // empty username
+		msgSecParams.AuthoritativeEngineID == "" && // empty authorative engine ID
+		len(result.Variables) == 0 { // empty variable binding list
+		return nil
+	}
+
 	if msgFlags&AuthNoPriv > 0 {
 		var authentic bool
 		var err error
