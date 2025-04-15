@@ -8,10 +8,12 @@
 package gosnmp
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -1334,6 +1336,127 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 
 }
 
+type testLogger struct {
+	prefix  string
+	t       *testing.T
+	matcher string
+	out     chan bool
+}
+
+func (l *testLogger) Print(v ...interface{}) {
+	if l.t != nil {
+		l.t.Log(append([]interface{}{l.prefix}, v)...)
+	}
+
+	if l.matcher != "" && l.out != nil {
+		if strings.Contains(fmt.Sprint(v...), l.matcher) {
+			l.out <- true
+		}
+	}
+}
+
+func (l *testLogger) Printf(format string, v ...interface{}) {
+	if l.t != nil {
+		l.t.Logf(l.prefix+format, v...)
+	}
+
+	if l.matcher != "" && l.out != nil {
+		if strings.Contains(fmt.Sprintf(format, v...), l.matcher) {
+			l.out <- true
+		}
+	}
+}
+
+func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
+	done := make(chan int)
+	found := make(chan bool)
+
+	tl := NewTrapListener()
+	defer tl.Close()
+
+	sp := &UsmSecurityParameters{
+		UserName:                 "test",
+		AuthenticationProtocol:   SHA,
+		AuthenticationPassphrase: "password",
+		AuthoritativeEngineBoots: 1,
+		AuthoritativeEngineTime:  1,
+		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
+	}
+
+	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.Params = Default
+	tl.Params.Version = Version3
+	tl.Params.SecurityParameters = sp
+	tl.Params.SecurityModel = UserSecurityModel
+	tl.Params.MsgFlags = AuthNoPriv
+	tl.Params.Logger = NewLogger(&testLogger{matcher: "incoming packet is not authentic", out: found})
+
+	// listener goroutine
+	errch := make(chan error)
+	go func() {
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		if err != nil {
+			errch <- err
+		}
+	}()
+
+	// Wait until the listener is ready.
+	select {
+	case <-tl.Listening():
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
+	}
+
+	ts := &GoSNMP{
+		Target:        trapTestAddress,
+		Port:          trapTestPort,
+		Community:     "public",
+		Version:       Version3,
+		Timeout:       2 * time.Second,
+		Retries:       3,
+		MaxOids:       MaxOids,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:                 "test",
+			AuthenticationProtocol:   NoAuth,
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
+		},
+		MsgFlags: NoAuthNoPriv,
+	}
+
+	require.NoError(t, ts.Connect())
+	defer ts.Conn.Close()
+
+	trap := SnmpTrap{
+		Variables: []SnmpPDU{
+			{
+				Name:  trapTestOid,
+				Type:  OctetString,
+				Value: trapTestPayload,
+			},
+		},
+		Enterprise:   trapTestEnterpriseOid,
+		AgentAddress: trapTestAgentAddress,
+		GenericTrap:  trapTestGenericTrap,
+		SpecificTrap: trapTestSpecificTrap,
+		Timestamp:    trapTestTimestamp,
+	}
+
+	_, err := ts.SendTrap(trap)
+	require.NoError(t, err)
+
+	// wait for response from handler
+	select {
+	case <-done:
+		t.Fatal("received trap where we shouldn't")
+	case <-found:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
+	}
+}
+
 func TestSendV3EngineIdDiscovery(t *testing.T) {
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -1371,23 +1494,20 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 		t.Fatalf("error in listen: %v", err)
 	}
 
+	clientParams := sp.Copy()
+	clientParams.(*UsmSecurityParameters).AuthoritativeEngineID = ""
 	ts := &GoSNMP{
-		Target: trapTestAddress,
-		Port:   trapTestPort,
-		//Community: "public",
+		Target:             trapTestAddress,
+		Port:               trapTestPort,
 		Version:            Version3,
 		Timeout:            time.Duration(2) * time.Second,
 		Retries:            3,
 		MaxOids:            MaxOids,
 		SecurityModel:      UserSecurityModel,
-		SecurityParameters: sp,
+		SecurityParameters: clientParams,
 		MsgFlags:           AuthPriv,
 	}
-
-	err := ts.Connect()
-	if err != nil {
-		t.Fatalf("Connect() err: %v", err)
-	}
+	require.NoError(t, ts.Connect())
 	defer ts.Conn.Close()
 
 	getEngineIDRequest := SnmpPacket{
@@ -1403,6 +1523,7 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 	}
 	result, err := ts.sendOneRequest(&getEngineIDRequest, true)
 	require.NoError(t, err, "sendOneRequest failed")
+
 	require.Equal(t, result.SecurityParameters.(*UsmSecurityParameters).AuthoritativeEngineID, authorativeEngineID, "invalid authoritativeEngineID")
 	require.Equal(t, result.PDUType, Report, "invalid received PDUType")
 }

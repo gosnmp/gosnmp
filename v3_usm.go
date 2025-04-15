@@ -20,6 +20,7 @@ import (
 	"crypto/sha1"     //nolint:gosec
 	_ "crypto/sha256" // Register hash function #4 (SHA224), #5 (SHA256)
 	_ "crypto/sha512" // Register hash function #6 (SHA384), #7 (SHA512)
+	"crypto/subtle"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -66,38 +67,38 @@ func (authProtocol SnmpV3AuthProtocol) HashType() crypto.Hash {
 
 //nolint:gochecknoglobals
 var macVarbinds = [][]byte{
-	{},
-	{byte(OctetString), 0},
-	{byte(OctetString), 12,
+	{},                     // dummy
+	{byte(OctetString), 0}, // NoAuth
+	{byte(OctetString), 12, // MD5
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	{byte(OctetString), 12,
+	{byte(OctetString), 12, // SHA
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	{byte(OctetString), 16,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0},
-	{byte(OctetString), 24,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
+	{byte(OctetString), 16, // SHA224
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	{byte(OctetString), 32,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
+	{byte(OctetString), 24, // SHA256
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
-	{byte(OctetString), 48,
+	{byte(OctetString), 32, // SHA384
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0},
+	{byte(OctetString), 48, // SHA512
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
@@ -696,8 +697,13 @@ func calcPacketDigest(packetBytes []byte, secParams *UsmSecurityParameters) ([]b
 			packetBytes,
 			secParams.SecretKey)
 	}
+	if err != nil {
+		return nil, err
+	}
 
-	return digest, err
+	digest = digest[:len(macVarbinds[secParams.AuthenticationProtocol])-2]
+
+	return digest, nil
 }
 
 // digestRFC7860 calculate digest for incoming messages using HMAC-SHA2 protcols
@@ -788,17 +794,20 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 	if packetSecParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
 		return false, err
 	}
+
+	// Verify the username
+	if packetSecParams.UserName != sp.UserName {
+		return false, nil
+	}
+
 	// TODO: investigate call chain to determine if this is really the best spot for this
 	if msgDigest, err = calcPacketDigest(packetBytes, packetSecParams); err != nil {
 		return false, err
 	}
 
-	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
-		if msgDigest[k] != v {
-			return false, nil
-		}
-	}
-	return true, nil
+	// Check the message signature against the computed digest
+	signature := []byte(packetSecParams.AuthenticationParameters)
+	return subtle.ConstantTimeCompare(msgDigest, signature) == 1, nil
 }
 
 func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error) {
