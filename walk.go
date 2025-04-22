@@ -11,7 +11,7 @@ import (
 
 func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) error {
 	if rootOid == "" || rootOid == "." {
-		rootOid = baseOid
+		rootOid = x.BaseOid
 	}
 
 	if !strings.HasPrefix(rootOid, ".") {
