@@ -169,12 +169,12 @@ func NewTrapListener() *TrapListener {
 
 // WithBufferSize changes the snmp message buffer size of the current TrapListener
 //
-// NOTE: The buffer size cannot be less than 484 bytes, the default size is 4096 bytes
+// NOTE: The buffer size cannot be 0 bytes, the default size is 4096 bytes
 func (t *TrapListener) WithBufferSize(i uint) *TrapListener {
-	if i < 484 {
-		t.buffSize = 484 // RFC 1157
-		return t
+	if i < 1 {
+		i = 1
 	}
+
 	t.buffSize = i
 	return t
 }
