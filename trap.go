@@ -131,6 +131,8 @@ type TrapListener struct {
 	usmStatsUnknownEngineIDsCount uint32
 
 	finish int32 // Atomic flag; set to 1 when closing connection
+
+	buffSize uint // SNMP message buffer size
 }
 
 // Default timeout value for CloseTimeout of 3 seconds
@@ -156,12 +158,25 @@ type TrapHandlerFunc func(s *SnmpPacket, u *net.UDPAddr)
 func NewTrapListener() *TrapListener {
 	tl := &TrapListener{
 		finish:       0,
+		buffSize:     4096,
 		done:         make(chan bool),
 		listening:    make(chan bool, 1), // Buffered because one doesn't have to block on it.
 		CloseTimeout: defaultCloseTimeout,
 	}
 
 	return tl
+}
+
+// WithBufferSize changes the snmp message buffer size of the current TrapListener
+//
+// NOTE: The buffer size cannot be less than 484 bytes, the default size is 4096 bytes
+func (t *TrapListener) WithBufferSize(i uint) *TrapListener {
+	if i < 484 {
+		t.buffSize = 484 // RFC 1157
+		return t
+	}
+	t.buffSize = i
+	return t
 }
 
 // Listening returns a sentinel channel on which one can block
@@ -240,7 +255,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 			return nil
 
 		default:
-			var buf [4096]byte
+			buf := make([]byte, t.buffSize)
 			rlen, remote, err := t.conn.ReadFromUDP(buf[:])
 			if err != nil {
 				if atomic.LoadInt32(&t.finish) == 1 {
