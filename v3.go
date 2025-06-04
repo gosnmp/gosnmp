@@ -112,7 +112,7 @@ func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useRespon
 	msgSecParams := result.SecurityParameters.(*UsmSecurityParameters)
 	if msgFlags&NoAuthNoPriv == 0 && // NoAuthNoPriv method
 		msgSecParams.UserName == "" && // empty username
-		msgSecParams.AuthoritativeEngineID == "" && // empty authorative engine ID
+		msgSecParams.AuthoritativeEngineID == "" && // empty authoritative engine ID
 		len(result.Variables) == 0 { // empty variable binding list
 		return nil
 	}
@@ -224,7 +224,7 @@ func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	return nil
 }
 
-func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) { //nolint:interfacer
+func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	emptyBuffer := new(bytes.Buffer) // used when returning errors
 
 	header, err := packet.marshalV3Header()

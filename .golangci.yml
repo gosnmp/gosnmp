@@ -1,47 +1,61 @@
----
-run:
-  timeout: 5m
-
+version: "2"
 linters:
   enable:
-  - bodyclose
-  - copyloopvar
-  - dogsled
-  - dupl
-  - gochecknoglobals
-  - goconst
-  - gocritic
-  - goimports
-  - goprintffuncname
-  - gosec
-  - misspell
-  - nakedret
-  - nolintlint
-  - revive # Replaces golint
-  - unconvert
-  - unparam
-  - whitespace
-  # TODO the following linters
-  # - gocognit
-  # - gocyclo
-  # - goerr113
-  # - gomnd
-  # - lll
-  # - nestif
-  # - prealloc
-
-linters-settings:
-  gofmt:
-    simplify: true
-  gocyclo:
-    min-complexity: 20
-  govet:
-    enable:
-    - shadow
-
-issues:
-  exclude-rules:
-  - path: _test.go
-    linters:
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - dupl
     - gochecknoglobals
+    - goconst
+    - gocritic
+    - goprintffuncname
+    - gosec
+    - misspell
+    - nakedret
     - nolintlint
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    gocritic:
+      disabled-checks:
+        - exitAfterDefer
+    gocyclo:
+      min-complexity: 20
+    gosec:
+      excludes:
+        - G501 # Allowed for handling old SNMP security methods.
+        - G502 # Allowed for handling old SNMP security methods.
+        - G505 # Allowed for handling old SNMP security methods.
+    govet:
+      enable:
+        - shadow
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gochecknoglobals
+          - nolintlint
+        path: _test.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

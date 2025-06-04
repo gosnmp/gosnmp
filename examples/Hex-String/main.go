@@ -7,13 +7,13 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 	"strconv"
+	"strings"
+
 	g "github.com/gosnmp/gosnmp"
 )
 
 func main() {
-
 	// Default is a pointer to a GoSNMP struct that contains sensible defaults
 	// eg port 161, community public, etc
 	g.Default.Target = "192.168.1.10"
@@ -36,7 +36,7 @@ func main() {
 			value := variable.Value.([]byte)
 			if strings.Contains(strconv.Quote(string(value)), "\\x") {
 				tmp := ""
-                for i := 0; i < len(value); i++ {
+				for i := 0; i < len(value); i++ {
 					tmp += fmt.Sprintf("%v", value[i])
 					if i != (len(value) - 1) {
 						tmp += " "

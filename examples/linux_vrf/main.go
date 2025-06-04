@@ -27,7 +27,7 @@ func main() {
 		// https://www.kernel.org/doc/Documentation/networking/vrf.txt
 		Control: func(_, _ string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				syscall.BindToDevice(int(fd), "VRF1")
+				_ = syscall.BindToDevice(int(fd), "VRF1")
 			})
 		},
 		// Specify an IP address within the VRF

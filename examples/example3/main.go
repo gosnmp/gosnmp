@@ -13,7 +13,6 @@ import (
 )
 
 func main() {
-
 	// build our own GoSNMP struct, rather than using g.Default
 	params := &g.GoSNMP{
 		Target:        "192.168.91.20",

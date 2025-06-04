@@ -23,31 +23,31 @@ import (
 	g "github.com/gosnmp/gosnmp"
 )
 
-var secParamsList = []*g.UsmSecurityParameters{
-	{
-		UserName:                 "myuser",
-		AuthenticationProtocol:   g.MD5,
-		AuthenticationPassphrase: "mypassword",
-		PrivacyProtocol:          g.AES,
-		PrivacyPassphrase:        "myprivacy",
-	},
-	{
-		UserName:                 "myuser2",
-		AuthenticationProtocol:   g.SHA,
-		AuthenticationPassphrase: "mypassword2",
-		PrivacyProtocol:          g.DES,
-		PrivacyPassphrase:        "myprivacy2",
-	},
-	{
-		UserName:                 "myuser2",
-		AuthenticationProtocol:   g.MD5,
-		AuthenticationPassphrase: "mypassword2",
-		PrivacyProtocol:          g.AES,
-		PrivacyPassphrase:        "myprivacy2",
-	},
-}
-
 func main() {
+	secParamsList := []*g.UsmSecurityParameters{
+		{
+			UserName:                 "myuser",
+			AuthenticationProtocol:   g.MD5,
+			AuthenticationPassphrase: "mypassword",
+			PrivacyProtocol:          g.AES,
+			PrivacyPassphrase:        "myprivacy",
+		},
+		{
+			UserName:                 "myuser2",
+			AuthenticationProtocol:   g.SHA,
+			AuthenticationPassphrase: "mypassword2",
+			PrivacyProtocol:          g.DES,
+			PrivacyPassphrase:        "myprivacy2",
+		},
+		{
+			UserName:                 "myuser2",
+			AuthenticationProtocol:   g.MD5,
+			AuthenticationPassphrase: "mypassword2",
+			PrivacyProtocol:          g.AES,
+			PrivacyPassphrase:        "myprivacy2",
+		},
+	}
+
 	flag.Usage = func() {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("   %s\n", filepath.Base(os.Args[0]))
