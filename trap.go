@@ -256,7 +256,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 
 		default:
 			buf := make([]byte, t.buffSize)
-			rlen, remote, err := t.conn.ReadFromUDP(buf[:])
+			rlen, remote, err := t.conn.ReadFromUDP(buf)
 			if err != nil {
 				if atomic.LoadInt32(&t.finish) == 1 {
 					// err most likely comes from reading from a closed connection
