@@ -13,11 +13,11 @@ import (
 	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/des" //nolint:gosec
+	"crypto/des"
 	"crypto/hmac"
-	"crypto/md5" //nolint:gosec
+	"crypto/md5"
 	crand "crypto/rand"
-	"crypto/sha1"     //nolint:gosec
+	"crypto/sha1"
 	_ "crypto/sha256" // Register hash function #4 (SHA224), #5 (SHA256)
 	_ "crypto/sha512" // Register hash function #6 (SHA384), #7 (SHA512)
 	"crypto/subtle"

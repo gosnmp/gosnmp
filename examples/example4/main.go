@@ -9,12 +9,13 @@ import (
 	"log"
 	"os"
 	"time"
+
 	g "github.com/gosnmp/gosnmp"
 )
 
 const (
 	On  int = 1
-	Off     = 2
+	Off int = 2
 )
 
 func main() {

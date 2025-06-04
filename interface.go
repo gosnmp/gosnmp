@@ -253,11 +253,11 @@ func (x *snmpHandler) SetRetries(retries int) {
 }
 
 func (x *snmpHandler) GetExponentialTimeout() bool {
-	return x.GoSNMP.ExponentialTimeout
+	return x.ExponentialTimeout
 }
 
 func (x *snmpHandler) SetExponentialTimeout(value bool) {
-	x.GoSNMP.ExponentialTimeout = value
+	x.ExponentialTimeout = value
 }
 
 func (x *snmpHandler) Logger() Logger {
@@ -335,5 +335,5 @@ func (x *snmpHandler) SetContextName(contextName string) {
 
 func (x *snmpHandler) Close() error {
 	// not x.Conn for consistency
-	return x.GoSNMP.Conn.Close()
+	return x.Conn.Close()
 }
