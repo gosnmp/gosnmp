@@ -333,7 +333,12 @@ func marshalUint64(v interface{}) []byte {
 	source := v.(uint64)
 	binary.BigEndian.PutUint64(bs, source) // will panic on failure
 	// truncate leading zeros. Cleaner technique?
-	return bytes.TrimLeft(bs, "\x00")
+	bs = bytes.TrimLeft(bs, "\x00")
+	// if the highest bit in bs is set and x is not negative - prepend a byte to make it positive
+	if len(bs) > 0 && bs[0]&0x80 > 0 {
+		bs = append([]byte{0}, bs...)
+	}
+	return bs
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
