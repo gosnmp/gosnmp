@@ -331,9 +331,18 @@ func marshalInt32(value int) ([]byte, error) {
 func marshalUint64(v interface{}) []byte {
 	bs := make([]byte, 8)
 	source := v.(uint64)
-	binary.BigEndian.PutUint64(bs, source) // will panic on failure
-	// truncate leading zeros. Cleaner technique?
-	return bytes.TrimLeft(bs, "\x00")
+	binary.BigEndian.PutUint64(bs, source)
+
+	// Trim leading zeros but ensure at least one byte remains
+	trimmed := bytes.TrimLeft(bs, "\x00")
+	if len(trimmed) == 0 {
+		return []byte{0} // Always return at least one byte
+	}
+
+	if trimmed[0]&0x80 > 0 {
+		trimmed = append([]byte{0}, trimmed...)
+	}
+	return trimmed
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
