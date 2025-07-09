@@ -943,7 +943,10 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		tmpBuf.Write([]byte{byte(ObjectIdentifier), byte(len(oid))})
 		tmpBuf.Write(oid)
 		tmpBuf.WriteByte(byte(pdu.Type))
-		intBytes := marshalUint64(pdu.Value)
+		intBytes, err := marshalUint64(pdu.Value)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling: %w", err)
+		}
 		tmpBuf.WriteByte(byte(len(intBytes)))
 		tmpBuf.Write(intBytes)
 		tmpBytes := tmpBuf.Bytes()

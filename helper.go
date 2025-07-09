@@ -328,21 +328,31 @@ func marshalInt32(value int) ([]byte, error) {
 	}
 }
 
-func marshalUint64(v interface{}) []byte {
+// marshalUint64 encodes a uint64 into BER-compliant bytes for SNMP Counter64.
+// It trims leading zero bytes and prepends one if MSB is set (per X.690 §8.3.2)
+func marshalUint64(v interface{}) ([]byte, error) {
+	// gracefully handle type assertion to uint64
+	source, ok := v.(uint64)
+	if !ok {
+		return nil, fmt.Errorf("marshalUint64: input is not a uint64")
+	}
+	// Step 1: Encode uint64 in big-endian (8 bytes)
 	bs := make([]byte, 8)
-	source := v.(uint64)
 	binary.BigEndian.PutUint64(bs, source)
 
-	// Trim leading zeros but ensure at least one byte remains
+	// Step 2: Trim leading 0x00 bytes (X.690 §8.3.2: use minimal number of octets)
 	trimmed := bytes.TrimLeft(bs, "\x00")
+
+	// Step 3: Ensure at least one byte remains
 	if len(trimmed) == 0 {
-		return []byte{0} // Always return at least one byte
+		return []byte{0}, nil
 	}
 
+	// Step 4: If the MSB of the first byte is set, prepend 0x00 to indicate positive value
 	if trimmed[0]&0x80 > 0 {
 		trimmed = append([]byte{0}, trimmed...)
 	}
-	return trimmed
+	return trimmed, nil
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
