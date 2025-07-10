@@ -62,6 +62,9 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 		// If it's an inform, do that instead.
 		if trap.IsInform {
 			pdutype = InformRequest
+			//incase of inform we would need the response so setting this
+			//explictly for inform request
+			x.MsgFlags = (x.MsgFlags | Reportable)
 		}
 
 		if trap.Variables[0].Type != TimeTicks {
