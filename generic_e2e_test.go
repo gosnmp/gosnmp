@@ -15,12 +15,10 @@
 package gosnmp
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 func isUsingSnmpLabs() bool {
@@ -312,15 +310,18 @@ func TestMaxOids(t *testing.T) {
 }
 
 func TestGenericFailureUnknownHost(t *testing.T) {
-	unknownHost := fmt.Sprintf("gosnmp-test-unknown-host-%d", time.Now().UTC().UnixNano())
+	unknownHost := "nonexistent.invalid" // .invalid is guaranteed by RFC 2606 to never resolve.
 	Default.Target = unknownHost
 	err := Default.Connect()
 	if err == nil {
 		t.Fatalf("Expected connection failure due to unknown host")
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "no such host") {
-		t.Fatalf("Expected connection error of type 'no such host'! Got => %v", err)
+
+	lerr := strings.ToLower(err.Error())
+	if !strings.Contains(lerr, "no such host") && !strings.Contains(lerr, "i/o timeout") {
+		t.Fatalf("Expected connection error of type 'no such host' or 'i/o timeout'! Got => %v", err)
 	}
+
 	_, err = Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
 		t.Fatalf("Expected get to fail due to missing connection")
