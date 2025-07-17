@@ -62,6 +62,13 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 		// If it's an inform, do that instead.
 		if trap.IsInform {
 			pdutype = InformRequest
+			// Per RFC 3414 Section 4:
+			// When sending an SNMPv3 InformRequest, the Reportable flag MUST be set in MsgFlags.
+			// This ensures that the authoritative engine will return a Report PDU containing
+			// engineBoots and engineTime for time synchronization which is required before
+			// authenticated communication can succeed. Without this, the engine may reject
+			// the Inform as out-of-time-window or unknown engine.
+			x.MsgFlags = (x.MsgFlags | Reportable)
 		}
 
 		if trap.Variables[0].Type != TimeTicks {
