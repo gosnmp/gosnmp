@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"sync"
+	"time"
 )
 
 func isUsingSnmpLabs() bool {
@@ -102,6 +104,71 @@ func setupConnectionIPv4(t *testing.T) {
 			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?\n(err: %v)",
 				target, port, err)
 		}
+	}
+}
+
+func TestClose(t *testing.T) {
+	gs := &GoSNMP{
+		Version:   Version2c,
+		Community: "public",
+		Timeout:   time.Second * 2,
+		Retries:   1,
+	}
+
+	setupConnectionInstance(gs, t)
+
+	// Ensure connection is open
+	if gs.Conn == nil {
+		t.Fatal("expected connection to be established, got nil")
+	}
+
+	// Close the connection
+	err := gs.Close()
+	if err != nil {
+		t.Fatalf("Close() returned an error: %v", err)
+	}
+
+	// Try closing again to make sure it handles idempotency
+	err = gs.Close()
+	if err != nil {
+		t.Errorf("Close() on already-closed connection should not error, got: %v", err)
+	}
+}
+
+func TestClose_NilConnection(t *testing.T) {
+	gs := &GoSNMP{
+		Conn: nil,
+	}
+
+	err := gs.Close()
+	if err != nil {
+		t.Errorf("expected nil error when closing nil connection, got: %v", err)
+	}
+}
+
+func TestClose_Concurrent(t *testing.T) {
+	gs := &GoSNMP{
+		Version:   Version2c,
+		Community: "public",
+		Timeout:   time.Second,
+		Retries:   1,
+	}
+
+	setupConnectionInstance(gs, t)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ { // simulate 100 concurrent calls
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = gs.Close()
+		}()
+	}
+
+	wg.Wait()
+
+	if gs.Conn != nil {
+		t.Errorf("expected connection to be nil after Close")
 	}
 }
 
