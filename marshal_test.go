@@ -1715,6 +1715,55 @@ func TestSendOneRequest_dups(t *testing.T) {
 	}
 }
 
+func TestSendOneRequest_TCP_EOF_Reconnect(t *testing.T) {
+	listen, err := net.Listen("tcp", "127.0.0.1:0") // dynamic port
+	if err != nil {
+		t.Fatalf("failed to set up test listener: %v", err)
+	}
+	defer listen.Close()
+	port := listen.Addr().(*net.TCPAddr).Port
+
+	// Start mock SNMP server in goroutine
+	go func() {
+		conn, err := listen.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		buf := make([]byte, 2048)
+		_, _ = conn.Read(buf) // Read request
+		// simulate EOF by closing immediately
+	}()
+
+	params := &GoSNMP{
+		Target:    "127.0.0.1",
+		Port:      uint16(port),
+		Transport: "tcp",
+		Community: "public",
+		Version:   Version2c,
+		Timeout:   time.Second,
+		Retries:   1,
+		Logger:    NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	err = params.Connect()
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer params.Conn.Close()
+
+	// Use an arbitrary OID
+	_, err = params.Get([]string{".1.3.6.1.2.1.1.1.0"})
+
+	if err == nil {
+		t.Fatal("expected error due to EOF, got nil")
+	}
+	if !strings.Contains(err.Error(), "timeout") && !strings.Contains(err.Error(), "max retries") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func BenchmarkSendOneRequest(b *testing.B) {
 	b.StopTimer()
 
