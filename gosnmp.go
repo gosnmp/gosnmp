@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -170,6 +171,9 @@ type GoSNMP struct {
 
 	// Internal - we use to send packets if using unconnected socket.
 	uaddr *net.UDPAddr
+
+	// Internal - mutual exclusion allows us to idempotently perform operations
+	mu sync.Mutex
 }
 
 // Default connection settings
@@ -284,6 +288,23 @@ func (x *GoSNMP) ConnectIPv4() error {
 // ConnectIPv6 forces an IPv6-only connection
 func (x *GoSNMP) ConnectIPv6() error {
 	return x.connect("6")
+}
+
+// Close closes the underlaying connection.
+//
+// This method is safe to call multiple times and from concurrent goroutines.
+// Only the first call will close the connection; subsequent calls are no-ops.
+func (x *GoSNMP) Close() error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+
+	if x.Conn == nil {
+		return nil
+	}
+
+	err := x.Conn.Close()
+	x.Conn = nil
+	return err
 }
 
 // connect to address addr on the given network
