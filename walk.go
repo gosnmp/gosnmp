@@ -10,8 +10,15 @@ import (
 )
 
 func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) error {
+	// If no rootOid is provided, fall back to the 'internet' subtree (.1.3.6.1).
+	// This ensures visibility of both standard (e.g. MIB-2) and vendor-specific branches.
+	// It also guarantees the OID is valid for BER encoding:
+	// - RFC 2578 §7.1.3: OIDs must have at least two sub-identifiers
+	// - X.690 §8.19: the first two arcs are encoded as (40 * arc1 + arc2)
 	if rootOid == "" || rootOid == "." {
-		rootOid = baseOid
+		// IANA 'internet' subtree under ISO OID structure per X.660.
+		// See https://oidref.com/1.3.6.1
+		rootOid = ".1.3.6.1"
 	}
 
 	if !strings.HasPrefix(rootOid, ".") {
