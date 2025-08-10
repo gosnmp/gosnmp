@@ -20,6 +20,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	pinglib "github.com/go-ping/ping"
 )
 
 const (
@@ -171,6 +173,12 @@ type GoSNMP struct {
 
 	// Internal - mutual exclusion allows us to idempotently perform operations
 	mu sync.Mutex
+	// When using UDP, ICMPPingOnConnect sends an ICMP echo ping to the target before Connect().
+	// It has priority over the SNMP probe. Default: false.
+	ICMPPingOnConnect bool
+	// If ICMPPrivileged is true, it attempts to use a raw socket (root/CAP_NET_RAW) for ICMP ping.
+	// Otherwise, it operates in unprivileged mode. Default: false.
+	ICMPPrivileged bool
 }
 
 // Default connection settings
@@ -185,6 +193,8 @@ var Default = &GoSNMP{
 	Retries:            3,
 	ExponentialTimeout: true,
 	MaxOids:            MaxOids,
+	ICMPPingOnConnect:  false,
+	ICMPPrivileged:     false,
 }
 
 // SnmpPDU will be used when doing SNMP Set's
@@ -317,8 +327,36 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 	}
 
 	x.Transport += networkSuffix
+	// If UDP + ICMP ping verification is requested, start the ping in a goroutine and
+	// attempt to establish the connection simultaneously. We do NOT block on ping
+	// completion; errors will close the connection asynchronously right after connect.
+	var pingCh chan error
+	if (x.Transport == "udp" || x.Transport == "udp4" || x.Transport == "udp6") && x.ICMPPingOnConnect {
+		pingCh = make(chan error, 1)
+		go func() {
+			pingCh <- x.icmpPingProbe()
+		}()
+	}
+
 	if err = x.netConnect(); err != nil {
+		// If there's a ping channel, try to drain it to prevent the ping goroutine from blocking
+		if pingCh != nil {
+			select {
+			case <-pingCh:
+			default:
+			}
+		}
 		return fmt.Errorf("error establishing connection to host: %w", err)
+	}
+
+	if pingCh != nil {
+		// Do not block: handle ping result asynchronously and close the connection if needed.
+		go func() {
+			if pingErr := <-pingCh; pingErr != nil {
+				_ = x.Close()
+				x.Logger.Printf("ICMP ping failed after connect: %v", pingErr)
+			}
+		}()
 	}
 
 	if x.random == 0 {
@@ -337,6 +375,64 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 
 	x.rxBuf = new([rxBufSize]byte)
 
+	return nil
+}
+
+// icmpPingProbe sends an ICMP echo similar to the ping in the terminal to the target IP.
+// If the privileged mode fails, it falls back to unprivileged mode.
+func (x *GoSNMP) icmpPingProbe() error {
+	if x.Target == "" {
+		return fmt.Errorf("empty target for icmp ping")
+	}
+
+	// Timeout: use the current Timeout, min 500ms (non-blocking ping runs in background)
+	t := x.Timeout / 2
+	if t < 500*time.Millisecond {
+		t = 500 * time.Millisecond
+	}
+	// Align with Context deadline
+	if deadline, ok := x.Context.Deadline(); ok {
+		until := time.Until(deadline)
+		if until > 0 && until < t {
+			t = until
+		}
+	}
+
+	pinger, err := pinglib.NewPinger(x.Target)
+	if err != nil {
+		return err
+	}
+	// Count and timeouts
+	pinger.Count = 1
+	pinger.Timeout = t
+	// Interval (min 10ms, default 100ms) - 100ms is the default interval for ping
+	pinger.Interval = 100 * time.Millisecond
+
+	// First try the requested privileged mode, then fallback to unprivileged mode
+	tryPrivileged := x.ICMPPrivileged
+
+	run := func(priv bool) error {
+		pinger.SetPrivileged(priv)
+		if err := pinger.Run(); err != nil {
+			return err
+		}
+		st := pinger.Statistics()
+		if st == nil || st.PacketsRecv < 1 || st.AvgRtt > 100*time.Millisecond {
+			return fmt.Errorf("no echo reply received")
+		}
+		return nil
+	}
+
+	if err := run(tryPrivileged); err != nil {
+		// If privileged is requested, fall back to unprivileged; otherwise, return the error directly.
+		if tryPrivileged {
+			if err2 := run(false); err2 != nil {
+				return err2
+			}
+		} else {
+			return err
+		}
+	}
 	return nil
 }
 
