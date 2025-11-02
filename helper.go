@@ -23,7 +23,7 @@ import (
 
 // variable struct is used by decodeValue()
 type variable struct {
-	Value interface{}
+	Value any
 	Type  Asn1BER
 }
 
@@ -330,7 +330,7 @@ func marshalInt32(value int) ([]byte, error) {
 
 // marshalUint64 encodes a uint64 into BER-compliant bytes for SNMP Counter64.
 // It trims leading zero bytes and prepends one if MSB is set (per X.690 §8.3.2)
-func marshalUint64(v interface{}) ([]byte, error) {
+func marshalUint64(v any) ([]byte, error) {
 	// gracefully handle type assertion to uint64
 	source, ok := v.(uint64)
 	if !ok {
@@ -356,7 +356,7 @@ func marshalUint64(v interface{}) ([]byte, error) {
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
-func marshalUint32(v interface{}) ([]byte, error) {
+func marshalUint32(v any) ([]byte, error) {
 	var source uint32
 	switch val := v.(type) {
 	case uint32:
@@ -388,14 +388,14 @@ func marshalUint32(v interface{}) ([]byte, error) {
 	return buf, nil
 }
 
-func marshalFloat32(v interface{}) ([]byte, error) {
+func marshalFloat32(v any) ([]byte, error) {
 	source := v.(float32)
 	out := bytes.NewBuffer(nil)
 	err := binary.Write(out, binary.BigEndian, source)
 	return out.Bytes(), err
 }
 
-func marshalFloat64(v interface{}) ([]byte, error) {
+func marshalFloat64(v any) ([]byte, error) {
 	source := v.(float64)
 	out := bytes.NewBuffer(nil)
 	err := binary.Write(out, binary.BigEndian, source)
@@ -592,7 +592,7 @@ func parseInt64(bytes []byte) (int64, error) {
 		return 0, ErrIntegerTooLarge
 	}
 	var ret int64
-	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
+	for bytesRead := range bytes {
 		ret <<= 8
 		ret |= int64(bytes[bytesRead])
 	}
@@ -640,7 +640,7 @@ func parseLength(bytes []byte) (int, int, error) {
 		cursor += 2
 	default:
 		numOctets := int(bytes[1]) & 127
-		for i := 0; i < numOctets; i++ {
+		for i := range numOctets {
 			length <<= 8
 			if len(bytes) < 2+i+1 {
 				// Invalid data detected, return an error
@@ -690,7 +690,7 @@ func parseObjectIdentifier(src []byte) (string, error) {
 	return out.String(), nil
 }
 
-func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, error) {
+func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
 	if len(data) == 0 {
 		return nil, 0, fmt.Errorf("empty data passed to parseRawField")
 	}
@@ -786,7 +786,7 @@ func parseUint64(bytes []byte) (uint64, error) {
 		// We'll overflow a uint64 in this case.
 		return 0, ErrIntegerTooLarge
 	}
-	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
+	for bytesRead := range bytes {
 		ret <<= 8
 		ret |= uint64(bytes[bytesRead])
 	}

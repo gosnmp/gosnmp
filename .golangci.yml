@@ -11,6 +11,7 @@ linters:
     - goprintffuncname
     - gosec
     - misspell
+    - modernize
     - nakedret
     - nolintlint
     - revive
