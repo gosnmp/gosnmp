@@ -8,7 +8,6 @@
 // should be asking yourself about API compatibility!
 
 //go:build all || api
-// +build all api
 
 package gosnmp_test // force external view
 

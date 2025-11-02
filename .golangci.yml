@@ -43,10 +43,6 @@ linters:
           - gochecknoglobals
           - nolintlint
         path: _test.go
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
 formatters:
   enable:
     - goimports
@@ -55,7 +51,3 @@ formatters:
       simplify: true
   exclusions:
     generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$

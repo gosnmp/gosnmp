@@ -10,7 +10,6 @@
 // generic test system.
 
 //go:build all || end2end
-// +build all end2end
 
 package gosnmp
 
@@ -18,8 +17,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"testing"
 	"sync"
+	"testing"
 	"time"
 )
 

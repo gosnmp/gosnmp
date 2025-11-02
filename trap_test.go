@@ -3,7 +3,6 @@
 // LICENSE file.
 
 //go:build all || trap
-// +build all trap
 
 package gosnmp
 

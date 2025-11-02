@@ -3,7 +3,6 @@
 // LICENSE file.
 
 //go:build !gosnmp_nodebug
-// +build !gosnmp_nodebug
 
 package gosnmp
 

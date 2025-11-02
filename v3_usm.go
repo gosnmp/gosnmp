@@ -824,7 +824,7 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		if err != nil {
 			return nil, err
 		}
-		stream := cipher.NewCFBEncrypter(block, iv[:])
+		stream := cipher.NewCTR(block, iv[:])
 		ciphertext := make([]byte, len(scopedPdu))
 		stream.XORKeyStream(ciphertext, scopedPdu)
 		pduLen, err := marshalLength(len(ciphertext))
@@ -882,7 +882,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		if err != nil {
 			return nil, err
 		}
-		stream := cipher.NewCFBDecrypter(block, iv[:])
+		stream := cipher.NewCTR(block, iv[:])
 		plaintext := make([]byte, len(packet[cursorTmp:]))
 		stream.XORKeyStream(plaintext, packet[cursorTmp:])
 		copy(packet[cursor:], plaintext)
