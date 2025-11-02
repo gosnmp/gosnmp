@@ -142,8 +142,8 @@ const rxBufSize = 65535 // max size of IPv4 & IPv6 packet
 // For verbose logging to stdout:
 // gosnmp_logger = NewLogger(log.New(os.Stdout, "", 0))
 type LoggerInterface interface {
-	Print(v ...interface{})
-	Printf(format string, v ...interface{})
+	Print(v ...any)
+	Printf(format string, v ...any)
 }
 
 type Logger struct {
@@ -706,7 +706,7 @@ func (packet *SnmpPacket) marshalVBL() ([]byte, error) {
 	vblBuf := new(bytes.Buffer)
 	for _, pdu := range packet.Variables {
 		// The copy of the 'for' variable "pdu" can be deleted (Go 1.22+)
-		pdu := pdu //nolint:copyloopvar
+		//nolint:copyloopvar
 		vb, err := marshalVarbind(&pdu)
 		if err != nil {
 			return nil, err
@@ -901,7 +901,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(tmpBuf.Bytes())
 
 	case OpaqueFloat, OpaqueDouble:
-		converters := map[Asn1BER]func(interface{}) ([]byte, error){
+		converters := map[Asn1BER]func(any) ([]byte, error){
 			OpaqueFloat:  marshalFloat32,
 			OpaqueDouble: marshalFloat64,
 		}

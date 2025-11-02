@@ -16,9 +16,9 @@ const _SnmpV3SecurityModel_name = "UserSecurityModel"
 var _SnmpV3SecurityModel_index = [...]uint8{0, 17}
 
 func (i SnmpV3SecurityModel) String() string {
-	i -= 3
-	if i >= SnmpV3SecurityModel(len(_SnmpV3SecurityModel_index)-1) {
-		return "SnmpV3SecurityModel(" + strconv.FormatInt(int64(i+3), 10) + ")"
+	idx := int(i) - 3
+	if i < 3 || idx >= len(_SnmpV3SecurityModel_index)-1 {
+		return "SnmpV3SecurityModel(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _SnmpV3SecurityModel_name[_SnmpV3SecurityModel_index[i]:_SnmpV3SecurityModel_index[i+1]]
+	return _SnmpV3SecurityModel_name[_SnmpV3SecurityModel_index[idx]:_SnmpV3SecurityModel_index[idx+1]]
 }

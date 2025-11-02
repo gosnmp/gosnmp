@@ -35,14 +35,14 @@ func main() {
 		case g.OctetString:
 			value := variable.Value.([]byte)
 			if strings.Contains(strconv.Quote(string(value)), "\\x") {
-				tmp := ""
-				for i := 0; i < len(value); i++ {
-					tmp += fmt.Sprintf("%v", value[i])
+				var tmp strings.Builder
+				for i := range value {
+					tmp.WriteString(fmt.Sprintf("%v", value[i]))
 					if i != (len(value) - 1) {
-						tmp += " "
+						tmp.WriteString(" ")
 					}
 				}
-				fmt.Printf("Hex-String: %s\n", tmp)
+				fmt.Printf("Hex-String: %s\n", tmp.String())
 			} else {
 				fmt.Printf("string: %s\n", string(variable.Value.([]byte)))
 			}

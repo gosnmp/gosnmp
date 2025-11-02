@@ -136,7 +136,7 @@ type GoSNMP struct {
 	// - 'c: do not check returned OIDs are increasing' - use AppOpts = map[string]interface{"c":true} with
 	//   Walk() or BulkWalk(). The library user needs to implement their own policy for terminating walks.
 	// - 'p,i,I,t,E' -> pull requests welcome
-	AppOpts map[string]interface{}
+	AppOpts map[string]any
 
 	// Internal - used to sync requests to responses.
 	requestID uint32
@@ -191,7 +191,7 @@ var Default = &GoSNMP{
 type SnmpPDU struct {
 	// The value to be set by the SNMP set, or the value when
 	// sending a trap
-	Value interface{}
+	Value any
 
 	// Name is an oid in string format eg ".1.3.6.1.4.9.27"
 	Name string
@@ -674,7 +674,7 @@ func Partition(currentPosition, partitionSize, sliceLength int) bool {
 // This is a convenience function to make working with SnmpPDU's easier - it
 // reduces the need for type assertions. A big.Int is convenient, as SNMP can
 // return int32, uint32, and uint64.
-func ToBigInt(value interface{}) *big.Int {
+func ToBigInt(value any) *big.Int {
 	var val int64
 
 	switch value := value.(type) { // shadow
