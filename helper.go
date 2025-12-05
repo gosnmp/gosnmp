@@ -558,21 +558,20 @@ func parseOpaque(logger Logger, data []byte, retVal *variable) error {
 	return nil
 }
 
-// parseBase128Int parses a base-128 encoded int from the given offset in the
-// given byte slice. It returns the value and the new offset.
-func parseBase128Int(bytes []byte, initOffset int) (int64, int, error) {
-	var ret int64
+// parseBase128Uint32 parses a base-128 (BER) encoded unsigned integer.
+// Returns error if the value exceeds 2^32-1.
+func parseBase128Uint32(bytes []byte, initOffset int) (uint32, int, error) {
+	var ret uint64
 	var offset = initOffset
-	for shifted := 0; offset < len(bytes); shifted++ {
-		if shifted > 4 {
+	for offset < len(bytes) {
+		b := bytes[offset]
+		ret = (ret << 7) | uint64(b&0x7f)
+		offset++
+		if ret > math.MaxUint32 {
 			return 0, 0, ErrBase128IntegerTooLarge
 		}
-		ret <<= 7
-		b := bytes[offset]
-		ret |= int64(b & 0x7f)
-		offset++
 		if b&0x80 == 0 {
-			return ret, offset, nil
+			return uint32(ret), offset, nil
 		}
 	}
 	return 0, 0, ErrBase128IntegerTruncated
@@ -664,30 +663,65 @@ func parseLength(bytes []byte) (int, int, error) {
 
 // parseObjectIdentifier parses an OBJECT IDENTIFIER from the given bytes and
 // returns it. An object identifier is a sequence of variable length integers
-// that are assigned in a hierarchy.
-func parseObjectIdentifier(src []byte) (string, error) {
+// that are assigned in a hierarchy. Returns both the string representation
+// and the integer components as uint32 (per RFC 2578 §7.1.3).
+func parseObjectIdentifier(src []byte) (string, []uint32, error) {
 	if len(src) == 0 {
-		return "", ErrInvalidOidLength
+		return "", nil, ErrInvalidOidLength
 	}
 
 	out := new(bytes.Buffer)
 
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])/40), 10))
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
+	first := uint32(src[0]) / 40
+	second := uint32(src[0]) % 40
+	components := make([]uint32, 0, len(src))
+	components = append(components, first, second)
 
-	var v int64
+	out.WriteByte('.')
+	out.WriteString(strconv.FormatUint(uint64(first), 10))
+	out.WriteByte('.')
+	out.WriteString(strconv.FormatUint(uint64(second), 10))
+
+	var v uint32
 	var err error
 	for offset := 1; offset < len(src); {
 		out.WriteByte('.')
-		v, offset, err = parseBase128Int(src, offset)
+		v, offset, err = parseBase128Uint32(src, offset)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
-		out.WriteString(strconv.FormatInt(v, 10))
+		out.WriteString(strconv.FormatUint(uint64(v), 10))
+		components = append(components, v)
 	}
-	return out.String(), nil
+	return out.String(), components, nil
+}
+
+// parseRawOID parses an OID from raw packet data and returns both the string
+// representation and integer components. Used by unmarshalVBL to populate
+// both SnmpPDU.Name and SnmpPDU.NameComponents.
+func parseRawOID(logger Logger, data []byte) (string, []uint32, int, error) {
+	if len(data) == 0 {
+		return "", nil, 0, fmt.Errorf("empty data passed to parseRawOID")
+	}
+	if Asn1BER(data[0]) != ObjectIdentifier {
+		return "", nil, 0, fmt.Errorf("expected ObjectIdentifier type, got %x", data[0])
+	}
+	length, cursor, err := parseLength(data)
+	if err != nil {
+		return "", nil, 0, err
+	}
+	if length > len(data) {
+		return "", nil, 0, fmt.Errorf("not enough data for OID (%d vs %d): %x", length, len(data), data)
+	}
+	if cursor > length {
+		return "", nil, 0, fmt.Errorf("invalid cursor position for OID %x (data %d length %d cursor %d)", data, len(data), length, cursor)
+	}
+	oid, components, err := parseObjectIdentifier(data[cursor:length])
+	if err != nil {
+		return "", nil, 0, err
+	}
+	logger.Printf("parseRawOID: %s", oid)
+	return oid, components, length, nil
 }
 
 func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, error) {
@@ -735,7 +769,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		if cursor > length {
 			return nil, 0, fmt.Errorf("invalid cursor position for OID %x (data %d length %d cursor %d)", data, len(data), length, cursor)
 		}
-		oid, err := parseObjectIdentifier(data[cursor:length])
+		oid, _, err := parseObjectIdentifier(data[cursor:length])
 		return oid, length, err
 	case IPAddress:
 		length, _, err := parseLength(data)
