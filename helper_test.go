@@ -19,8 +19,9 @@ import (
 func TestParseObjectIdentifier(t *testing.T) {
 	oid := []byte{43, 6, 1, 2, 1, 31, 1, 1, 1, 10, 143, 255, 255, 255, 127}
 	expected := ".1.3.6.1.2.1.31.1.1.1.10.4294967295"
+	expectedComponents := []uint32{1, 3, 6, 1, 2, 1, 31, 1, 1, 1, 10, 4294967295}
 
-	buf, err := parseObjectIdentifier(oid)
+	buf, components, err := parseObjectIdentifier(oid)
 	if err != nil {
 		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
 	}
@@ -28,19 +29,27 @@ func TestParseObjectIdentifier(t *testing.T) {
 
 	if string(result) != expected {
 		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
+	}
+	if !reflect.DeepEqual(components, expectedComponents) {
+		t.Errorf("parseObjectIdentifier(%v) components = %v, want %v", oid, components, expectedComponents)
 	}
 }
 
 func TestParseObjectIdentifierWithOtherOid(t *testing.T) {
 	oid := []byte{43, 6, 3, 30, 11, 1, 10}
 	expected := ".1.3.6.3.30.11.1.10"
-	buf, err := parseObjectIdentifier(oid)
+	expectedComponents := []uint32{1, 3, 6, 3, 30, 11, 1, 10}
+
+	buf, components, err := parseObjectIdentifier(oid)
 	if err != nil {
 		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
 	}
 	result := string(buf)
 	if string(result) != expected {
 		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
+	}
+	if !reflect.DeepEqual(components, expectedComponents) {
+		t.Errorf("parseObjectIdentifier(%v) components = %v, want %v", oid, components, expectedComponents)
 	}
 }
 
@@ -49,7 +58,7 @@ func TestParseObjectIdentifierOverflow(t *testing.T) {
 	// Base-128 encoding of 4294967296: 0x90 0x80 0x80 0x80 0x00
 	oid := []byte{0x2b, 0x06, 0x01, 0x04, 0x01, 0x90, 0x80, 0x80, 0x80, 0x00}
 
-	_, err := parseObjectIdentifier(oid)
+	_, _, err := parseObjectIdentifier(oid)
 	if err == nil {
 		t.Error("parseObjectIdentifier should reject sub-identifiers > 2^32-1")
 	}
@@ -105,7 +114,7 @@ func TestParseBase128Uint32(t *testing.T) {
 func BenchmarkParseObjectIdentifier(b *testing.B) {
 	oid := []byte{43, 6, 3, 30, 11, 1, 10}
 	for i := 0; i < b.N; i++ {
-		parseObjectIdentifier(oid)
+		_, _, _ = parseObjectIdentifier(oid)
 	}
 }
 
