@@ -558,21 +558,20 @@ func parseOpaque(logger Logger, data []byte, retVal *variable) error {
 	return nil
 }
 
-// parseBase128Int parses a base-128 encoded int from the given offset in the
-// given byte slice. It returns the value and the new offset.
-func parseBase128Int(bytes []byte, initOffset int) (int64, int, error) {
-	var ret int64
+// parseBase128Uint32 parses a base-128 (BER) encoded unsigned integer.
+// Returns error if the value exceeds 2^32-1.
+func parseBase128Uint32(bytes []byte, initOffset int) (uint32, int, error) {
+	var ret uint64
 	var offset = initOffset
-	for shifted := 0; offset < len(bytes); shifted++ {
-		if shifted > 4 {
+	for offset < len(bytes) {
+		b := bytes[offset]
+		ret = (ret << 7) | uint64(b&0x7f)
+		offset++
+		if ret > math.MaxUint32 {
 			return 0, 0, ErrBase128IntegerTooLarge
 		}
-		ret <<= 7
-		b := bytes[offset]
-		ret |= int64(b & 0x7f)
-		offset++
 		if b&0x80 == 0 {
-			return ret, offset, nil
+			return uint32(ret), offset, nil
 		}
 	}
 	return 0, 0, ErrBase128IntegerTruncated
@@ -677,15 +676,15 @@ func parseObjectIdentifier(src []byte) (string, error) {
 	out.WriteByte('.')
 	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
 
-	var v int64
+	var v uint32
 	var err error
 	for offset := 1; offset < len(src); {
 		out.WriteByte('.')
-		v, offset, err = parseBase128Int(src, offset)
+		v, offset, err = parseBase128Uint32(src, offset)
 		if err != nil {
 			return "", err
 		}
-		out.WriteString(strconv.FormatInt(v, 10))
+		out.WriteString(strconv.FormatUint(uint64(v), 10))
 	}
 	return out.String(), nil
 }
