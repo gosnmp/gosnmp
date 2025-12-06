@@ -378,7 +378,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 
 	if MsgID, ok := rawMsgID.(int); ok {
-		response.MsgID = uint32(MsgID) //nolint:gosec
+		response.MsgID = uint32(MsgID)
 		x.Logger.Printf("Parsed message ID %d", MsgID)
 	}
 
@@ -392,7 +392,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 
 	if MsgMaxSize, ok := rawMsgMaxSize.(int); ok {
-		response.MsgMaxSize = uint32(MsgMaxSize) //nolint:gosec
+		response.MsgMaxSize = uint32(MsgMaxSize)
 		x.Logger.Printf("Parsed message max size %d", MsgMaxSize)
 	}
 
@@ -420,7 +420,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 
 	if SecModel, ok := rawSecModel.(int); ok {
-		response.SecurityModel = SnmpV3SecurityModel(SecModel) //nolint:gosec
+		response.SecurityModel = SnmpV3SecurityModel(SecModel)
 		x.Logger.Printf("Parsed security model %d", SecModel)
 	}
 
