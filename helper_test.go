@@ -3,14 +3,14 @@
 // LICENSE file.
 
 //go:build all || helper
-// +build all helper
 
 package gosnmp
 
 import (
 	"encoding/base64"
-	"testing"
 	"reflect"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 )
 

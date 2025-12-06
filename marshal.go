@@ -142,8 +142,8 @@ const rxBufSize = 65535 // max size of IPv4 & IPv6 packet
 // For verbose logging to stdout:
 // gosnmp_logger = NewLogger(log.New(os.Stdout, "", 0))
 type LoggerInterface interface {
-	Print(v ...interface{})
-	Printf(format string, v ...interface{})
+	Print(v ...any)
+	Printf(format string, v ...any)
 }
 
 type Logger struct {
@@ -523,7 +523,7 @@ func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 		}
 	} else {
 		// community
-		buf.Write([]byte{4, uint8(len(packet.Community))}) //nolint:gosec
+		buf.Write([]byte{4, uint8(len(packet.Community))})
 		buf.WriteString(packet.Community)
 		// pdu
 		pdu, err2 := packet.marshalPDU()
@@ -706,7 +706,6 @@ func (packet *SnmpPacket) marshalVBL() ([]byte, error) {
 	vblBuf := new(bytes.Buffer)
 	for _, pdu := range packet.Variables {
 		// The copy of the 'for' variable "pdu" can be deleted (Go 1.22+)
-		pdu := pdu //nolint:copyloopvar
 		vb, err := marshalVarbind(&pdu)
 		if err != nil {
 			return nil, err
@@ -901,7 +900,7 @@ func marshalVarbind(pdu *SnmpPDU) ([]byte, error) {
 		pduBuf.Write(tmpBuf.Bytes())
 
 	case OpaqueFloat, OpaqueDouble:
-		converters := map[Asn1BER]func(interface{}) ([]byte, error){
+		converters := map[Asn1BER]func(any) ([]byte, error){
 			OpaqueFloat:  marshalFloat32,
 			OpaqueDouble: marshalFloat64,
 		}
@@ -1024,7 +1023,7 @@ func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket)
 
 	if version, ok := rawVersion.(int); ok {
 		x.Logger.Printf("Parsed version %d", version)
-		return SnmpVersion(version), cursor, nil //nolint:gosec
+		return SnmpVersion(version), cursor, nil
 	}
 	return 0, cursor, err
 }
@@ -1120,7 +1119,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 	}
 
 	if requestid, ok := rawRequestID.(int); ok {
-		response.RequestID = uint32(requestid) //nolint:gosec
+		response.RequestID = uint32(requestid)
 		x.Logger.Printf("requestID: %d", response.RequestID)
 	}
 
@@ -1136,7 +1135,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 		}
 
 		if nonRepeaters, ok := rawNonRepeaters.(int); ok {
-			response.NonRepeaters = uint8(nonRepeaters) //nolint:gosec
+			response.NonRepeaters = uint8(nonRepeaters)
 		}
 
 		// Parse Max Repetitions
@@ -1150,7 +1149,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 		}
 
 		if maxRepetitions, ok := rawMaxRepetitions.(int); ok {
-			response.MaxRepetitions = uint32(maxRepetitions & 0x7FFFFFFF) //nolint:gosec
+			response.MaxRepetitions = uint32(maxRepetitions & 0x7FFFFFFF)
 		}
 	} else {
 		// Parse Error-Status
@@ -1164,8 +1163,8 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 		}
 
 		if errorStatus, ok := rawError.(int); ok {
-			response.Error = SNMPError(errorStatus)                //nolint:gosec
-			x.Logger.Printf("errorStatus: %d", uint8(errorStatus)) //nolint:gosec
+			response.Error = SNMPError(errorStatus)
+			x.Logger.Printf("errorStatus: %d", uint8(errorStatus))
 		}
 
 		// Parse Error-Index
@@ -1179,8 +1178,8 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 		}
 
 		if errorindex, ok := rawErrorIndex.(int); ok {
-			response.ErrorIndex = uint8(errorindex)               //nolint:gosec
-			x.Logger.Printf("error-index: %d", uint8(errorindex)) //nolint:gosec
+			response.ErrorIndex = uint8(errorindex)
+			x.Logger.Printf("error-index: %d", uint8(errorindex))
 		}
 	}
 

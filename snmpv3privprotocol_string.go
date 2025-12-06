@@ -22,9 +22,9 @@ const _SnmpV3PrivProtocol_name = "NoPrivDESAESAES192AES256AES192CAES256C"
 var _SnmpV3PrivProtocol_index = [...]uint8{0, 6, 9, 12, 18, 24, 31, 38}
 
 func (i SnmpV3PrivProtocol) String() string {
-	i -= 1
-	if i >= SnmpV3PrivProtocol(len(_SnmpV3PrivProtocol_index)-1) {
-		return "SnmpV3PrivProtocol(" + strconv.FormatInt(int64(i+1), 10) + ")"
+	idx := int(i) - 1
+	if i < 1 || idx >= len(_SnmpV3PrivProtocol_index)-1 {
+		return "SnmpV3PrivProtocol(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _SnmpV3PrivProtocol_name[_SnmpV3PrivProtocol_index[i]:_SnmpV3PrivProtocol_index[i+1]]
+	return _SnmpV3PrivProtocol_name[_SnmpV3PrivProtocol_index[idx]:_SnmpV3PrivProtocol_index[idx+1]]
 }

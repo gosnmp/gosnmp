@@ -3,7 +3,6 @@
 // LICENSE file.
 
 //go:build all || marshal
-// +build all marshal
 
 package gosnmp
 
