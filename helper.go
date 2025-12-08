@@ -670,24 +670,25 @@ func parseObjectIdentifier(src []byte) (string, error) {
 		return "", ErrInvalidOidLength
 	}
 
-	out := new(bytes.Buffer)
+	out := make([]byte, 0, len(src) * 4) // Estimate 3 digits + dot per number
 
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])/40), 10))
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
+	out = append(out, '.')
+	out = strconv.AppendInt(out, int64(src[0])/40, 10)
+	out = append(out, '.')
+	out = strconv.AppendInt(out, int64(src[0])%40, 10)
 
 	var v int64
 	var err error
 	for offset := 1; offset < len(src); {
-		out.WriteByte('.')
+		out = append(out, '.')
 		v, offset, err = parseBase128Int(src, offset)
 		if err != nil {
 			return "", err
 		}
-		out.WriteString(strconv.FormatInt(v, 10))
+		out = strconv.AppendInt(out, v, 10)
 	}
-	return out.String(), nil
+
+	return string(out), nil
 }
 
 func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
