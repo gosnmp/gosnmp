@@ -991,8 +991,6 @@ func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket)
 		return 0, 0, fmt.Errorf("cannot unmarshal response into nil packet reference")
 	}
 
-	response.Variables = make([]SnmpPDU, 0, 5)
-
 	// Start parsing the packet
 	cursor := 0
 
@@ -1305,7 +1303,16 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 
 	// check for an empty response
 	if vblLength == 2 && packet[1] == 0x00 {
+		if response.Variables == nil {
+			response.Variables = []SnmpPDU{}
+		}
 		return nil
+	}
+
+	// Pre-allocate Variables slice based on estimated PDU count from VBL byte length.
+	// Err on the side of overestimating the number of varbinds by assuming 14 bytes/varbind.
+	if estimatedPDUs := vblLength / 14; estimatedPDUs > cap(response.Variables) {
+		response.Variables = make([]SnmpPDU, 0, estimatedPDUs)
 	}
 
 	// Loop & parse Varbinds
