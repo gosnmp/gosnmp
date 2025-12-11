@@ -432,7 +432,7 @@ func hashPassword(hash hash.Hash, password string) ([]byte, error) {
 	var pi int // password index
 	for i := 0; i < 1048576; i += 64 {
 		var chunk []byte
-		for e := 0; e < 64; e++ {
+		for range 64 {
 			chunk = append(chunk, password[pi%len(password)])
 			pi++
 		}
@@ -600,10 +600,10 @@ func genlocalkey(authProtocol SnmpV3AuthProtocol, passphrase string, engineID st
 
 // http://tools.ietf.org/html/rfc2574#section-8.1.1.1
 // localDESSalt needs to be incremented on every packet.
-func (sp *UsmSecurityParameters) usmAllocateNewSalt() interface{} {
+func (sp *UsmSecurityParameters) usmAllocateNewSalt() any {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
-	var newSalt interface{}
+	var newSalt any
 
 	switch sp.PrivacyProtocol {
 	case AES, AES192, AES256, AES192C, AES256C:
@@ -614,7 +614,7 @@ func (sp *UsmSecurityParameters) usmAllocateNewSalt() interface{} {
 	return newSalt
 }
 
-func (sp *UsmSecurityParameters) usmSetSalt(newSalt interface{}) error {
+func (sp *UsmSecurityParameters) usmSetSalt(newSalt any) error {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 	switch sp.PrivacyProtocol {
@@ -824,6 +824,7 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		if err != nil {
 			return nil, err
 		}
+		//nolint:staticcheck // RFC3826 Section 3.1.1.1 specifies CFB-128 mode for AES
 		stream := cipher.NewCFBEncrypter(block, iv[:])
 		ciphertext := make([]byte, len(scopedPdu))
 		stream.XORKeyStream(ciphertext, scopedPdu)
@@ -882,6 +883,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		if err != nil {
 			return nil, err
 		}
+		//nolint:staticcheck // RFC3826 Section 3.1.1.1 specifies CFB-128 mode for AES
 		stream := cipher.NewCFBDecrypter(block, iv[:])
 		plaintext := make([]byte, len(packet[cursorTmp:]))
 		stream.XORKeyStream(plaintext, packet[cursorTmp:])
@@ -1015,7 +1017,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	cursor += count
 	if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
-		sp.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots) //nolint:gosec
+		sp.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots)
 		sp.Logger.Printf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
 	}
 
@@ -1025,7 +1027,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	cursor += count
 	if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
-		sp.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime) //nolint:gosec
+		sp.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime)
 		sp.Logger.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
 	}
 

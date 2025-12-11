@@ -3,7 +3,6 @@
 // LICENSE file.
 
 //go:build all || misc
-// +build all misc
 
 package gosnmp
 

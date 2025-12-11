@@ -23,7 +23,7 @@ import (
 
 // variable struct is used by decodeValue()
 type variable struct {
-	Value interface{}
+	Value any
 	Type  Asn1BER
 }
 
@@ -91,7 +91,7 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		retVal.Type = Asn1BER(data[0])
 		switch Asn1BER(data[0]) {
 		case Uinteger32:
-			retVal.Value = uint32(ret) //nolint:gosec
+			retVal.Value = uint32(ret)
 		default:
 			retVal.Value = ret
 		}
@@ -273,7 +273,7 @@ func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
 	}
 
 	for i := l - 1; i >= 0; i-- {
-		o := byte(n >> uint(i*7)) //nolint:gosec
+		o := byte(n >> uint(i*7))
 		o &= 0x7f
 		if i != 0 {
 			o |= 0x80
@@ -315,7 +315,7 @@ func marshalInt32(value int) ([]byte, error) {
 	//  b) shall not all be zero
 	// These rules ensure that an integer value is always encoded in the smallest
 	// possible number of octets.
-	val := uint32(value) //nolint:gosec
+	val := uint32(value)
 	switch {
 	case val&mask1 == 0 || val&mask1 == mask1:
 		return []byte{byte(val)}, nil
@@ -330,7 +330,7 @@ func marshalInt32(value int) ([]byte, error) {
 
 // marshalUint64 encodes a uint64 into BER-compliant bytes for SNMP Counter64.
 // It trims leading zero bytes and prepends one if MSB is set (per X.690 §8.3.2)
-func marshalUint64(v interface{}) ([]byte, error) {
+func marshalUint64(v any) ([]byte, error) {
 	// gracefully handle type assertion to uint64
 	source, ok := v.(uint64)
 	if !ok {
@@ -356,13 +356,13 @@ func marshalUint64(v interface{}) ([]byte, error) {
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
-func marshalUint32(v interface{}) ([]byte, error) {
+func marshalUint32(v any) ([]byte, error) {
 	var source uint32
 	switch val := v.(type) {
 	case uint32:
 		source = val
 	case uint:
-		source = uint32(val) //nolint:gosec
+		source = uint32(val)
 	case uint8:
 		source = uint32(val)
 	case SNMPError:
@@ -388,14 +388,14 @@ func marshalUint32(v interface{}) ([]byte, error) {
 	return buf, nil
 }
 
-func marshalFloat32(v interface{}) ([]byte, error) {
+func marshalFloat32(v any) ([]byte, error) {
 	source := v.(float32)
 	out := bytes.NewBuffer(nil)
 	err := binary.Write(out, binary.BigEndian, source)
 	return out.Bytes(), err
 }
 
-func marshalFloat64(v interface{}) ([]byte, error) {
+func marshalFloat64(v any) ([]byte, error) {
 	source := v.(float64)
 	out := bytes.NewBuffer(nil)
 	err := binary.Write(out, binary.BigEndian, source)
@@ -592,13 +592,13 @@ func parseInt64(bytes []byte) (int64, error) {
 		return 0, ErrIntegerTooLarge
 	}
 	var ret int64
-	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
+	for bytesRead := range bytes {
 		ret <<= 8
 		ret |= int64(bytes[bytesRead])
 	}
 	// Shift up and down in order to sign extend the result.
-	ret <<= 64 - uint8(len(bytes))*8 //nolint:gosec
-	ret >>= 64 - uint8(len(bytes))*8 //nolint:gosec
+	ret <<= 64 - uint8(len(bytes))*8
+	ret >>= 64 - uint8(len(bytes))*8
 	return ret, nil
 }
 
@@ -640,7 +640,7 @@ func parseLength(bytes []byte) (int, int, error) {
 		cursor += 2
 	default:
 		numOctets := int(bytes[1]) & 127
-		for i := 0; i < numOctets; i++ {
+		for i := range numOctets {
 			length <<= 8
 			if len(bytes) < 2+i+1 {
 				// Invalid data detected, return an error
@@ -690,7 +690,7 @@ func parseObjectIdentifier(src []byte) (string, error) {
 	return out.String(), nil
 }
 
-func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, error) {
+func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
 	if len(data) == 0 {
 		return nil, 0, fmt.Errorf("empty data passed to parseRawField")
 	}
@@ -786,7 +786,7 @@ func parseUint64(bytes []byte) (uint64, error) {
 		// We'll overflow a uint64 in this case.
 		return 0, ErrIntegerTooLarge
 	}
-	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
+	for bytesRead := range bytes {
 		ret <<= 8
 		ret |= uint64(bytes[bytesRead])
 	}
@@ -800,7 +800,7 @@ func parseUint32(bytes []byte) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint32(ret), nil //nolint:gosec
+	return uint32(ret), nil
 }
 
 // parseUint treats the given bytes as a big-endian, signed integer and returns
@@ -857,14 +857,14 @@ func (b BitStringValue) At(i int) int {
 		return 0
 	}
 	x := i / 8
-	y := 7 - uint(i%8) //nolint:gosec
+	y := 7 - uint(i%8)
 	return int(b.Bytes[x]>>y) & 1
 }
 
 // RightAlign returns a slice where the padding bits are at the beginning. The
 // slice may share memory with the BitString.
 func (b BitStringValue) RightAlign() []byte {
-	shift := uint(8 - (b.BitLength % 8)) //nolint:gosec
+	shift := uint(8 - (b.BitLength % 8))
 	if shift == 8 || len(b.Bytes) == 0 {
 		return b.Bytes
 	}
