@@ -25,6 +25,22 @@ import (
 
 // Tests in alphabetical order of function being tested
 
+// oidStringToComponents converts an OID string like ".1.3.6.1" to []uint32{1, 3, 6, 1}.
+// Used for testing NameComponents population.
+func oidStringToComponents(oid string) []uint32 {
+	oid = strings.TrimPrefix(oid, ".")
+	parts := strings.Split(oid, ".")
+	result := make([]uint32, 0, len(parts))
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		v, _ := strconv.ParseUint(p, 10, 32)
+		result = append(result, uint32(v))
+	}
+	return result
+}
+
 // -- Enmarshal ----------------------------------------------------------------
 
 // "Enmarshal" not "Marshal" - easier to select tests via a regex
@@ -848,6 +864,10 @@ func TestUnmarshal(t *testing.T) {
 
 					if vbr.Name != vb.Name {
 						t.Errorf("#%d:%d Name result: %v, test: %v", i, n, vbr.Name, vb.Name)
+					}
+					expectedComponents := oidStringToComponents(vb.Name)
+					if !reflect.DeepEqual(vbr.NameComponents, expectedComponents) {
+						t.Errorf("#%d:%d NameComponents result: %v, expected: %v", i, n, vbr.NameComponents, expectedComponents)
 					}
 					if vbr.Type != vb.Type {
 						t.Errorf("#%d:%d Type result: %v, test: %v", i, n, vbr.Type, vb.Type)

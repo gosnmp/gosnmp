@@ -19,8 +19,9 @@ import (
 func TestParseObjectIdentifier(t *testing.T) {
 	oid := []byte{43, 6, 1, 2, 1, 31, 1, 1, 1, 10, 143, 255, 255, 255, 127}
 	expected := ".1.3.6.1.2.1.31.1.1.1.10.4294967295"
+	expectedComponents := []uint32{1, 3, 6, 1, 2, 1, 31, 1, 1, 1, 10, 4294967295}
 
-	buf, err := parseObjectIdentifier(oid)
+	buf, components, err := parseObjectIdentifier(oid)
 	if err != nil {
 		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
 	}
@@ -28,13 +29,18 @@ func TestParseObjectIdentifier(t *testing.T) {
 
 	if string(result) != expected {
 		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
+	}
+	if !reflect.DeepEqual(components, expectedComponents) {
+		t.Errorf("parseObjectIdentifier(%v) components = %v, want %v", oid, components, expectedComponents)
 	}
 }
 
 func TestParseObjectIdentifierWithOtherOid(t *testing.T) {
 	oid := []byte{43, 6, 3, 30, 11, 1, 10}
 	expected := ".1.3.6.3.30.11.1.10"
-	buf, err := parseObjectIdentifier(oid)
+	expectedComponents := []uint32{1, 3, 6, 3, 30, 11, 1, 10}
+
+	buf, components, err := parseObjectIdentifier(oid)
 	if err != nil {
 		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
 	}
@@ -42,12 +48,73 @@ func TestParseObjectIdentifierWithOtherOid(t *testing.T) {
 	if string(result) != expected {
 		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
 	}
+	if !reflect.DeepEqual(components, expectedComponents) {
+		t.Errorf("parseObjectIdentifier(%v) components = %v, want %v", oid, components, expectedComponents)
+	}
+}
+
+func TestParseObjectIdentifierOverflow(t *testing.T) {
+	// OID with sub-identifier 4294967296 (2^32), which exceeds uint32 max.
+	// Base-128 encoding of 4294967296: 0x90 0x80 0x80 0x80 0x00
+	oid := []byte{0x2b, 0x06, 0x01, 0x04, 0x01, 0x90, 0x80, 0x80, 0x80, 0x00}
+
+	_, _, err := parseObjectIdentifier(oid)
+	if err == nil {
+		t.Error("parseObjectIdentifier should reject sub-identifiers > 2^32-1")
+	}
+}
+
+func TestParseBase128Uint32(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		offset   int
+		expected uint32
+		newOff   int
+		wantErr  bool
+	}{
+		{"zero", []byte{0x00}, 0, 0, 1, false},
+		{"one", []byte{0x01}, 0, 1, 1, false},
+		{"max single byte (127)", []byte{0x7f}, 0, 127, 1, false},
+		{"min two byte (128)", []byte{0x81, 0x00}, 0, 128, 2, false},
+		{"two byte (255)", []byte{0x81, 0x7f}, 0, 255, 2, false},
+		{"two byte (256)", []byte{0x82, 0x00}, 0, 256, 2, false},
+		{"three byte (16383)", []byte{0xff, 0x7f}, 0, 16383, 2, false},
+		{"three byte (16384)", []byte{0x81, 0x80, 0x00}, 0, 16384, 3, false},
+		{"max uint32", []byte{0x8f, 0xff, 0xff, 0xff, 0x7f}, 0, 4294967295, 5, false},
+		{"overflow (2^32)", []byte{0x90, 0x80, 0x80, 0x80, 0x00}, 0, 0, 0, true},
+		{"truncated (continuation set, no more bytes)", []byte{0x81}, 0, 0, 0, true},
+		{"empty input", []byte{}, 0, 0, 0, true},
+		{"offset into buffer", []byte{0x00, 0x81, 0x00}, 1, 128, 3, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, newOff, err := parseBase128Uint32(tc.input, tc.offset)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got value %d", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if got != tc.expected {
+				t.Errorf("value = %d, want %d", got, tc.expected)
+			}
+			if newOff != tc.newOff {
+				t.Errorf("offset = %d, want %d", newOff, tc.newOff)
+			}
+		})
+	}
 }
 
 func BenchmarkParseObjectIdentifier(b *testing.B) {
 	oid := []byte{43, 6, 3, 30, 11, 1, 10}
 	for i := 0; i < b.N; i++ {
-		parseObjectIdentifier(oid)
+		_, _, _ = parseObjectIdentifier(oid)
 	}
 }
 

@@ -991,8 +991,6 @@ func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket)
 		return 0, 0, fmt.Errorf("cannot unmarshal response into nil packet reference")
 	}
 
-	response.Variables = make([]SnmpPDU, 0, 5)
-
 	// Start parsing the packet
 	cursor := 0
 
@@ -1305,7 +1303,16 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 
 	// check for an empty response
 	if vblLength == 2 && packet[1] == 0x00 {
+		if response.Variables == nil {
+			response.Variables = []SnmpPDU{}
+		}
 		return nil
+	}
+
+	// Pre-allocate Variables slice based on estimated PDU count from VBL byte length.
+	// Err on the side of overestimating the number of varbinds by assuming 14 bytes/varbind.
+	if estimatedPDUs := vblLength / 14; estimatedPDUs > cap(response.Variables) {
+		response.Variables = make([]SnmpPDU, 0, estimatedPDUs)
 	}
 
 	// Loop & parse Varbinds
@@ -1324,17 +1331,13 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 		}
 
 		// Parse OID
-		rawOid, oidLength, err := parseRawField(x.Logger, packet[cursor:], "OID")
+		oid, oidComponents, oidLength, err := parseRawOID(x.Logger, packet[cursor:])
 		if err != nil {
 			return fmt.Errorf("error parsing OID Value: %w", err)
 		}
 		cursor += oidLength
 		if cursor > len(packet) {
 			return fmt.Errorf("error parsing OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
-		}
-		oid, ok := rawOid.(string)
-		if !ok {
-			return fmt.Errorf("unable to type assert rawOid |%v| to string", rawOid)
 		}
 		x.Logger.Printf("OID: %s", oid)
 		// Parse Value
@@ -1352,7 +1355,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
 
-		response.Variables = append(response.Variables, SnmpPDU{Name: oid, Type: decodedVal.Type, Value: decodedVal.Value})
+		response.Variables = append(response.Variables, SnmpPDU{Name: oid, NameComponents: oidComponents, Type: decodedVal.Type, Value: decodedVal.Value})
 	}
 	return nil
 }

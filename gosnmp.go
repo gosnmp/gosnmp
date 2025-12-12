@@ -196,6 +196,12 @@ type SnmpPDU struct {
 	// Name is an oid in string format eg ".1.3.6.1.4.9.27"
 	Name string
 
+	// NameComponents is the OID as a slice of uint32 values, providing
+	// efficient numeric access without string parsing. Per RFC 2578 §7.1.3,
+	// each sub-identifier is constrained to 0..4294967295 (2^32-1).
+	// This field is populated during response unmarshalling.
+	NameComponents []uint32
+
 	// The type of the value eg Integer
 	Type Asn1BER
 }
