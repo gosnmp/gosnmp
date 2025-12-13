@@ -630,7 +630,7 @@ func parseInt(bytes []byte) (int, error) {
 func parseLength(bytes []byte) (int, int, error) {
 	var cursor, length int
 	switch {
-	case len(bytes) <= 2:
+	case len(bytes) < 2:
 		// handle null octet strings ie "0x04 0x00"
 		cursor = len(bytes)
 		length = len(bytes)
@@ -638,6 +638,11 @@ func parseLength(bytes []byte) (int, int, error) {
 		length = int(bytes[1])
 		length += 2
 		cursor += 2
+	case bytes[1] == 0x80:
+		// Indefinite length encoding (0x80) is prohibited in SNMP per RFC 3417 Section 8:
+		// "When encoding the length field, only the definite form is used;
+		// use of the indefinite form encoding is prohibited."
+		return 0, 0, fmt.Errorf("indefinite length encoding (0x80) is not permitted in SNMP")
 	default:
 		numOctets := int(bytes[1]) & 127
 		for i := range numOctets {
