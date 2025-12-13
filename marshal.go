@@ -192,6 +192,7 @@ func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
 	withContextDeadline := false
 sendRetry:
 	for retries := 0; ; retries++ {
+		retriedReport := false
 		if retries > 0 {
 			if x.OnRetry != nil {
 				x.OnRetry(x)
@@ -242,6 +243,7 @@ sendRetry:
 
 		packetOut.RequestID = reqID
 
+	resendSameAttempt:
 		if x.Version == Version3 {
 			msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
 
@@ -333,11 +335,25 @@ sendRetry:
 						useResponseSecurityParameters = true
 					}
 				}
-				err = x.testAuthentication(resp, result, useResponseSecurityParameters)
-				if err != nil {
-					x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)
-					break
+
+				// For noAuth REPORTs, do NOT fail hard in testAuthentication; let payload parsing proceed
+				// so we can see the REPORT and adopt engine params.
+				noAuth := result.MsgFlags == NoAuthNoPriv
+				isReport := false
+
+				if noAuth {
+					if pduTag, ok := peekV3PDUType(resp, cursor, x.Logger); ok {
+						isReport = pduTag == Report
+					}
 				}
+
+				if !(isReport && noAuth) {
+					if err = x.testAuthentication(resp, result, useResponseSecurityParameters); err != nil {
+						x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)
+						break
+					}
+				}
+
 				resp, cursor, err = x.decryptPacket(resp, cursor, result)
 				if err != nil {
 					x.Logger.Printf("ERROR on decryptPacket on v3: %s", err)
@@ -370,20 +386,44 @@ sendRetry:
 			//    or zero if the request identifier cannot be extracted.
 			// - The variable bindings will contain a single object identifier and its value
 			//
-			// usmStatsNotInTimeWindows and usmStatsUnknownEngineIDs are recoverable errors
-			// and will be retransmitted, for others we return the result with an error.
+			// For SNMPv3 REPORT PDUs indicating time/engine sync issues
+			// (usmStatsNotInTimeWindows, usmStatsWrongDigests)
+			// we adopt the authoritative engine params from the REPORT header and
+			// immediately re-marshal and resend once within the same attempt.
+			// Other REPORT OIDs are returned as errors.
 			if result.Version == Version3 && result.PDUType == Report && len(result.Variables) == 1 {
-				switch result.Variables[0].Name {
+				// Adopt authoritative params from the REPORT into the session USM
+				if err := x.storeSecurityParameters(result); err != nil {
+					x.Logger.Printf("SNMPv3: storeSecurityParameters failed: %v", err)
+					return result, err
+				}
+
+				switch oid := result.Variables[0].Name; oid {
 				case usmStatsUnsupportedSecLevels:
 					return result, ErrUnknownSecurityLevel
-				case usmStatsNotInTimeWindows:
-					break waitingResponse
-				case usmStatsUnknownUserNames:
-					return result, ErrUnknownUsername
 				case usmStatsUnknownEngineIDs:
 					break waitingResponse
-				case usmStatsWrongDigests:
-					return result, ErrWrongDigest
+				case usmStatsNotInTimeWindows, usmStatsWrongDigests:
+					// Single immediate resend in this iteration (no Retries consumption)
+					if retriedReport {
+						if oid == usmStatsWrongDigests {
+							return result, ErrWrongDigest
+						}
+						return result, ErrUnknownReportPDU
+					}
+					retriedReport = true
+					// Re-inject the stored authoritative params into the outgoing packet
+					if err := x.updatePktSecurityParameters(packetOut); err != nil {
+						x.Logger.Printf("SNMPv3: updatePktSecurityParameters failed: %v", err)
+						return result, err
+					}
+					// (Optional safety) ensure the packet holds a fresh copy
+					if x.Version == Version3 && x.SecurityParameters != nil {
+						packetOut.SecurityParameters = x.SecurityParameters.Copy()
+					}
+					goto resendSameAttempt
+				case usmStatsUnknownUserNames:
+					return result, ErrUnknownUsername
 				case usmStatsDecryptionErrors:
 					return result, ErrDecryption
 				case snmpUnknownSecurityModels:
@@ -436,7 +476,6 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 		if e := recover(); e != nil {
 			var buf = make([]byte, 8192)
 			runtime.Stack(buf, true)
-
 			err = fmt.Errorf("recover: %v Stack:%v", e, string(buf))
 		}
 	}()
@@ -444,10 +483,10 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 	if x.Conn == nil {
 		return nil, fmt.Errorf("&GoSNMP.Conn is missing. Provide a connection or use Connect()")
 	}
-
 	if x.Retries < 0 {
 		x.Retries = 0
 	}
+
 	x.Logger.Print("SEND INIT")
 	if packetOut.Version == Version3 {
 		x.Logger.Print("SEND INIT NEGOTIATE SECURITY PARAMS")
@@ -457,47 +496,18 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 		x.Logger.Print("SEND END NEGOTIATE SECURITY PARAMS")
 	}
 
-	// perform request
+	// perform request (handles REPORT resync internally)
 	result, err = x.sendOneRequest(packetOut, wait)
 	if err != nil {
 		x.Logger.Printf("SEND Error on the first Request Error: %s", err)
 		return result, err
 	}
 
-	if result.Version == Version3 {
+	if result.Version == Version3 && result.SecurityParameters != nil {
 		x.Logger.Printf("SEND STORE SECURITY PARAMS from result: %s", result.SecurityParameters.SafeString())
-		err = x.storeSecurityParameters(result)
-
-		if result.PDUType == Report && len(result.Variables) == 1 {
-			switch result.Variables[0].Name {
-			case usmStatsNotInTimeWindows:
-				x.Logger.Print("WARNING detected out-of-time-window ERROR")
-				if err = x.updatePktSecurityParameters(packetOut); err != nil {
-					x.Logger.Printf("ERROR updatePktSecurityParameters error: %s", err)
-					return nil, err
-				}
-				// retransmit with updated auth engine params
-				result, err = x.sendOneRequest(packetOut, wait)
-				if err != nil {
-					x.Logger.Printf("ERROR out-of-time-window retransmit error: %s", err)
-					return result, ErrNotInTimeWindow
-				}
-
-			case usmStatsUnknownEngineIDs:
-				x.Logger.Print("WARNING detected unknown engine id ERROR")
-				if err = x.updatePktSecurityParameters(packetOut); err != nil {
-					x.Logger.Printf("ERROR updatePktSecurityParameters error: %s", err)
-					return nil, err
-				}
-				// retransmit with updated engine id
-				result, err = x.sendOneRequest(packetOut, wait)
-				if err != nil {
-					x.Logger.Printf("ERROR unknown engine id retransmit error: %s", err)
-					return result, ErrUnknownEngineID
-				}
-			}
-		}
+		_ = x.storeSecurityParameters(result) // best-effort; ignore error
 	}
+
 	return result, err
 }
 
@@ -1391,4 +1401,58 @@ func shrinkAndWriteUint(buf io.Writer, in int) error {
 	}
 	_, err = buf.Write(out)
 	return err
+}
+
+// peekV3PDUType peeks the PDUs tag (Report/GetResponse/...) from a v3 message.
+//   - 'cursor' must point to the start of the ScopedPDU (right after v3 header).
+//   - Works only when the ScopedPDU is plaintext (NoPriv). If it's encrypted returns ok=false
+func peekV3PDUType(resp []byte, cursor int, log Logger) (PDUType, bool) {
+	if cursor >= len(resp) {
+		return 0, false
+	}
+	switch PDUType(resp[cursor]) {
+	case PDUType(OctetString):
+		// Encrypted ScopedPDU => cannot peek safely.
+		return 0, false
+	case Sequence:
+		// ScopedPDU is plaintext.
+	default:
+		// Not a valid ScopedPDU start.
+		return 0, false
+	}
+
+	// Skip SEQUENCE header
+	_, hdrLen, err := parseLength(resp[cursor:])
+	if err != nil {
+		log.Printf("peekV3PDUType: parse SEQUENCE err: %v", err)
+		return 0, false
+	}
+	cursor += hdrLen
+	if cursor >= len(resp) {
+		return 0, false
+	}
+
+	// Skip contextEngineID TLV
+	_, consumed, err := parseRawField(log, resp[cursor:], "contextEngineID")
+	if err != nil {
+		log.Printf("peekV3PDUType: parse contextEngineID err: %v", err)
+		return 0, false
+	}
+	cursor += consumed
+	if cursor >= len(resp) {
+		return 0, false
+	}
+
+	// Skip contextName TLV
+	_, consumed, err = parseRawField(log, resp[cursor:], "contextName")
+	if err != nil {
+		log.Printf("peekV3PDUType: parse contextName err: %v", err)
+		return 0, false
+	}
+	cursor += consumed
+	if cursor >= len(resp) {
+		return 0, false
+	}
+
+	return PDUType(resp[cursor]), true
 }
