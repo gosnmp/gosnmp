@@ -146,7 +146,7 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 			if len(data) < cursor+4 {
 				return fmt.Errorf("not enough data for ipv4 address: %x", data)
 			}
-			retVal.Value = net.IPv4(data[cursor], data[cursor+1], data[cursor+2], data[cursor+3]).String()
+			retVal.Value = net.IP(data[cursor : cursor+4]).String()
 		case 16: // IPv6
 			if len(data) < cursor+16 {
 				return fmt.Errorf("not enough data for ipv6 address: %x", data)
@@ -758,7 +758,7 @@ func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
 			if len(data) < cursor+4 {
 				return nil, 0, fmt.Errorf("not enough data for ipv4 address: %x", data)
 			}
-			return net.IPv4(data[cursor], data[cursor+1], data[cursor+2], data[cursor+3]).String(), length, nil
+			return net.IP(data[cursor : cursor+4]).String(), length, nil
 		default:
 			return nil, 0, fmt.Errorf("got ipaddress len %d, expected 4", ipLen)
 		}
