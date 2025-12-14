@@ -132,28 +132,30 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		// 0x40
 		x.Logger.Print("decodeValue: type is IPAddress")
 		retVal.Type = IPAddress
-		if len(data) < 2 {
-			return fmt.Errorf("not enough data for ipv4 address: %x", data)
+		length, cursor, err := parseLength(data)
+		if err != nil {
+			return err
 		}
-
-		switch data[1] {
+		// length includes header bytes, ipLen is just the address bytes
+		ipLen := length - cursor
+		switch ipLen {
 		case 0: // real life, buggy devices returning bad data
 			retVal.Value = nil
 			return nil
 		case 4: // IPv4
-			if len(data) < 6 {
+			if len(data) < cursor+4 {
 				return fmt.Errorf("not enough data for ipv4 address: %x", data)
 			}
-			retVal.Value = net.IPv4(data[2], data[3], data[4], data[5]).String()
+			retVal.Value = net.IP(data[cursor : cursor+4]).String()
 		case 16: // IPv6
-			if len(data) < 18 {
+			if len(data) < cursor+16 {
 				return fmt.Errorf("not enough data for ipv6 address: %x", data)
 			}
 			d := make(net.IP, 16)
-			copy(d, data[2:17])
+			copy(d, data[cursor:cursor+16])
 			retVal.Value = d.String()
 		default:
-			return fmt.Errorf("got ipaddress len %d, expected 4 or 16", data[1])
+			return fmt.Errorf("got ipaddress len %d, expected 4 or 16", ipLen)
 		}
 	case Counter32:
 		// 0x41. unsigned
@@ -630,7 +632,7 @@ func parseInt(bytes []byte) (int, error) {
 func parseLength(bytes []byte) (int, int, error) {
 	var cursor, length int
 	switch {
-	case len(bytes) <= 2:
+	case len(bytes) < 2:
 		// handle null octet strings ie "0x04 0x00"
 		cursor = len(bytes)
 		length = len(bytes)
@@ -638,6 +640,11 @@ func parseLength(bytes []byte) (int, int, error) {
 		length = int(bytes[1])
 		length += 2
 		cursor += 2
+	case bytes[1] == 0x80:
+		// Indefinite length encoding (0x80) is prohibited in SNMP per RFC 3417 Section 8:
+		// "When encoding the length field, only the definite form is used;
+		// use of the indefinite form encoding is prohibited."
+		return 0, 0, fmt.Errorf("indefinite length encoding (0x80) is not permitted in SNMP")
 	default:
 		numOctets := int(bytes[1]) & 127
 		for i := range numOctets {
@@ -738,24 +745,22 @@ func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
 		oid, err := parseObjectIdentifier(data[cursor:length])
 		return oid, length, err
 	case IPAddress:
-		length, _, err := parseLength(data)
+		length, cursor, err := parseLength(data)
 		if err != nil {
 			return nil, 0, err
 		}
-		if len(data) < 2 {
-			return nil, 0, fmt.Errorf("not enough data for ipv4 address: %x", data)
-		}
-
-		switch data[1] {
+		// length includes header bytes, ipLen is just the address bytes
+		ipLen := length - cursor
+		switch ipLen {
 		case 0: // real life, buggy devices returning bad data
 			return nil, length, nil
 		case 4: // IPv4
-			if len(data) < 6 {
+			if len(data) < cursor+4 {
 				return nil, 0, fmt.Errorf("not enough data for ipv4 address: %x", data)
 			}
-			return net.IPv4(data[2], data[3], data[4], data[5]).String(), length, nil
+			return net.IP(data[cursor : cursor+4]).String(), length, nil
 		default:
-			return nil, 0, fmt.Errorf("got ipaddress len %d, expected 4", data[1])
+			return nil, 0, fmt.Errorf("got ipaddress len %d, expected 4", ipLen)
 		}
 	case TimeTicks:
 		length, cursor, err := parseLength(data)

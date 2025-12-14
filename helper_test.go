@@ -8,7 +8,10 @@ package gosnmp
 
 import (
 	"encoding/base64"
+	"io"
+	"log"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -232,4 +235,302 @@ func checkByteEquality2(a, b []byte) bool {
 	}
 
 	return true
+}
+
+// TestParseLength tests the parseLength function with various BER length encodings
+func TestParseLength(t *testing.T) {
+	tests := []struct {
+		name       string
+		data       []byte
+		wantLength int
+		wantCursor int
+		wantErr    bool
+		errContain string
+	}{
+		// Short form length encoding (length byte <= 127)
+		{
+			name:       "short form length 4",
+			data:       []byte{0x04, 0x04, 0x01, 0x02, 0x03, 0x04},
+			wantLength: 6,
+			wantCursor: 2,
+			wantErr:    false,
+		},
+		{
+			name:       "short form length 0 (null)",
+			data:       []byte{0x04, 0x00},
+			wantLength: 2,
+			wantCursor: 2,
+			wantErr:    false,
+		},
+		{
+			name:       "short form max length 127",
+			data:       append([]byte{0x04, 0x7F}, make([]byte, 127)...),
+			wantLength: 129,
+			wantCursor: 2,
+			wantErr:    false,
+		},
+		// Long form length encoding (first byte > 127, subsequent bytes contain length)
+		{
+			name:       "long form 1 byte length (0x81 0x80 = 128)",
+			data:       append([]byte{0x04, 0x81, 0x80}, make([]byte, 128)...),
+			wantLength: 131,
+			wantCursor: 3,
+			wantErr:    false,
+		},
+		{
+			name:       "long form 2 byte length (0x82 0x01 0x00 = 256)",
+			data:       append([]byte{0x04, 0x82, 0x01, 0x00}, make([]byte, 256)...),
+			wantLength: 260,
+			wantCursor: 4,
+			wantErr:    false,
+		},
+		// Edge cases
+		{
+			name:       "exactly 2 bytes should use short form parsing",
+			data:       []byte{0x04, 0x00},
+			wantLength: 2,
+			wantCursor: 2,
+			wantErr:    false,
+		},
+		{
+			name:       "1 byte input uses fallback",
+			data:       []byte{0x04},
+			wantLength: 1,
+			wantCursor: 1,
+			wantErr:    false,
+		},
+		{
+			name:       "empty input uses fallback",
+			data:       []byte{},
+			wantLength: 0,
+			wantCursor: 0,
+			wantErr:    false,
+		},
+		// Indefinite length encoding - prohibited per RFC 3417 Section 8
+		{
+			name:       "indefinite length 0x80 should be rejected",
+			data:       []byte{0x04, 0x80, 0x01, 0x02, 0x00, 0x00},
+			wantErr:    true,
+			errContain: "indefinite length",
+		},
+		// Invalid long form data
+		{
+			name:    "truncated long form length",
+			data:    []byte{0x04, 0x82, 0x01}, // missing second length byte
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			length, cursor, err := parseLength(tt.data)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseLength() expected error, got nil")
+				} else if tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+					t.Errorf("parseLength() error = %v, want error containing %q", err, tt.errContain)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("parseLength() unexpected error: %v", err)
+				return
+			}
+			if length != tt.wantLength {
+				t.Errorf("parseLength() length = %v, want %v", length, tt.wantLength)
+			}
+			if cursor != tt.wantCursor {
+				t.Errorf("parseLength() cursor = %v, want %v", cursor, tt.wantCursor)
+			}
+		})
+	}
+}
+
+// TestIPAddressDecodeValue tests IPAddress parsing via decodeValue with various BER encodings
+func TestIPAddressDecodeValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     []byte
+		wantIP   string
+		wantNull bool
+		wantErr  bool
+	}{
+		// Standard short-form BER encoding (most common)
+		{
+			name:   "short-form IPv4",
+			data:   []byte{0x40, 0x04, 192, 168, 1, 1},
+			wantIP: "192.168.1.1",
+		},
+		{
+			name:   "short-form IPv4 loopback",
+			data:   []byte{0x40, 0x04, 127, 0, 0, 1},
+			wantIP: "127.0.0.1",
+		},
+		{
+			name:   "short-form IPv6",
+			data:   []byte{0x40, 0x10, 0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+			wantIP: "2001:db8::1",
+		},
+		{
+			name:   "short-form IPv6 all bytes set",
+			data:   []byte{0x40, 0x10, 0x20, 0x01, 0x0d, 0xb8, 0x85, 0xa3, 0x00, 0x00, 0x8a, 0x2e, 0x03, 0x70, 0x73, 0x34, 0xab, 0xcd},
+			wantIP: "2001:db8:85a3:0:8a2e:370:7334:abcd",
+		},
+		// Long-form BER encoding
+		{
+			name:   "long-form IPv4",
+			data:   []byte{0x40, 0x81, 0x04, 192, 168, 1, 1},
+			wantIP: "192.168.1.1",
+		},
+		{
+			name:   "long-form IPv6",
+			data:   []byte{0x40, 0x81, 0x10, 0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+			wantIP: "2001:db8::1",
+		},
+		// Edge cases
+		{
+			name:     "null IPAddress (length 0)",
+			data:     []byte{0x40, 0x00},
+			wantNull: true,
+		},
+		// Error cases
+		{
+			name:    "truncated IPv4 data",
+			data:    []byte{0x40, 0x04, 192, 168},
+			wantErr: true,
+		},
+		{
+			name:    "truncated IPv6 data",
+			data:    []byte{0x40, 0x10, 0x20, 0x01, 0x0d, 0xb8},
+			wantErr: true,
+		},
+		{
+			name:    "invalid length (not 0, 4, or 16)",
+			data:    []byte{0x40, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
+			wantErr: true,
+		},
+		{
+			name:    "indefinite length rejected",
+			data:    []byte{0x40, 0x80, 192, 168, 1, 1, 0x00, 0x00},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			x := &GoSNMP{}
+			retVal := &variable{}
+			err := x.decodeValue(tt.data, retVal)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("decodeValue() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("decodeValue() unexpected error: %v", err)
+				return
+			}
+			if tt.wantNull {
+				if retVal.Value != nil {
+					t.Errorf("decodeValue() = %v, want nil", retVal.Value)
+				}
+				return
+			}
+			if retVal.Value != tt.wantIP {
+				t.Errorf("decodeValue() = %v, want %v", retVal.Value, tt.wantIP)
+			}
+			if retVal.Type != IPAddress {
+				t.Errorf("decodeValue() type = %v, want IPAddress", retVal.Type)
+			}
+		})
+	}
+}
+
+// TestIPAddressParseRawField tests IPAddress parsing via parseRawField.
+// Note: parseRawField only supports IPv4, not IPv6 (returns error for length != 4).
+func TestIPAddressParseRawField(t *testing.T) {
+	tests := []struct {
+		name       string
+		data       []byte
+		wantIP     string
+		wantLength int
+		wantNull   bool
+		wantErr    bool
+	}{
+		// Standard short-form
+		{
+			name:       "short-form IPv4",
+			data:       []byte{0x40, 0x04, 192, 168, 1, 1},
+			wantIP:     "192.168.1.1",
+			wantLength: 6,
+		},
+		{
+			name:       "short-form IPv4 loopback",
+			data:       []byte{0x40, 0x04, 127, 0, 0, 1},
+			wantIP:     "127.0.0.1",
+			wantLength: 6,
+		},
+		// Long-form BER
+		{
+			name:       "long-form IPv4",
+			data:       []byte{0x40, 0x81, 0x04, 10, 0, 0, 1},
+			wantIP:     "10.0.0.1",
+			wantLength: 7,
+		},
+		// Edge cases
+		{
+			name:       "null IPAddress (length 0)",
+			data:       []byte{0x40, 0x00},
+			wantNull:   true,
+			wantLength: 2,
+		},
+		// Error cases - parseRawField only supports IPv4
+		{
+			name:    "IPv6 rejected by parseRawField",
+			data:    []byte{0x40, 0x10, 0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+			wantErr: true,
+		},
+		{
+			name:    "truncated IPv4",
+			data:    []byte{0x40, 0x04, 192, 168},
+			wantErr: true,
+		},
+		{
+			name:    "indefinite length rejected",
+			data:    []byte{0x40, 0x80, 192, 168, 1, 1, 0x00, 0x00},
+			wantErr: true,
+		},
+	}
+
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, length, err := parseRawField(logger, tt.data, "test")
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseRawField() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("parseRawField() unexpected error: %v", err)
+				return
+			}
+			if length != tt.wantLength {
+				t.Errorf("parseRawField() length = %v, want %v", length, tt.wantLength)
+			}
+			if tt.wantNull {
+				if val != nil {
+					t.Errorf("parseRawField() = %v, want nil", val)
+				}
+				return
+			}
+			if val != tt.wantIP {
+				t.Errorf("parseRawField() = %v, want %v", val, tt.wantIP)
+			}
+		})
+	}
 }
