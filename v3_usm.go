@@ -737,9 +737,9 @@ func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) ([]byte,
 		h2 = sha1.New() //nolint:gosec
 	}
 
-	for i := 0; i < 64; i++ {
-		k1[i] = extkey[i] ^ 0x36
-		k2[i] = extkey[i] ^ 0x5c
+	for i := range 64 {
+		k1[i] = extkey[i] ^ 0x36 //nolint:gosec
+		k2[i] = extkey[i] ^ 0x5c //nolint:gosec
 	}
 
 	_, err = h1.Write(k1[:])
@@ -837,8 +837,8 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 	case DES:
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
-		for i := 0; i < len(iv); i++ {
-			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
+		for i := range len(iv) {
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i] //nolint:gosec
 		}
 		block, err := des.NewCipher(sp.PrivacyKey[:8]) //nolint:gosec
 		if err != nil {
@@ -895,8 +895,8 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		}
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
-		for i := 0; i < len(iv); i++ {
-			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
+		for i := range len(iv) {
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i] //nolint:gosec
 		}
 		block, err := des.NewCipher(sp.PrivacyKey[:8]) //nolint:gosec
 		if err != nil {
@@ -1017,7 +1017,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	cursor += count
 	if AuthoritativeEngineBoots, ok := rawMsgAuthoritativeEngineBoots.(int); ok {
-		sp.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots)
+		sp.AuthoritativeEngineBoots = uint32(AuthoritativeEngineBoots) //nolint:gosec
 		sp.Logger.Printf("Parsed authoritativeEngineBoots %d", AuthoritativeEngineBoots)
 	}
 
@@ -1027,7 +1027,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	cursor += count
 	if AuthoritativeEngineTime, ok := rawMsgAuthoritativeEngineTime.(int); ok {
-		sp.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime)
+		sp.AuthoritativeEngineTime = uint32(AuthoritativeEngineTime) //nolint:gosec
 		sp.Logger.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
 	}
 

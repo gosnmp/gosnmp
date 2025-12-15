@@ -72,7 +72,7 @@ func (x *GoSNMP) SendTrap(trap SnmpTrap) (result *SnmpPacket, err error) {
 		}
 
 		if trap.Variables[0].Type != TimeTicks {
-			now := uint32(time.Now().Unix())
+			now := uint32(time.Now().Unix()) //nolint:gosec
 			timetickPDU := SnmpPDU{Name: "1.3.6.1.2.1.1.3.0", Type: TimeTicks, Value: now}
 			// prepend timetickPDU
 			trap.Variables = append([]SnmpPDU{timetickPDU}, trap.Variables...)
