@@ -20,30 +20,266 @@ import (
 // https://www.scadacore.com/tools/programming-calculators/online-hex-converter/ is useful
 
 func TestParseObjectIdentifier(t *testing.T) {
-	oid := []byte{43, 6, 1, 2, 1, 31, 1, 1, 1, 10, 143, 255, 255, 255, 127}
-	expected := ".1.3.6.1.2.1.31.1.1.1.10.4294967295"
-
-	buf, err := parseObjectIdentifier(oid)
-	if err != nil {
-		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
+	tests := []struct {
+		name    string
+		data    []byte
+		want    string
+		wantErr error
+	}{
+		// First byte encoding: first two sub-identifiers encoded as (x*40 + y)
+		// where x is first sub-id (0, 1, or 2) and y is second sub-id
+		{
+			name: "iso.org (1.3)",
+			data: []byte{43}, // 1*40 + 3 = 43
+			want: ".1.3",
+		},
+		{
+			name: "iso.member-body (1.2)",
+			data: []byte{42}, // 1*40 + 2 = 42
+			want: ".1.2",
+		},
+		{
+			name: "joint-iso-itu-t (2.0)",
+			data: []byte{80}, // 2*40 + 0 = 80
+			want: ".2.0",
+		},
+		{
+			name: "itu-t (0.0)",
+			data: []byte{0}, // 0*40 + 0 = 0
+			want: ".0.0",
+		},
+		{
+			name: "first byte max second sub-id (0.39)",
+			data: []byte{39}, // 0*40 + 39 = 39
+			want: ".0.39",
+		},
+		{
+			name: "first byte boundary (1.0)",
+			data: []byte{40}, // 1*40 + 0 = 40
+			want: ".1.0",
+		},
+		// Standard OIDs
+		{
+			name: "sysDescr (1.3.6.1.2.1.1.1)",
+			data: []byte{43, 6, 1, 2, 1, 1, 1},
+			want: ".1.3.6.1.2.1.1.1",
+		},
+		{
+			name: "ifTable (1.3.6.1.2.1.2.2)",
+			data: []byte{43, 6, 1, 2, 1, 2, 2},
+			want: ".1.3.6.1.2.1.2.2",
+		},
+		{
+			name: "enterprises (1.3.6.1.4.1)",
+			data: []byte{43, 6, 1, 4, 1},
+			want: ".1.3.6.1.4.1",
+		},
+		// Multi-byte sub-identifiers
+		{
+			name: "two-byte sub-id (128)",
+			data: []byte{43, 0x81, 0x00}, // .1.3.128
+			want: ".1.3.128",
+		},
+		{
+			name: "two-byte sub-id (255)",
+			data: []byte{43, 0x81, 0x7F}, // .1.3.255
+			want: ".1.3.255",
+		},
+		{
+			name: "three-byte sub-id (16384)",
+			data: []byte{43, 0x81, 0x80, 0x00}, // .1.3.16384
+			want: ".1.3.16384",
+		},
+		{
+			name: "max uint32 sub-id (4294967295)",
+			data: []byte{43, 0x8F, 0xFF, 0xFF, 0xFF, 0x7F},
+			want: ".1.3.4294967295",
+		},
+		{
+			name: "mixed sub-id sizes",
+			data: []byte{43, 6, 1, 2, 1, 31, 1, 1, 1, 10, 0x8F, 0xFF, 0xFF, 0xFF, 0x7F},
+			want: ".1.3.6.1.2.1.31.1.1.1.10.4294967295",
+		},
+		// Error cases
+		{
+			name:    "empty input",
+			data:    []byte{},
+			want:    "",
+			wantErr: ErrInvalidOidLength,
+		},
+		{
+			name:    "overflow sub-id (4294967296)",
+			data:    []byte{43, 0x90, 0x80, 0x80, 0x80, 0x00},
+			want:    "",
+			wantErr: ErrBase128IntegerTooLarge,
+		},
+		{
+			name:    "truncated multi-byte sub-id",
+			data:    []byte{43, 0x81}, // continuation byte without termination
+			want:    "",
+			wantErr: ErrBase128IntegerTruncated,
+		},
+		{
+			name:    "truncated mid-sequence",
+			data:    []byte{43, 6, 0x81, 0x82}, // two continuation bytes
+			want:    "",
+			wantErr: ErrBase128IntegerTruncated,
+		},
 	}
-	result := string(buf)
 
-	if string(result) != expected {
-		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseObjectIdentifier(tt.data)
+			if err != tt.wantErr {
+				t.Errorf("parseObjectIdentifier() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("parseObjectIdentifier() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestParseObjectIdentifierWithOtherOid(t *testing.T) {
-	oid := []byte{43, 6, 3, 30, 11, 1, 10}
-	expected := ".1.3.6.3.30.11.1.10"
-	buf, err := parseObjectIdentifier(oid)
-	if err != nil {
-		t.Errorf("parseObjectIdentifier(%v) want %s, error: %v", oid, expected, err)
+func TestParseBase128Uint32(t *testing.T) {
+	tests := []struct {
+		name       string
+		data       []byte
+		initOffset int
+		want       uint32
+		wantOffset int
+		wantErr    error
+	}{
+		// Single byte values (0-127)
+		{
+			name:       "zero",
+			data:       []byte{0x00},
+			want:       0,
+			wantOffset: 1,
+		},
+		{
+			name:       "one",
+			data:       []byte{0x01},
+			want:       1,
+			wantOffset: 1,
+		},
+		{
+			name:       "max single byte (127)",
+			data:       []byte{0x7F},
+			want:       127,
+			wantOffset: 1,
+		},
+		// Two byte values (128-16383)
+		{
+			name:       "min two byte (128)",
+			data:       []byte{0x81, 0x00},
+			want:       128,
+			wantOffset: 2,
+		},
+		{
+			name:       "two byte value 300",
+			data:       []byte{0x82, 0x2C}, // 2*128 + 44 = 300
+			want:       300,
+			wantOffset: 2,
+		},
+		{
+			name:       "max two byte (16383)",
+			data:       []byte{0xFF, 0x7F}, // 127*128 + 127 = 16383
+			want:       16383,
+			wantOffset: 2,
+		},
+		// Three byte values
+		{
+			name:       "min three byte (16384)",
+			data:       []byte{0x81, 0x80, 0x00},
+			want:       16384,
+			wantOffset: 3,
+		},
+		// Four byte values
+		{
+			name:       "four byte value",
+			data:       []byte{0x81, 0x80, 0x80, 0x00}, // 2097152
+			want:       2097152,
+			wantOffset: 4,
+		},
+		// Five byte values - boundary cases
+		{
+			name:       "max uint32 (4294967295)",
+			data:       []byte{0x8F, 0xFF, 0xFF, 0xFF, 0x7F},
+			want:       4294967295,
+			wantOffset: 5,
+		},
+		// Overflow cases
+		{
+			name:    "overflow - uint32 max + 1 (4294967296)",
+			data:    []byte{0x90, 0x80, 0x80, 0x80, 0x00},
+			want:    0,
+			wantErr: ErrBase128IntegerTooLarge,
+		},
+		{
+			name:    "overflow - 6 bytes (exceeds max base128 length for uint32)",
+			data:    []byte{0x81, 0x80, 0x80, 0x80, 0x80, 0x00},
+			want:    0,
+			wantErr: ErrBase128IntegerTooLarge,
+		},
+		// Truncation cases
+		{
+			name:    "truncated - single continuation byte",
+			data:    []byte{0x80},
+			want:    0,
+			wantErr: ErrBase128IntegerTruncated,
+		},
+		{
+			name:    "truncated - multiple continuation bytes",
+			data:    []byte{0x81, 0x82, 0x83},
+			want:    0,
+			wantErr: ErrBase128IntegerTruncated,
+		},
+		{
+			name:    "truncated - empty input",
+			data:    []byte{},
+			want:    0,
+			wantErr: ErrBase128IntegerTruncated,
+		},
+		// Non-minimal encoding (accepted per permissive parsing)
+		{
+			name:       "non-minimal encoding of 1",
+			data:       []byte{0x80, 0x01}, // could be just 0x01
+			want:       1,
+			wantOffset: 2,
+		},
+		// Offset handling
+		{
+			name:       "value with trailing data",
+			data:       []byte{0x7F, 0x99, 0x99}, // 127 followed by garbage
+			want:       127,
+			wantOffset: 1, // should stop after first byte
+		},
+		{
+			name:       "parse from middle of slice",
+			data:       []byte{0x99, 0x99, 0x82, 0x2C, 0x99}, // garbage, 300, garbage
+			initOffset: 2,
+			want:       300,
+			wantOffset: 4,
+		},
 	}
-	result := string(buf)
-	if string(result) != expected {
-		t.Errorf("parseObjectIdentifier(%v) = %s, want %s", oid, result, expected)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, offset, err := parseBase128Uint32(tt.data, tt.initOffset)
+			if err != tt.wantErr {
+				t.Errorf("parseBase128Uint32() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err == nil {
+				if got != tt.want {
+					t.Errorf("parseBase128Uint32() value = %v, want %v", got, tt.want)
+				}
+				if offset != tt.wantOffset {
+					t.Errorf("parseBase128Uint32() offset = %v, want %v", offset, tt.wantOffset)
+				}
+			}
+		})
 	}
 }
 

@@ -560,21 +560,20 @@ func parseOpaque(logger Logger, data []byte, retVal *variable) error {
 	return nil
 }
 
-// parseBase128Int parses a base-128 encoded int from the given offset in the
-// given byte slice. It returns the value and the new offset.
-func parseBase128Int(bytes []byte, initOffset int) (int64, int, error) {
-	var ret int64
-	var offset = initOffset
-	for shifted := 0; offset < len(bytes); shifted++ {
-		if shifted > 4 {
+// parseBase128Uint32 parses a base-128 encoded unsigned integer from the given
+// offset in the given byte slice. Returns the value and the new offset.
+func parseBase128Uint32(bytes []byte, initOffset int) (uint32, int, error) {
+	var ret uint64
+	offset := initOffset
+	for offset < len(bytes) {
+		b := bytes[offset]
+		offset++
+		ret = (ret << 7) | uint64(b&0x7f)
+		if ret > math.MaxUint32 {
 			return 0, 0, ErrBase128IntegerTooLarge
 		}
-		ret <<= 7
-		b := bytes[offset]
-		ret |= int64(b & 0x7f)
-		offset++
 		if b&0x80 == 0 {
-			return ret, offset, nil
+			return uint32(ret), offset, nil
 		}
 	}
 	return 0, 0, ErrBase128IntegerTruncated
@@ -677,24 +676,25 @@ func parseObjectIdentifier(src []byte) (string, error) {
 		return "", ErrInvalidOidLength
 	}
 
-	out := new(bytes.Buffer)
+	// Worst-case: first byte expands to 5 chars (".2.39"), rest to 4 chars (".127")
+	out := make([]byte, 0, len(src)*4+1)
 
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])/40), 10))
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
+	out = append(out, '.')
+	out = strconv.AppendUint(out, uint64(src[0]/40), 10)
+	out = append(out, '.')
+	out = strconv.AppendUint(out, uint64(src[0]%40), 10)
 
-	var v int64
+	var v uint32
 	var err error
 	for offset := 1; offset < len(src); {
-		out.WriteByte('.')
-		v, offset, err = parseBase128Int(src, offset)
+		out = append(out, '.')
+		v, offset, err = parseBase128Uint32(src, offset)
 		if err != nil {
 			return "", err
 		}
-		out.WriteString(strconv.FormatInt(v, 10))
+		out = strconv.AppendUint(out, uint64(v), 10)
 	}
-	return out.String(), nil
+	return string(out), nil
 }
 
 func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
