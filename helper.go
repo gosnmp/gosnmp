@@ -91,7 +91,7 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		retVal.Type = Asn1BER(data[0])
 		switch Asn1BER(data[0]) {
 		case Uinteger32:
-			retVal.Value = uint32(ret)
+			retVal.Value = uint32(ret) //nolint:gosec
 		default:
 			retVal.Value = ret
 		}
@@ -275,7 +275,7 @@ func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
 	}
 
 	for i := l - 1; i >= 0; i-- {
-		o := byte(n >> uint(i*7))
+		o := byte(n >> uint(i*7)) //nolint:gosec
 		o &= 0x7f
 		if i != 0 {
 			o |= 0x80
@@ -317,7 +317,7 @@ func marshalInt32(value int) ([]byte, error) {
 	//  b) shall not all be zero
 	// These rules ensure that an integer value is always encoded in the smallest
 	// possible number of octets.
-	val := uint32(value)
+	val := uint32(value) //nolint:gosec
 	switch {
 	case val&mask1 == 0 || val&mask1 == mask1:
 		return []byte{byte(val)}, nil
@@ -364,7 +364,7 @@ func marshalUint32(v any) ([]byte, error) {
 	case uint32:
 		source = val
 	case uint:
-		source = uint32(val)
+		source = uint32(val) //nolint:gosec
 	case uint8:
 		source = uint32(val)
 	case SNMPError:
@@ -599,8 +599,8 @@ func parseInt64(bytes []byte) (int64, error) {
 		ret |= int64(bytes[bytesRead])
 	}
 	// Shift up and down in order to sign extend the result.
-	ret <<= 64 - uint8(len(bytes))*8
-	ret >>= 64 - uint8(len(bytes))*8
+	ret <<= 64 - uint8(len(bytes))*8 //nolint:gosec
+	ret >>= 64 - uint8(len(bytes))*8 //nolint:gosec
 	return ret, nil
 }
 
@@ -805,7 +805,7 @@ func parseUint32(bytes []byte) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint32(ret), nil
+	return uint32(ret), nil //nolint:gosec
 }
 
 // parseUint treats the given bytes as a big-endian, signed integer and returns
@@ -862,14 +862,14 @@ func (b BitStringValue) At(i int) int {
 		return 0
 	}
 	x := i / 8
-	y := 7 - uint(i%8)
+	y := 7 - uint(i%8) //nolint:gosec
 	return int(b.Bytes[x]>>y) & 1
 }
 
 // RightAlign returns a slice where the padding bits are at the beginning. The
 // slice may share memory with the BitString.
 func (b BitStringValue) RightAlign() []byte {
-	shift := uint(8 - (b.BitLength % 8))
+	shift := uint(8 - (b.BitLength % 8)) //nolint:gosec
 	if shift == 8 || len(b.Bytes) == 0 {
 		return b.Bytes
 	}
