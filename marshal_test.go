@@ -2088,3 +2088,172 @@ func dumpBytes2(desc string, bb []byte, cursor int) string {
 	}
 	return result
 }
+
+// TestMarshalVarbindRoundTrip verifies that marshaled varbinds can be parsed back correctly
+// for all PDU types with various OID sizes including boundary cases.
+func TestMarshalVarbindRoundTrip(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+
+	// OID that encodes to exactly 128 bytes (requires long-form BER length)
+	// Base .1.3.6.1.4.1 = 5 bytes, each 268435455 = 4 bytes, each 127 = 1 byte
+	// 5 + (30 * 4) + 3 = 128 bytes
+	largeOID := ".1.3.6.1.4.1"
+	for i := 0; i < 30; i++ {
+		largeOID += ".268435455"
+	}
+	largeOID += ".127.127.127"
+
+	smallOID := ".1.3.6.1.2.1.1.1.0"
+
+	tests := []struct {
+		name string
+		pdu  SnmpPDU
+	}{
+		// Integer with various OID sizes
+		{"Integer/small OID", SnmpPDU{Name: smallOID, Type: Integer, Value: 42}},
+		{"Integer/large OID", SnmpPDU{Name: largeOID, Type: Integer, Value: 42}},
+
+		// Null
+		{"Null/small OID", SnmpPDU{Name: smallOID, Type: Null, Value: nil}},
+		{"Null/large OID", SnmpPDU{Name: largeOID, Type: Null, Value: nil}},
+
+		// Counter32
+		{"Counter32/small OID", SnmpPDU{Name: smallOID, Type: Counter32, Value: uint(1000)}},
+		{"Counter32/large OID", SnmpPDU{Name: largeOID, Type: Counter32, Value: uint(1000)}},
+
+		// Gauge32
+		{"Gauge32/small OID", SnmpPDU{Name: smallOID, Type: Gauge32, Value: uint(500)}},
+		{"Gauge32/large OID", SnmpPDU{Name: largeOID, Type: Gauge32, Value: uint(500)}},
+
+		// TimeTicks
+		{"TimeTicks/small OID", SnmpPDU{Name: smallOID, Type: TimeTicks, Value: uint32(123456)}},
+		{"TimeTicks/large OID", SnmpPDU{Name: largeOID, Type: TimeTicks, Value: uint32(123456)}},
+
+		// OctetString with various sizes
+		{"OctetString/small OID/small value", SnmpPDU{Name: smallOID, Type: OctetString, Value: []byte("test")}},
+		{"OctetString/large OID/small value", SnmpPDU{Name: largeOID, Type: OctetString, Value: []byte("test")}},
+		{"OctetString/small OID/large value", SnmpPDU{Name: smallOID, Type: OctetString, Value: make([]byte, 200)}},
+
+		// ObjectIdentifier as value
+		{"ObjectIdentifier/small OID", SnmpPDU{Name: smallOID, Type: ObjectIdentifier, Value: ".1.3.6.1.2.1"}},
+		{"ObjectIdentifier/large OID", SnmpPDU{Name: largeOID, Type: ObjectIdentifier, Value: ".1.3.6.1.2.1"}},
+
+		// IPAddress
+		{"IPAddress/small OID", SnmpPDU{Name: smallOID, Type: IPAddress, Value: "192.168.1.1"}},
+		{"IPAddress/large OID", SnmpPDU{Name: largeOID, Type: IPAddress, Value: "192.168.1.1"}},
+
+		// Counter64
+		{"Counter64/small OID", SnmpPDU{Name: smallOID, Type: Counter64, Value: uint64(9999999999)}},
+		{"Counter64/large OID", SnmpPDU{Name: largeOID, Type: Counter64, Value: uint64(9999999999)}},
+
+		// NoSuchObject, NoSuchInstance, EndOfMibView
+		{"NoSuchObject/small OID", SnmpPDU{Name: smallOID, Type: NoSuchObject, Value: nil}},
+		{"NoSuchObject/large OID", SnmpPDU{Name: largeOID, Type: NoSuchObject, Value: nil}},
+		{"NoSuchInstance/small OID", SnmpPDU{Name: smallOID, Type: NoSuchInstance, Value: nil}},
+		{"EndOfMibView/small OID", SnmpPDU{Name: smallOID, Type: EndOfMibView, Value: nil}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := marshalVarbind(&tt.pdu)
+			if err != nil {
+				t.Fatalf("marshalVarbind() error = %v", err)
+			}
+
+			// Verify SEQUENCE tag
+			if result[0] != byte(Sequence) {
+				t.Fatalf("expected SEQUENCE tag 0x30, got 0x%02x", result[0])
+			}
+
+			// Parse length and get cursor position
+			_, cursor, err := parseLength(result)
+			if err != nil {
+				t.Fatalf("parseLength() error = %v", err)
+			}
+
+			// Parse OID
+			rawOid, oidLength, err := parseRawField(logger, result[cursor:], "OID")
+			if err != nil {
+				t.Fatalf("parseRawField(OID) error = %v", err)
+			}
+
+			parsedOID, ok := rawOid.(string)
+			if !ok {
+				t.Fatalf("OID type assertion failed, got %T", rawOid)
+			}
+			if parsedOID != tt.pdu.Name {
+				t.Errorf("OID mismatch: got %q, want %q", parsedOID, tt.pdu.Name)
+			}
+
+			// Parse value
+			cursor += oidLength
+			var decodedVal variable
+			x := &GoSNMP{Logger: logger}
+			if err = x.decodeValue(result[cursor:], &decodedVal); err != nil {
+				t.Fatalf("decodeValue() error = %v", err)
+			}
+
+			if decodedVal.Type != tt.pdu.Type {
+				t.Errorf("Type mismatch: got %v, want %v", decodedVal.Type, tt.pdu.Type)
+			}
+		})
+	}
+}
+
+// TestMarshalTLV verifies BER TLV encoding for various length values.
+func TestMarshalTLV(t *testing.T) {
+	tests := []struct {
+		name         string
+		tag          byte
+		valueLen     int
+		wantLenBytes []byte // expected BER length encoding
+	}{
+		// Short form: lengths 0-127 encoded in single byte
+		{"length 10", byte(ObjectIdentifier), 10, []byte{0x0a}},
+		{"length 127", byte(ObjectIdentifier), 127, []byte{0x7f}},
+
+		// Long form: lengths >= 128 use 0x8n prefix where n = number of length bytes
+		{"length 128", byte(ObjectIdentifier), 128, []byte{0x81, 0x80}},
+		{"length 255", byte(ObjectIdentifier), 255, []byte{0x81, 0xff}},
+		{"length 256", byte(ObjectIdentifier), 256, []byte{0x82, 0x01, 0x00}},
+
+		// Different tags
+		{"Sequence length 100", byte(Sequence), 100, []byte{0x64}},
+		{"Sequence length 200", byte(Sequence), 200, []byte{0x81, 0xc8}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			value := make([]byte, tt.valueLen)
+
+			err := marshalTLV(buf, tt.tag, value)
+			if err != nil {
+				t.Fatalf("marshalTLV() error = %v", err)
+			}
+
+			result := buf.Bytes()
+
+			// Check tag
+			if result[0] != tt.tag {
+				t.Errorf("tag = 0x%02x, want 0x%02x", result[0], tt.tag)
+			}
+
+			// Check length encoding exactly
+			gotLenBytes := result[1 : 1+len(tt.wantLenBytes)]
+			for i, b := range tt.wantLenBytes {
+				if gotLenBytes[i] != b {
+					t.Errorf("length byte[%d] = 0x%02x, want 0x%02x (full: got %x, want %x)",
+						i, gotLenBytes[i], b, gotLenBytes, tt.wantLenBytes)
+					break
+				}
+			}
+
+			// Check total size
+			expectedTotal := 1 + len(tt.wantLenBytes) + tt.valueLen
+			if len(result) != expectedTotal {
+				t.Errorf("total length = %d, want %d", len(result), expectedTotal)
+			}
+		})
+	}
+}

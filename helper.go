@@ -418,8 +418,8 @@ func marshalFloat64(v any) ([]byte, error) {
 func marshalLength(length int) ([]byte, error) {
 	// more convenient to pass length as int than uint64. Therefore check < 0
 	if length < 0 {
-		return nil, fmt.Errorf("length must be greater than zero")
-	} else if length < 127 {
+		return nil, fmt.Errorf("length must be >= 0")
+	} else if length <= 127 {
 		return []byte{byte(length)}, nil
 	}
 
@@ -440,6 +440,19 @@ func marshalLength(length int) ([]byte, error) {
 
 	header := []byte{byte(128 | len(bufBytes))}
 	return append(header, bufBytes...), nil
+}
+
+// marshalTLV writes a BER TLV (type-length-value) to buf using proper length
+// encoding. Handles values of any size, including those exceeding 127 bytes.
+func marshalTLV(buf *bytes.Buffer, tag byte, value []byte) error {
+	length, err := marshalLength(len(value))
+	if err != nil {
+		return err
+	}
+	buf.WriteByte(tag)
+	buf.Write(length)
+	buf.Write(value)
+	return nil
 }
 
 func marshalObjectIdentifier(oid string) ([]byte, error) {
