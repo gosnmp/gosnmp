@@ -770,3 +770,145 @@ func TestIPAddressParseRawField(t *testing.T) {
 		})
 	}
 }
+
+func TestMarshalFloat32(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   any
+		want    []byte
+		wantErr bool
+	}{
+		{
+			name:    "zero",
+			input:   float32(0.0),
+			want:    []byte{0x00, 0x00, 0x00, 0x00},
+			wantErr: false,
+		},
+		{
+			name:    "positive 1.0",
+			input:   float32(1.0),
+			want:    []byte{0x3f, 0x80, 0x00, 0x00},
+			wantErr: false,
+		},
+		{
+			name:    "negative 1.0",
+			input:   float32(-1.0),
+			want:    []byte{0xbf, 0x80, 0x00, 0x00},
+			wantErr: false,
+		},
+		{
+			name:    "pi approx",
+			input:   float32(3.14159),
+			want:    []byte{0x40, 0x49, 0x0f, 0xd0},
+			wantErr: false,
+		},
+		{
+			name:    "wrong type int",
+			input:   42,
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "wrong type float64",
+			input:   float64(1.0),
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "wrong type string",
+			input:   "1.0",
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := marshalFloat32(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("marshalFloat32() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("marshalFloat32() unexpected error: %v", err)
+				return
+			}
+			if !checkByteEquality2(got, tt.want) {
+				t.Errorf("marshalFloat32() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMarshalFloat64(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   any
+		want    []byte
+		wantErr bool
+	}{
+		{
+			name:    "zero",
+			input:   float64(0.0),
+			want:    []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			wantErr: false,
+		},
+		{
+			name:    "positive 1.0",
+			input:   float64(1.0),
+			want:    []byte{0x3f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			wantErr: false,
+		},
+		{
+			name:    "negative 1.0",
+			input:   float64(-1.0),
+			want:    []byte{0xbf, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			wantErr: false,
+		},
+		{
+			name:    "pi approx",
+			input:   float64(3.141592653589793),
+			want:    []byte{0x40, 0x09, 0x21, 0xfb, 0x54, 0x44, 0x2d, 0x18},
+			wantErr: false,
+		},
+		{
+			name:    "wrong type int",
+			input:   42,
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "wrong type float32",
+			input:   float32(1.0),
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "wrong type string",
+			input:   "1.0",
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := marshalFloat64(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("marshalFloat64() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("marshalFloat64() unexpected error: %v", err)
+				return
+			}
+			if !checkByteEquality2(got, tt.want) {
+				t.Errorf("marshalFloat64() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

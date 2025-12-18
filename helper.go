@@ -13,7 +13,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"net"
@@ -263,30 +262,29 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 	return nil
 }
 
-func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
+// appendBase128Int appends a base-128 encoded integer to the given slice.
+// Returns the extended slice.
+func appendBase128Int(dst []byte, n int64) []byte {
 	if n == 0 {
-		err = out.WriteByte(0)
-		return
+		return append(dst, 0)
 	}
 
+	// Count number of 7-bit groups needed
 	l := 0
 	for i := n; i > 0; i >>= 7 {
 		l++
 	}
 
+	// Encode from most significant to least significant 7-bit group
 	for i := l - 1; i >= 0; i-- {
-		o := byte(n >> uint(i*7)) //nolint:gosec
-		o &= 0x7f
+		o := byte(n>>uint(i*7)) & 0x7f //nolint:gosec
 		if i != 0 {
 			o |= 0x80
 		}
-		err = out.WriteByte(o)
-		if err != nil {
-			return
-		}
+		dst = append(dst, o)
 	}
 
-	return nil
+	return dst
 }
 
 /*
@@ -391,17 +389,23 @@ func marshalUint32(v any) ([]byte, error) {
 }
 
 func marshalFloat32(v any) ([]byte, error) {
-	source := v.(float32)
-	out := bytes.NewBuffer(nil)
-	err := binary.Write(out, binary.BigEndian, source)
-	return out.Bytes(), err
+	source, ok := v.(float32)
+	if !ok {
+		return nil, fmt.Errorf("marshalFloat32: expected float32, got %T", v)
+	}
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, math.Float32bits(source))
+	return buf, nil
 }
 
 func marshalFloat64(v any) ([]byte, error) {
-	source := v.(float64)
-	out := bytes.NewBuffer(nil)
-	err := binary.Write(out, binary.BigEndian, source)
-	return out.Bytes(), err
+	source, ok := v.(float64)
+	if !ok {
+		return nil, fmt.Errorf("marshalFloat64: expected float64, got %T", v)
+	}
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, math.Float64bits(source))
+	return buf, nil
 }
 
 // marshalLength builds a byte representation of length
@@ -419,27 +423,27 @@ func marshalLength(length int) ([]byte, error) {
 	// more convenient to pass length as int than uint64. Therefore check < 0
 	if length < 0 {
 		return nil, fmt.Errorf("length must be >= 0")
-	} else if length <= 127 {
+	}
+	if length <= 127 {
 		return []byte{byte(length)}, nil
 	}
 
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, uint64(length))
-	if err != nil {
-		return nil, err
-	}
-	bufBytes := buf.Bytes()
+	// Encode length as big-endian uint64 and find first non-zero byte
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], uint64(length))
 
-	// strip leading zeros
-	for idx, octect := range bufBytes {
-		if octect != 00 {
-			bufBytes = bufBytes[idx:]
-			break
-		}
+	// Find first non-zero byte to trim leading zeros
+	start := 0
+	for start < 8 && buf[start] == 0 {
+		start++
 	}
 
-	header := []byte{byte(128 | len(bufBytes))}
-	return append(header, bufBytes...), nil
+	// Build result: header byte + length bytes
+	numBytes := 8 - start
+	result := make([]byte, 1+numBytes)
+	result[0] = byte(128 | numBytes)
+	copy(result[1:], buf[start:])
+	return result, nil
 }
 
 // marshalTLV writes a BER TLV (type-length-value) to buf using proper length
@@ -456,10 +460,13 @@ func marshalTLV(buf *bytes.Buffer, tag byte, value []byte) error {
 }
 
 func marshalObjectIdentifier(oid string) ([]byte, error) {
-	out := new(bytes.Buffer)
 	oidLength := len(oid)
+
+	// Worst-case: 2 chars per output byte (e.g., ".128" = 4 chars → 2 bytes)
+	// This ratio holds at base-128 boundaries; smaller values use more chars per byte
+	out := make([]byte, 0, oidLength/2)
+
 	oidBase := 0
-	var err error
 	i := 0
 	for j := 0; j < oidLength; {
 		if oid[j] == '.' {
@@ -470,7 +477,7 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 		for j < oidLength && oid[j] != '.' {
 			ch := int64(oid[j] - '0')
 			if ch > 9 {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
 			val *= 10
 			val += ch
@@ -479,35 +486,28 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 		switch i {
 		case 0:
 			if val > 6 {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
 			oidBase = int(val * 40)
 		case 1:
 			if val >= 40 {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
 			oidBase += int(val)
-			err = out.WriteByte(byte(oidBase))
-			if err != nil {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
-			}
-
+			out = append(out, byte(oidBase))
 		default:
 			if val > MaxObjectSubIdentifierValue {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Value out of range")
+				return nil, fmt.Errorf("unable to marshal OID: Value out of range")
 			}
-			err = marshalBase128Int(out, val)
-			if err != nil {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
-			}
+			out = appendBase128Int(out, val)
 		}
 		i++
 	}
 	if i < 2 || i > 128 {
-		return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+		return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 	}
 
-	return out.Bytes(), nil
+	return out, nil
 }
 
 // TODO no tests
