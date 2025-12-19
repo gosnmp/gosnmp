@@ -151,8 +151,8 @@ RequestLoop:
 				break RequestLoop
 			}
 
-			if checkIncreasing && pdu.Name == oid {
-				return fmt.Errorf("OID not increasing: %s", pdu.Name)
+			if checkIncreasing && oidCompare(oid, pdu.Name) >= 0 {
+				return fmt.Errorf("OID not increasing: %s >= %s", oid, pdu.Name)
 			}
 
 			// Report our pdu
@@ -173,4 +173,60 @@ func (x *GoSNMP) walkAll(getRequestType PDUType, rootOid string) (results []Snmp
 		return nil
 	})
 	return results, err
+}
+
+// oidCompare compares two OID strings lexicographically.
+// Returns -1 if oid1 < oid2, 0 if equal, 1 if oid1 > oid2.
+// This matches net-snmp's snmp_oid_compare semantics.
+//
+// OIDs are compared component by component as unsigned integers.
+// A shorter OID is considered less than a longer OID when all
+// components of the shorter OID match the prefix of the longer OID.
+func oidCompare(oid1, oid2 string) int {
+	pos1, pos2 := 0, 0
+	for {
+		comp1, newPos1, ok1 := nextOIDComponent(oid1, pos1)
+		comp2, newPos2, ok2 := nextOIDComponent(oid2, pos2)
+		pos1, pos2 = newPos1, newPos2
+
+		switch {
+		case !ok1 && !ok2:
+			return 0
+		case !ok1:
+			return -1
+		case !ok2:
+			return 1
+		}
+
+		if comp1 != comp2 {
+			if comp1 < comp2 {
+				return -1
+			}
+			return 1
+		}
+	}
+}
+
+// nextOIDComponent parses the next OID component starting at pos.
+// Returns the component value, the new position, and whether a component was found.
+func nextOIDComponent(oid string, pos int) (uint32, int, bool) {
+	if pos < len(oid) && oid[pos] == '.' {
+		pos++
+	}
+	if pos >= len(oid) {
+		return 0, pos, false
+	}
+
+	var val uint32
+	start := pos
+	for pos < len(oid) && oid[pos] >= '0' && oid[pos] <= '9' {
+		val = val*10 + uint32(oid[pos]-'0')
+		pos++
+	}
+
+	if pos == start {
+		return 0, pos, false
+	}
+
+	return val, pos, true
 }
