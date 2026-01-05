@@ -1,3 +1,6 @@
+# Don't include the `go generate` mock file, use gomock. See the README.md.
+/gosnmp_mock.go
+
 # Created by https://www.gitignore.io/api/go,osx,vim
 
 ### Go ###
