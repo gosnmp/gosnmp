@@ -969,7 +969,7 @@ func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket)
 	}
 
 	cursor += count
-	if cursor >= len(packet) {
+	if cursor < 0 || cursor >= len(packet) {
 		return 0, 0, fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
@@ -1001,7 +1001,7 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 			return 0, fmt.Errorf("error parsing community string: %w", err)
 		}
 		cursor += count
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return 0, fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 		}
 
@@ -1066,7 +1066,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("error parsing SNMP packet request ID: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
@@ -1082,7 +1082,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error parsing SNMP packet non repeaters: %w", err)
 		}
 		cursor += count
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 		}
 
@@ -1096,7 +1096,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error parsing SNMP packet max repetitions: %w", err)
 		}
 		cursor += count
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 		}
 
@@ -1110,7 +1110,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error parsing SNMP packet error: %w", err)
 		}
 		cursor += count
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 		}
 
@@ -1125,7 +1125,7 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error parsing SNMP packet error index: %w", err)
 		}
 		cursor += count
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 		}
 
@@ -1157,7 +1157,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 	}
 
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
@@ -1172,7 +1172,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("error parsing SNMP packet error: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
@@ -1187,7 +1187,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("error parsing SNMP packet error: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
@@ -1202,7 +1202,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("error parsing SNMP packet error: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
@@ -1217,7 +1217,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 		return fmt.Errorf("error parsing SNMP packet error: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return fmt.Errorf("error parsing SNMP packet, packet length %d cursor %d", len(packet), cursor)
 	}
 
@@ -1281,7 +1281,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("error parsing OID Value: %w", err)
 		}
 		cursor += oidLength
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return fmt.Errorf("error parsing OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
 		oid, ok := rawOid.(string)
@@ -1300,7 +1300,7 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return err
 		}
 		cursor += valueLength
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
 		}
 

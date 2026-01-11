@@ -373,7 +373,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("error parsing SNMPV3 message ID: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
@@ -387,7 +387,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("error parsing SNMPV3 msgMaxSize: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
@@ -401,7 +401,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: %w", err)
 	}
 	cursor += count
-	if cursor > len(packet) {
+	if cursor < 0 || cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
@@ -415,7 +415,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("error parsing SNMPV3 msgSecModel: %w", err)
 	}
 	cursor += count
-	if cursor >= len(packet) {
+	if cursor < 0 || cursor >= len(packet) {
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
@@ -474,7 +474,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		if decrypted {
 			// truncate padding that might have been included with
 			// the encrypted PDU
-			if cursor+tlength > len(packet) {
+			if cursor+tlength < 0 || cursor+tlength > len(packet) {
 				return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 			}
 			packet = packet[:cursor+tlength]
@@ -489,7 +489,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextEngineID: %w", err)
 		}
 		cursor += count
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
@@ -502,7 +502,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextName: %w", err)
 		}
 		cursor += count
-		if cursor > len(packet) {
+		if cursor < 0 || cursor > len(packet) {
 			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
