@@ -346,23 +346,30 @@ func (t *TrapListener) listenUDP(addr string) error {
 }
 
 func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineID string, addr *net.UDPAddr) error {
-	newSecurityParams, ok := trap.SecurityParameters.Copy().(*UsmSecurityParameters)
+	secParams, ok := trap.SecurityParameters.Copy().(*UsmSecurityParameters)
 	if !ok {
 		return errors.New("unable to cast SecurityParams to UsmSecurityParameters")
 	}
-	newSecurityParams.AuthoritativeEngineID = snmpEngineID
-	reportPacket := trap
-	reportPacket.PDUType = Report
-	reportPacket.MsgFlags &= AuthPriv
-	reportPacket.SecurityParameters = newSecurityParams
-	reportPacket.Variables = []SnmpPDU{
-		{
-			Name:  usmStatsUnknownEngineIDs,
-			Value: int(atomic.LoadUint32(&t.usmStatsUnknownEngineIDsCount)),
-			Type:  Integer,
+
+	return t.SendUDP(&SnmpPacket{
+		Version:       Version3,
+		MsgFlags:      NoAuthNoPriv,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			AuthoritativeEngineID:    snmpEngineID,
+			AuthoritativeEngineBoots: 1,
+			AuthoritativeEngineTime:  1,
+			UserName:                 secParams.UserName,
 		},
-	}
-	return t.SendUDP(reportPacket, addr)
+		ContextEngineID: snmpEngineID,
+		PDUType:         Report,
+		RequestID:       0,
+		Variables: []SnmpPDU{{
+			Name:  usmStatsUnknownEngineIDs,
+			Value: atomic.LoadUint32(&t.usmStatsUnknownEngineIDsCount),
+			Type:  Counter32,
+		}},
+	}, addr)
 }
 
 func (t *TrapListener) handleTCPRequest(conn net.Conn) {
