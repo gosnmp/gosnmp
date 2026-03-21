@@ -2276,3 +2276,164 @@ func TestMarshalTLV(t *testing.T) {
 		})
 	}
 }
+
+// -- UnmarshalVBL -------------------------------------------------------------
+
+// BER packet construction helpers for unmarshalVBL tests.
+
+// buildTLVHeader constructs a BER tag+length header.
+func buildTLVHeader(tag byte, length int) []byte {
+	if length < 128 {
+		return []byte{tag, byte(length)}
+	}
+	if length < 256 {
+		return []byte{tag, 0x81, byte(length)}
+	}
+	return []byte{tag, 0x82, byte(length >> 8), byte(length)}
+}
+
+// buildSequence wraps content in a BER SEQUENCE (0x30 tag).
+func buildSequence(content []byte) []byte {
+	return append(buildTLVHeader(0x30, len(content)), content...)
+}
+
+// buildVBL constructs a BER-encoded VarBind List (SEQUENCE wrapping varbinds).
+func buildVBL(varbinds ...[]byte) []byte {
+	var content []byte
+	for _, vb := range varbinds {
+		content = append(content, vb...)
+	}
+	return buildSequence(content)
+}
+
+// goodVB builds a well-formed varbind with OID .1.3.6.<suffix> and the given value.
+func goodVB(suffix byte, tag Asn1BER, content []byte) []byte {
+	oid := append(buildTLVHeader(0x06, 3), 0x2b, 0x06, suffix)
+	val := append(buildTLVHeader(byte(tag), len(content)), content...)
+	return buildSequence(append(oid, val...))
+}
+
+// badVB builds a malformed varbind: the value's BER length field is set to
+// declaredLen (which should differ from len(content)).
+// The enclosing varbind SEQUENCE length reflects the physical bytes.
+func badVB(suffix byte, tag Asn1BER, content []byte, declaredLen int) []byte {
+	oid := append(buildTLVHeader(0x06, 3), 0x2b, 0x06, suffix)
+	val := append(buildTLVHeader(byte(tag), declaredLen), content...)
+	return buildSequence(append(oid, val...))
+}
+
+// testUnmarshalVBL calls unmarshalVBL and returns the parsed variables and error.
+func testUnmarshalVBL(t *testing.T, packet []byte) ([]SnmpPDU, error) {
+	t.Helper()
+	vhandle := GoSNMP{}
+	vhandle.Logger = Default.Logger
+	response := &SnmpPacket{}
+	err := vhandle.unmarshalVBL(packet, response)
+	return response.Variables, err
+}
+
+func TestUnmarshalVBL(t *testing.T) {
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
+	// 200 null bytes, for long-form BER length testing.
+	largeContent := make([]byte, 200)
+
+	tests := []struct {
+		name     string
+		packet   []byte
+		wantErr  bool
+		wantVars int
+	}{
+		// Well-formed packets
+		{"OctetString", buildVBL(goodVB(0x01, OctetString, []byte("test")), goodVB(0x02, OctetString, []byte("data"))), false, 2},
+		{"Integer", buildVBL(goodVB(0x01, Integer, []byte{0x01})), false, 1},
+		{"Counter32", buildVBL(goodVB(0x01, Counter32, []byte{0x00, 0x01, 0x00, 0x00})), false, 1},
+		{"Counter64", buildVBL(goodVB(0x01, Counter64, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00})), false, 1},
+		{"Gauge32", buildVBL(goodVB(0x01, Gauge32, []byte{0x00, 0x00, 0x00, 0x2a})), false, 1},
+		{"TimeTicks", buildVBL(goodVB(0x01, TimeTicks, []byte{0x00, 0x01, 0x51, 0x80})), false, 1},
+		{"IPAddress", buildVBL(goodVB(0x01, IPAddress, []byte{0x0a, 0x00, 0x00, 0x01})), false, 1},
+		{"ObjectIdentifier", buildVBL(goodVB(0x01, ObjectIdentifier, []byte{0x2b, 0x06, 0x01})), false, 1},
+		{"Null", buildVBL(goodVB(0x01, Null, nil)), false, 1},
+		{"empty VBL short-form", []byte{0x30, 0x00}, false, 0},
+		{"empty VBL long-form BER", []byte{0x30, 0x82, 0x00, 0x00}, false, 0},
+
+		// Malformed value length
+		{"bad OctetString length + valid", buildVBL(badVB(0x01, OctetString, []byte("test"), 5), goodVB(0x02, OctetString, []byte("data"))), true, 1},
+		{"bad Integer length + valid", buildVBL(badVB(0x01, Integer, []byte{0x01}, 3), goodVB(0x02, OctetString, []byte("data"))), true, 1},
+		{"bad length last varbind", buildVBL(badVB(0x01, OctetString, []byte("test"), 5)), true, 0},
+		{"bad length long-form BER + valid", buildVBL(badVB(0x01, OctetString, largeContent, 201), goodVB(0x02, OctetString, []byte("ok"))), true, 1},
+
+		// Malformed varbind at different positions
+		{"valid then bad", buildVBL(goodVB(0x01, OctetString, []byte("good")), badVB(0x02, OctetString, []byte("bad"), 10)), true, 1},
+		{"valid bad valid", buildVBL(goodVB(0x01, OctetString, []byte("first")), badVB(0x02, OctetString, []byte("x"), 5), goodVB(0x03, OctetString, []byte("third"))), true, 2},
+		{"bad bad valid", buildVBL(badVB(0x01, OctetString, []byte("a"), 5), badVB(0x02, OctetString, []byte("b"), 5), goodVB(0x03, OctetString, []byte("ok"))), true, 1},
+
+		// Garbage OID
+		{"garbage OID + valid", buildVBL(buildSequence([]byte{0xFF, 0x03, 0xDE, 0xAD, 0xBE}), goodVB(0x01, OctetString, []byte("ok"))), true, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vars, err := testUnmarshalVBL(t, tt.packet)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantVars >= 0 && len(vars) != tt.wantVars {
+				t.Errorf("expected %d variables, got %d", tt.wantVars, len(vars))
+			}
+		})
+	}
+
+	t.Run("valid varbind values", func(t *testing.T) {
+		vars, _ := testUnmarshalVBL(t, buildVBL(goodVB(0x01, OctetString, []byte("test")), goodVB(0x02, OctetString, []byte("data"))))
+		if len(vars) != 2 {
+			t.Fatalf("expected 2 variables, got %d", len(vars))
+		}
+		if vars[0].Name != ".1.3.6.1" || string(vars[0].Value.([]byte)) != "test" {
+			t.Errorf("vars[0]: got %s=%q, want .1.3.6.1=test", vars[0].Name, vars[0].Value)
+		}
+		if vars[1].Name != ".1.3.6.2" || string(vars[1].Value.([]byte)) != "data" {
+			t.Errorf("vars[1]: got %s=%q, want .1.3.6.2=data", vars[1].Name, vars[1].Value)
+		}
+	})
+}
+
+func TestUnmarshalVBLVarbindSequenceExceedsVBL(t *testing.T) {
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
+	// Varbind SEQUENCE length extends past VBL boundary.
+	vbl := buildVBL(goodVB(0x01, OctetString, []byte("test")))
+	vbl[3] += 10
+
+	vars, err := testUnmarshalVBL(t, vbl)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(vars) != 1 {
+		t.Errorf("expected 1 variable, got %d", len(vars))
+	}
+}
+
+func TestUnmarshalVBLCrossContamination(t *testing.T) {
+	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
+	// Value declares 5 bytes but has 4, followed by a valid varbind.
+	// Without bounded parsing, decodeValue reads 1 byte from the next
+	// varbind (the 0x30 SEQUENCE tag), producing cross-varbind leakage.
+	packet := buildVBL(badVB(0x01, OctetString, []byte("AAAA"), 5), goodVB(0x02, OctetString, []byte("SECRET")))
+	vars, err := testUnmarshalVBL(t, packet)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if len(vars) != 1 {
+		t.Fatalf("expected 1 variable, got %d", len(vars))
+	}
+	val, ok := vars[0].Value.([]byte)
+	if !ok {
+		t.Fatalf("expected []byte value, got %T", vars[0].Value)
+	}
+	// The leaked byte is 0x30 (next varbind's SEQUENCE tag).
+	if len(val) != 5 || val[4] != 0x30 {
+		t.Errorf("expected 5 bytes with trailing 0x30, got %x", val)
+	}
+}
