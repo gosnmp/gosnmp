@@ -738,8 +738,8 @@ func digestRFC3414(h SnmpV3AuthProtocol, packet []byte, authKey []byte) ([]byte,
 	}
 
 	for i := range 64 {
-		k1[i] = extkey[i] ^ 0x36 //nolint:gosec
-		k2[i] = extkey[i] ^ 0x5c //nolint:gosec
+		k1[i] = extkey[i] ^ 0x36
+		k2[i] = extkey[i] ^ 0x5c
 	}
 
 	_, err = h1.Write(k1[:])
@@ -838,7 +838,7 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
 		for i := range len(iv) {
-			iv[i] = preiv[i] ^ sp.PrivacyParameters[i] //nolint:gosec
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
 		block, err := des.NewCipher(sp.PrivacyKey[:8]) //nolint:gosec
 		if err != nil {
@@ -896,7 +896,7 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
 		for i := range len(iv) {
-			iv[i] = preiv[i] ^ sp.PrivacyParameters[i] //nolint:gosec
+			iv[i] = preiv[i] ^ sp.PrivacyParameters[i]
 		}
 		block, err := des.NewCipher(sp.PrivacyKey[:8]) //nolint:gosec
 		if err != nil {
@@ -920,7 +920,7 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	var err error
 
 	// msgAuthoritativeEngineID
-	buf.Write([]byte{byte(OctetString), byte(len(sp.AuthoritativeEngineID))})
+	buf.Write([]byte{byte(OctetString), byte(len(sp.AuthoritativeEngineID))}) //nolint:gosec
 	buf.WriteString(sp.AuthoritativeEngineID)
 
 	// msgAuthoritativeEngineBoots
@@ -928,7 +928,7 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineBoots))})
+	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineBoots))}) //nolint:gosec
 	buf.Write(msgAuthoritativeEngineBoots)
 
 	// msgAuthoritativeEngineTime
@@ -936,11 +936,11 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineTime))})
+	buf.Write([]byte{byte(Integer), byte(len(msgAuthoritativeEngineTime))}) //nolint:gosec
 	buf.Write(msgAuthoritativeEngineTime)
 
 	// msgUserName
-	buf.Write([]byte{byte(OctetString), byte(len(sp.UserName))})
+	buf.Write([]byte{byte(OctetString), byte(len(sp.UserName))}) //nolint:gosec
 	buf.WriteString(sp.UserName)
 
 	// msgAuthenticationParameters

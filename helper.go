@@ -441,7 +441,7 @@ func marshalLength(length int) ([]byte, error) {
 	// Build result: header byte + length bytes
 	numBytes := 8 - start
 	result := make([]byte, 1+numBytes)
-	result[0] = byte(128 | numBytes)
+	result[0] = byte(128 | numBytes) //nolint:gosec
 	copy(result[1:], buf[start:])
 	return result, nil
 }
@@ -875,14 +875,14 @@ func (b BitStringValue) At(i int) int {
 		return 0
 	}
 	x := i / 8
-	y := 7 - uint(i%8) //nolint:gosec
+	y := 7 - uint(i%8)
 	return int(b.Bytes[x]>>y) & 1
 }
 
 // RightAlign returns a slice where the padding bits are at the beginning. The
 // slice may share memory with the BitString.
 func (b BitStringValue) RightAlign() []byte {
-	shift := uint(8 - (b.BitLength % 8)) //nolint:gosec
+	shift := uint(8 - (b.BitLength % 8))
 	if shift == 8 || len(b.Bytes) == 0 {
 		return b.Bytes
 	}

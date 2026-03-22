@@ -231,7 +231,7 @@ func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	if err != nil {
 		return emptyBuffer, err
 	}
-	buf.Write([]byte{byte(Sequence), byte(len(header))})
+	buf.Write([]byte{byte(Sequence), byte(len(header))}) //nolint:gosec
 	packet.Logger.Printf("Marshal V3 Header len=%d. Eaten Last 4 Bytes=%v", len(header), header[len(header)-4:])
 	buf.Write(header)
 
@@ -281,7 +281,7 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	buf.Write([]byte{byte(Integer), byte(len(maxmsgsize))})
+	buf.Write([]byte{byte(Integer), byte(len(maxmsgsize))}) //nolint:gosec
 	buf.Write(maxmsgsize)
 	packet.Logger.Printf("MarshalV3Header maxmsgsize len=%v", buf.Len()-oldLen)
 	oldLen = buf.Len()

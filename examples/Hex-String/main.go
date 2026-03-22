@@ -37,7 +37,7 @@ func main() {
 			if strings.Contains(strconv.Quote(string(value)), "\\x") {
 				var tmp strings.Builder
 				for i := range value {
-					tmp.WriteString(fmt.Sprintf("%v", value[i]))
+					fmt.Fprintf(&tmp, "%v", value[i])
 					if i != (len(value) - 1) {
 						tmp.WriteString(" ")
 					}
