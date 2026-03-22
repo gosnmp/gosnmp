@@ -1,8 +1,12 @@
-all: test lint
+all: test test_netsnmp lint 
 
 .PHONY: test
 test:
 	go test ./...
+
+.PHONY: test_netsnmp
+test_netsnmp:
+	go test -tags netsnmp ./...
 
 .PHONY: lint
 lint: check_license

@@ -21,6 +21,7 @@ jobs:
     steps:
     - checkout
     - run: make lint
+    - run: make -C netsnmp lint
 
   fuzz:
     executor: golang
@@ -63,6 +64,14 @@ jobs:
          go test -v -tags all -race
        else
          echo "Not running -race"
+       fi
+    - run: make -C netsnmp test
+    - run: |
+       if [[ "${GOARCH}" == "amd64" ]]; then
+         sudo apt-get -y install libsnmp-dev
+         make -C netsnmp test_netsnmp
+       else
+         echo "Not running net-snmp tests"
        fi
 
 workflows:
