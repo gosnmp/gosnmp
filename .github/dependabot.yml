@@ -1,7 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: "gomod"
-    directory: "/"
+    directories:
+      - /
+      - /netsnmp
     schedule:
       interval: "monthly"
   - package-ecosystem: "github-actions"
