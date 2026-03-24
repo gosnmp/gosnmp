@@ -1231,7 +1231,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 
 // unmarshal a Varbind list
 func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
-	var cursor, cursorInc int
+	var cursor int
 	var vblLength int
 
 	if len(packet) == 0 || cursor > len(packet) {
@@ -1266,43 +1266,46 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("expected a sequence when unmarshalling a VB, got %x", packet[cursor])
 		}
 
-		_, cursorInc, err = parseLength(packet[cursor:])
+		vbLength, cursorInc, err := parseLength(packet[cursor:])
 		if err != nil {
 			return err
 		}
-		cursor += cursorInc
-		if cursor > len(packet) {
-			return fmt.Errorf("error parsing OID Value: packet %d cursor %d", len(packet), cursor)
+		vbEnd := cursor + vbLength
+		if vbEnd > vblLength {
+			return fmt.Errorf("varbind SEQUENCE length exceeds remaining VBL (vbEnd %d, vblLength %d)", vbEnd, vblLength)
 		}
+		cursor += cursorInc
 
 		// Parse OID
-		rawOid, oidLength, err := parseRawField(x.Logger, packet[cursor:], "OID")
+		rawOid, oidLength, err := parseRawField(x.Logger, packet[cursor:vbEnd], "OID")
 		if err != nil {
 			return fmt.Errorf("error parsing OID Value: %w", err)
 		}
 		cursor += oidLength
-		if cursor < 0 || cursor > len(packet) {
-			return fmt.Errorf("error parsing OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
-		}
+
 		oid, ok := rawOid.(string)
 		if !ok {
 			return fmt.Errorf("unable to type assert rawOid |%v| to string", rawOid)
 		}
 		x.Logger.Printf("OID: %s", oid)
+
+		// Validate value TLV fills remaining varbind body exactly
+		valueSlice := packet[cursor:vbEnd]
+		valueLength, _, err := parseLength(valueSlice)
+		if err != nil {
+			return fmt.Errorf("error parsing value TLV in varbind: %w", err)
+		}
+		if valueLength != len(valueSlice) {
+			return fmt.Errorf("value TLV length mismatch in varbind (TLV %d, remaining %d)", valueLength, len(valueSlice))
+		}
+
 		// Parse Value
 		var decodedVal variable
-		if err = x.decodeValue(packet[cursor:], &decodedVal); err != nil {
+		if err = x.decodeValue(valueSlice, &decodedVal); err != nil {
 			return fmt.Errorf("error decoding value: %w", err)
 		}
 
-		valueLength, _, err := parseLength(packet[cursor:])
-		if err != nil {
-			return err
-		}
-		cursor += valueLength
-		if cursor < 0 || cursor > len(packet) {
-			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
-		}
+		cursor = vbEnd
 
 		response.Variables = append(response.Variables, SnmpPDU{Name: oid, Type: decodedVal.Type, Value: decodedVal.Value})
 	}

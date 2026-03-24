@@ -2396,27 +2396,22 @@ func TestUnmarshalVBL(t *testing.T) {
 		{"empty_VBL_short_form", []byte{0x30, 0x00}, false, 0, nil},
 		{"empty_VBL_long_form_BER", []byte{0x30, 0x82, 0x00, 0x00}, false, 0, nil},
 
-		// Malformed value length
-		{"bad_OctetString_length,valid", buildVBL(badVB(0x01, OctetString, []byte("test"), 5), goodVB(0x02, OctetString, []byte("data"))), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, append([]byte("test"), 0x30)}}},
-		{"bad_Integer_length,valid", buildVBL(badVB(0x01, Integer, []byte{0x01}, 3), goodVB(0x02, OctetString, []byte("data"))), true, 1,
-			[]wantPDU{{".1.3.6.1", Integer, 77835}}},
-		{"bad_Counter32_length,valid", buildVBL(badVB(0x01, Counter32, []byte{0x00, 0x00, 0x00, 0x2a}, 5), goodVB(0x02, OctetString, []byte("data"))), true, 1,
-			[]wantPDU{{".1.3.6.1", Counter32, uint(10800)}}},
+		// Malformed value length — bounded parsing catches errors within the
+		// offending varbind, preventing cross-varbind data leakage.
+		{"bad_OctetString_length,valid", buildVBL(badVB(0x01, OctetString, []byte("test"), 5), goodVB(0x02, OctetString, []byte("data"))), true, 0, nil},
+		{"bad_Integer_length,valid", buildVBL(badVB(0x01, Integer, []byte{0x01}, 3), goodVB(0x02, OctetString, []byte("data"))), true, 0, nil},
+		{"bad_Counter32_length,valid", buildVBL(badVB(0x01, Counter32, []byte{0x00, 0x00, 0x00, 0x2a}, 5), goodVB(0x02, OctetString, []byte("data"))), true, 0, nil},
 		{"bad_length_last", buildVBL(badVB(0x01, OctetString, []byte("test"), 5)), true, 0, nil},
-		{"bad_length_long_form_BER,valid", buildVBL(badVB(0x01, OctetString, largeContent, 201), goodVB(0x02, OctetString, []byte("ok"))), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, append(append([]byte{}, largeContent...), 0x30)}}},
+		{"bad_length_long_form_BER,valid", buildVBL(badVB(0x01, OctetString, largeContent, 201), goodVB(0x02, OctetString, []byte("ok"))), true, 0, nil},
 		{"large_OctetString_off_by_one_last", buildVBL(badVB(0x01, OctetString, largeString, 448)), true, 0, nil},
-		{"large_OctetString_off_by_one,valid", buildVBL(badVB(0x01, OctetString, largeString, 448), goodVB(0x02, OctetString, []byte("ok"))), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, append(append([]byte{}, largeString...), 0x30)}}},
+		{"large_OctetString_off_by_one,valid", buildVBL(badVB(0x01, OctetString, largeString, 448), goodVB(0x02, OctetString, []byte("ok"))), true, 0, nil},
 
 		// Malformed varbind at different positions
 		{"valid,bad", buildVBL(goodVB(0x01, OctetString, []byte("good")), badVB(0x02, OctetString, []byte("bad"), 10)), true, 1,
 			[]wantPDU{{".1.3.6.1", OctetString, []byte("good")}}},
-		{"valid,bad,valid", buildVBL(goodVB(0x01, OctetString, []byte("first")), badVB(0x02, OctetString, []byte("x"), 5), goodVB(0x03, OctetString, []byte("third"))), true, 2,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte("first")}, {".1.3.6.2", OctetString, []byte{0x78, 0x30, 0x0c, 0x06, 0x03}}}},
-		{"bad,bad,valid", buildVBL(badVB(0x01, OctetString, []byte("a"), 5), badVB(0x02, OctetString, []byte("b"), 5), goodVB(0x03, OctetString, []byte("ok"))), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte{0x61, 0x30, 0x08, 0x06, 0x03}}}},
+		{"valid,bad,valid", buildVBL(goodVB(0x01, OctetString, []byte("first")), badVB(0x02, OctetString, []byte("x"), 5), goodVB(0x03, OctetString, []byte("third"))), true, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("first")}}},
+		{"bad,bad,valid", buildVBL(badVB(0x01, OctetString, []byte("a"), 5), badVB(0x02, OctetString, []byte("b"), 5), goodVB(0x03, OctetString, []byte("ok"))), true, 0, nil},
 
 		// Malformed OID
 		{"garbage_OID_tag", buildVBL(buildSequence([]byte{0xFF, 0x03, 0xDE, 0xAD, 0xBE}), goodVB(0x01, OctetString, []byte("ok"))), true, 0, nil},
@@ -2426,21 +2421,29 @@ func TestUnmarshalVBL(t *testing.T) {
 		{"zero_length_OID", buildVBL(buildSequence(append([]byte{0x06, 0x00}, 0x04, 0x04, 0x74, 0x65, 0x73, 0x74))), true, 0, nil},
 
 		// Trailing bytes inside varbind body (value TLV doesn't fill SEQUENCE)
-		{"trailing_junk_after_Null", buildVBL(rawVB(0x01, []byte{0x05, 0x00, 0xFF})), true, 1,
-			[]wantPDU{{".1.3.6.1", Null, nil}}},
-		{"trailing_junk_after_OctetString", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0xFF})), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte{0x41}}}},
-		{"multiple_value_TLVs", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0x02, 0x01, 0x01})), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte{0x41}}}},
-		{"short_value_with_padding", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0x00, 0x00})), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte{0x41}}}},
-		{"valid,trailing_junk", buildVBL(goodVB(0x01, OctetString, []byte("ok")), rawVB(0x02, []byte{0x05, 0x00, 0xFF})), true, 2,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte("ok")}, {".1.3.6.2", Null, nil}}},
+		// Structural validation rejects these before decodeValue runs.
+		{"trailing_junk_after_Null", buildVBL(rawVB(0x01, []byte{0x05, 0x00, 0xFF})), true, 0, nil},
+		{"trailing_junk_after_OctetString", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0xFF})), true, 0, nil},
+		{"multiple_value_TLVs", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0x02, 0x01, 0x01})), true, 0, nil},
+		{"short_value_with_padding", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0x00, 0x00})), true, 0, nil},
+		{"valid,trailing_junk", buildVBL(goodVB(0x01, OctetString, []byte("ok")), rawVB(0x02, []byte{0x05, 0x00, 0xFF})), true, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("ok")}}},
 
 		// Unknown type
 		{"unknown_type_well_formed", buildVBL(rawVB(0x01, []byte{0xC0, 0x02, 0x01, 0x02})), false, 1,
 			[]wantPDU{{".1.3.6.1", UnknownType, nil}}},
 		{"unknown_type_malformed_length", buildVBL(rawVB(0x01, []byte{0xC0, 0x05})), true, 0, nil},
+
+		// Varbind SEQUENCE length exceeds VBL boundary
+		{"varbind_sequence_exceeds_VBL", func() []byte {
+			vbl := buildVBL(goodVB(0x01, OctetString, []byte("test")))
+			vbl[3] += 10
+			return vbl
+		}(), true, 0, nil},
+
+		// Cross-varbind data leakage: bounded parsing prevents value from
+		// reading past varbind SEQUENCE boundary into adjacent varbind data.
+		{"cross_contamination", buildVBL(badVB(0x01, OctetString, []byte("AAAA"), 5), goodVB(0x02, OctetString, []byte("SECRET"))), true, 0, nil},
 	}
 
 	for _, tt := range tests {
@@ -2459,41 +2462,5 @@ func TestUnmarshalVBL(t *testing.T) {
 				assertPDUs(t, vars, tt.wantPDUs)
 			}
 		})
-	}
-}
-
-func TestUnmarshalVBLVarbindSequenceExceedsVBL(t *testing.T) {
-	// Varbind SEQUENCE length extends past VBL boundary.
-	vbl := buildVBL(goodVB(0x01, OctetString, []byte("test")))
-	vbl[3] += 10
-
-	vars, err := testUnmarshalVBL(t, vbl)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(vars) != 1 {
-		t.Errorf("expected 1 variable, got %d", len(vars))
-	}
-}
-
-func TestUnmarshalVBLCrossContamination(t *testing.T) {
-	// Value declares 5 bytes but has 4, followed by a valid varbind.
-	// Without bounded parsing, decodeValue reads 1 byte from the next
-	// varbind (the 0x30 SEQUENCE tag), producing cross-varbind leakage.
-	packet := buildVBL(badVB(0x01, OctetString, []byte("AAAA"), 5), goodVB(0x02, OctetString, []byte("SECRET")))
-	vars, err := testUnmarshalVBL(t, packet)
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if len(vars) != 1 {
-		t.Fatalf("expected 1 variable, got %d", len(vars))
-	}
-	val, ok := vars[0].Value.([]byte)
-	if !ok {
-		t.Fatalf("expected []byte value, got %T", vars[0].Value)
-	}
-	// The leaked byte is 0x30 (next varbind's SEQUENCE tag).
-	if len(val) != 5 || val[4] != 0x30 {
-		t.Errorf("expected 5 bytes with trailing 0x30, got %x", val)
 	}
 }
