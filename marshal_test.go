@@ -1782,6 +1782,81 @@ func TestSendOneRequest_TCP_EOF_Reconnect(t *testing.T) {
 	}
 }
 
+func TestSendOneRequest_MaxRetries_SentinelError(t *testing.T) {
+	listen, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to set up test listener: %v", err)
+	}
+	defer listen.Close()
+	port := listen.Addr().(*net.TCPAddr).Port
+
+	// Accept every connection and close it immediately to produce
+	// repeated EOF errors that exhaust the retry loop.
+	go func() {
+		for {
+			conn, err := listen.Accept()
+			if err != nil {
+				return
+			}
+			buf := make([]byte, 2048)
+			_, _ = conn.Read(buf)
+			conn.Close()
+		}
+	}()
+
+	params := &GoSNMP{
+		Target:    "127.0.0.1",
+		Port:      uint16(port),
+		Transport: "tcp",
+		Community: "public",
+		Version:   Version2c,
+		Timeout:   time.Second,
+		Retries:   1,
+		Logger:    NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	err = params.Connect()
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer params.Conn.Close()
+
+	_, err = params.Get([]string{".1.3.6.1.2.1.1.1.0"})
+
+	assert.ErrorIs(t, err, ErrMaxRetriesExceeded)
+	assert.Contains(t, err.Error(), "max retries",
+		"error message must still contain 'max retries' for backward compatibility")
+}
+
+func TestSendOneRequest_TimeoutRetries_SentinelError(t *testing.T) {
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	if err != nil {
+		t.Fatalf("udp4 error listening: %s", err)
+	}
+	defer srvr.Close()
+
+	params := &GoSNMP{
+		Target:  srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:    uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Version: Version2c,
+		Timeout: 50 * time.Millisecond,
+		Retries: 1,
+		Logger:  NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	err = params.Connect()
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer params.Conn.Close()
+
+	_, err = params.Get([]string{".1.3.6.1.2.1.1.1.0"})
+
+	assert.ErrorIs(t, err, ErrMaxRetriesExceeded)
+	assert.Contains(t, err.Error(), "request timeout",
+		"error message must still contain 'request timeout' for backward compatibility")
+}
+
 func BenchmarkSendOneRequest(b *testing.B) {
 	b.StopTimer()
 
