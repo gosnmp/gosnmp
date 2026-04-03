@@ -269,6 +269,57 @@ func TestIsAuthenticSHA512(t *testing.T) {
 	require.True(t, authentic, "Packet was not considered to be authentic")
 }
 
+// TestUnmarshalTruncatedUSMSequence verifies that unmarshal returns an error
+// rather than panicking when the USM SEQUENCE body is truncated.
+//
+// The bounds check at v3_usm.go:991 originally compared cursorTmp (the BER
+// length-header size, a small relative increment) against len(packet) rather
+// than cursor (the updated absolute position). Because parseLength guarantees
+// cursorTmp <= len(packet[cursor:]), cursor after incrementing is at most
+// len(packet) and the check never fires either way. The fix uses the correct
+// variable so the check reflects its intended purpose.
+func TestUnmarshalTruncatedUSMSequence(t *testing.T) {
+	sp := &UsmSecurityParameters{
+		Logger: NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	tests := []struct {
+		name   string
+		packet []byte
+		cursor int
+	}{
+		{
+			name:   "short-form length zero",
+			packet: []byte{0x30, 0x00},
+			cursor: 0,
+		},
+		{
+			name: "long-form length one extra byte truncated body",
+			// 0x81 signals long-form with 1 extra length byte; body is absent.
+			// cursorTmp = 3 (2 + 1); cursor advances to 3 == len(packet).
+			// Old check: cursorTmp(3) > len(packet)(3) → false (check is dead).
+			// New check: cursor(3)    > len(packet)(3) → false (boundary, not past end).
+			// Either way execution reaches parseRawField with an empty slice → error.
+			packet: []byte{0x30, 0x81, 0x05},
+			cursor: 0,
+		},
+		{
+			name:   "long-form with non-zero starting cursor",
+			packet: []byte{0xff, 0xff, 0x30, 0x81, 0x05},
+			cursor: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				_, err := sp.unmarshal(NoAuthNoPriv, tt.packet, tt.cursor)
+				require.Error(t, err)
+			})
+		})
+	}
+}
+
 func BenchmarkSingleHash(b *testing.B) {
 	SetPwdCache()
 
