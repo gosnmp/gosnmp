@@ -163,7 +163,16 @@ func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket) error
 		result, err := x.sendOneRequest(discoveryPacket, true)
 
 		if err != nil {
-			return err
+			// Some devices (e.g. Dell EMC switches) respond to discovery probes with
+			// usmStatsUnknownUserNames instead of usmStatsUnknownEngineIDs, yet still
+			// include valid engine parameters. Treat it as a valid discovery response.
+			if !errors.Is(err, ErrUnknownUsername) || result == nil {
+				return err
+			}
+			usp, ok := result.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || usp.AuthoritativeEngineID == "" {
+				return err
+			}
 		}
 
 		err = x.storeSecurityParameters(result)
