@@ -988,7 +988,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		return 0, err
 	}
 	cursor += cursorTmp
-	if cursorTmp > len(packet) {
+	if cursor > len(packet) {
 		return 0, errors.New("error parsing SNMPV3 User Security Model parameters: truncated packet")
 	}
 
