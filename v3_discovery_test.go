@@ -48,14 +48,15 @@ const (
 // return usmStatsUnknownUserNames for post-discovery authenticated requests,
 // simulating an agent that does not recognise the user credentials.
 type mockAgentUnknownUserNames struct {
-	conn             *net.UDPConn
-	engineID         string
-	boots            uint32
-	engineTime       uint32
-	logger           Logger
-	done             chan struct{}
-	errs             chan error
-	failAuthRequests bool
+	conn               *net.UDPConn
+	engineID           string
+	boots              uint32
+	engineTime         uint32
+	logger             Logger
+	done               chan struct{}
+	errs               chan error
+	failAuthRequests   bool
+	omitEngineIDInReport bool // send usmStatsUnknownUserNames with empty AuthoritativeEngineID
 }
 
 func newMockAgentUnknownUserNames(t *testing.T, engineID string, boots, engineTime uint32) *mockAgentUnknownUserNames {
@@ -175,13 +176,19 @@ func (m *mockAgentUnknownUserNames) secParams() *UsmSecurityParameters {
 
 // marshalUnknownUserNamesReport builds a Report PDU that carries
 // usmStatsUnknownUserNames but contains valid engine parameters — the
-// non-standard response that triggers the bug.
+// non-standard response that triggers the bug. If omitEngineIDInReport is set,
+// the AuthoritativeEngineID in the security parameters is left empty to simulate
+// a malformed device response.
 func (m *mockAgentUnknownUserNames) marshalUnknownUserNamesReport(req *SnmpPacket) ([]byte, error) {
+	secParams := m.secParams()
+	if m.omitEngineIDInReport {
+		secParams.AuthoritativeEngineID = ""
+	}
 	pkt := &SnmpPacket{
 		Version:            Version3,
 		MsgFlags:           NoAuthNoPriv,
 		SecurityModel:      UserSecurityModel,
-		SecurityParameters: m.secParams(),
+		SecurityParameters: secParams,
 		PDUType:            Report,
 		MsgID:              req.MsgID,
 		RequestID:          req.RequestID,
@@ -303,6 +310,27 @@ func TestV3GetWithDiscoveryUnknownUserNames(t *testing.T) {
 	require.Len(t, result.Variables, 1)
 	require.Equal(t, ".1.3.6.1.2.1.1.1.0", result.Variables[0].Name)
 	require.Equal(t, []byte("mock sysDescr"), result.Variables[0].Value)
+}
+
+// TestV3DiscoveryUnknownUserNamesNoEngineID verifies that ErrUnknownUsername is
+// propagated when the device responds to the discovery probe with
+// usmStatsUnknownUserNames but provides an empty AuthoritativeEngineID in the
+// USM security parameters. Without a valid engine ID there is nothing useful to
+// extract, so the error must not be suppressed.
+func TestV3DiscoveryUnknownUserNamesNoEngineID(t *testing.T) {
+	agent := newMockAgentUnknownUserNames(t, testDiscoveryEngineID, testDiscoveryEngineBoots, testDiscoveryEngineTime)
+	agent.omitEngineIDInReport = true
+	go agent.serve()
+	t.Cleanup(func() { agent.closeAndCheck(t) })
+
+	ts := newV3NoAuthClientForDiscoveryTest(agent.port())
+	require.NoError(t, ts.Connect())
+	t.Cleanup(func() { ts.Conn.Close() })
+
+	pkt := ts.mkSnmpPacket(GetRequest, nil, 0, 0)
+	err := ts.negotiateInitialSecurityParameters(pkt)
+	require.ErrorIs(t, err, ErrUnknownUsername,
+		"ErrUnknownUsername must not be suppressed when the Report carries an empty engine ID")
 }
 
 // TestV3GetRealUnknownUserNameStillFails verifies that ErrUnknownUsername is

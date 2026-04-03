@@ -169,6 +169,10 @@ func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket) error
 			if !errors.Is(err, ErrUnknownUsername) || result == nil {
 				return err
 			}
+			usp, ok := result.SecurityParameters.(*UsmSecurityParameters)
+			if !ok || usp.AuthoritativeEngineID == "" {
+				return err
+			}
 		}
 
 		err = x.storeSecurityParameters(result)
