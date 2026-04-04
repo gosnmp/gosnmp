@@ -692,14 +692,24 @@ func parseObjectIdentifier(src []byte) (string, error) {
 	// Worst-case: first byte expands to 5 chars (".2.39"), rest to 4 chars (".127")
 	out := make([]byte, 0, len(src)*4+1)
 
+	// First sub-identifier encodes arc1 and arc2 as (arc1*40 + arc2);
+	// arc1 is 0, 1, or 2, with arc2 <= 39 when arc1 < 2.
+	// Remaining arcs are encoded individually.
+	v, offset, err := parseBase128Uint32(src, 0)
+	if err != nil {
+		return "", err
+	}
 	out = append(out, '.')
-	out = strconv.AppendUint(out, uint64(src[0]/40), 10)
-	out = append(out, '.')
-	out = strconv.AppendUint(out, uint64(src[0]%40), 10)
+	if v < 80 {
+		out = strconv.AppendUint(out, uint64(v/40), 10)
+		out = append(out, '.')
+		out = strconv.AppendUint(out, uint64(v%40), 10)
+	} else {
+		out = append(out, '2', '.')
+		out = strconv.AppendUint(out, uint64(v-80), 10)
+	}
 
-	var v uint32
-	var err error
-	for offset := 1; offset < len(src); {
+	for offset < len(src) {
 		out = append(out, '.')
 		v, offset, err = parseBase128Uint32(src, offset)
 		if err != nil {

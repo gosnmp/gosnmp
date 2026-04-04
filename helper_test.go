@@ -58,6 +58,22 @@ func TestParseObjectIdentifier(t *testing.T) {
 			data: []byte{40}, // 1*40 + 0 = 40
 			want: ".1.0",
 		},
+		// Multi-byte first sub-identifier (X.690 8.19.5)
+		{
+			name: "joint-iso-itu-t 2.999 (X.690 example)",
+			data: []byte{0x88, 0x37, 0x03}, // first sub-id 1079 = 2*40+999, then arc 3
+			want: ".2.999.3",
+		},
+		{
+			name: "joint-iso-itu-t 2.40",
+			data: []byte{0x81, 0x00}, // first sub-id 128 = 2*40+48
+			want: ".2.48",
+		},
+		{
+			name: "joint-iso-itu-t 2.100 (stdlib test vector)",
+			data: []byte{0x81, 0x34, 0x03}, // first sub-id 180 = 2*40+100, then arc 3
+			want: ".2.100.3",
+		},
 		// Standard OIDs
 		{
 			name: "sysDescr (1.3.6.1.2.1.1.1)",
@@ -112,6 +128,12 @@ func TestParseObjectIdentifier(t *testing.T) {
 			data:    []byte{43, 0x90, 0x80, 0x80, 0x80, 0x00},
 			want:    "",
 			wantErr: ErrBase128IntegerTooLarge,
+		},
+		{
+			name:    "truncated first sub-id",
+			data:    []byte{0x80}, // continuation byte as only byte
+			want:    "",
+			wantErr: ErrBase128IntegerTruncated,
 		},
 		{
 			name:    "truncated multi-byte sub-id",
