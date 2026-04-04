@@ -120,6 +120,7 @@ const (
 var (
 	ErrDecryption            = errors.New("decryption error")
 	ErrInvalidMsgs           = errors.New("invalid messages")
+	ErrMaxRetriesExceeded    = errors.New("max retries exceeded")
 	ErrNotInTimeWindow       = errors.New("not in time window")
 	ErrUnknownEngineID       = errors.New("unknown engine id")
 	ErrUnknownPDUHandlers    = errors.New("unknown pdu handlers")
@@ -204,10 +205,10 @@ sendRetry:
 			}
 			if retries > x.Retries {
 				if err == nil {
-					err = fmt.Errorf("max retries (%d) exceeded", x.Retries)
+					err = fmt.Errorf("max retries (%d) exceeded: %w", x.Retries, ErrMaxRetriesExceeded)
 				}
 				if strings.Contains(err.Error(), "timeout") {
-					err = fmt.Errorf("request timeout (after %d retries)", retries-1)
+					err = fmt.Errorf("request timeout (after %d retries): %w", retries-1, ErrMaxRetriesExceeded)
 				}
 				break
 			}
