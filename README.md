@@ -242,11 +242,11 @@ Tests are grouped as follows:
    * `misc_test.go`
 * Public API consistency tests:
    * `gosnmp_api_test.go`
-* End-to-end integration tests:
-   * `generic_e2e_test.go`
+* End-to-end integration tests (separate module):
+   * `e2e/` — tests the public API against a real net-snmp agent in a Docker container
 
-The generic end-to-end integration test `generic_e2e_test.go` should
-work against any SNMP MIB-2 compliant host (e.g. a router, NAS box, printer).
+Set `GOSNMP_TARGET` and `GOSNMP_PORT` to run the e2e tests, or use the
+container in `e2e/testcontainer/`.
 
 Mocks were generated using:
 
