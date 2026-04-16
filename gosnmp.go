@@ -157,7 +157,9 @@ type GoSNMP struct {
 	// SNMP V3 Security Model parameters, currently only used for receiving traps.
 	//
 	// Deprecated: use GetTrapSecurityParametersTable / SetTrapSecurityParametersTable.
-	// Writes to this field are NOT safe concurrently with a running TrapListener.
+	// Writes to this field are NOT safe concurrently with a running TrapListener,
+	// and are IGNORED if SetTrapSecurityParametersTable has ever been called on
+	// this *GoSNMP instance.
 	TrapSecurityParametersTable *SnmpV3SecurityParametersTable
 
 	// trapSecParams holds the runtime-swappable security parameters table.
