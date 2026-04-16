@@ -142,7 +142,7 @@ func TestUnmarshalTrapWithMultipleUsers(t *testing.T) {
 	}
 SANITY:
 	for i, test := range testsUnmarshalTrap {
-		Default.TrapSecurityParametersTable = usmMap
+		Default.SetTrapSecurityParametersTable(usmMap)
 		Default.Version = Version3
 		var buf = test.in()
 		res, err := Default.UnmarshalTrap(buf, true)
@@ -157,7 +157,7 @@ SANITY:
 		require.Equal(t, test.out.Version, res.Version)
 		require.Equal(t, test.out.RequestID, res.RequestID)
 
-		Default.TrapSecurityParametersTable = nil
+		Default.SetTrapSecurityParametersTable(nil)
 	}
 }
 
