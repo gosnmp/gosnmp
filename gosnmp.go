@@ -153,9 +153,18 @@ type GoSNMP struct {
 	// SecurityParameters is an SNMPV3 Security Model parameters struct.
 	SecurityParameters SnmpV3SecurityParameters
 
-	// TrapSecurityParametersTable is a mapping of identifiers to corresponding SNMP V3 Security Model parameters
-	// right now only supported for receiving traps, variable name to make that clear
+	// TrapSecurityParametersTable is a mapping of identifiers to corresponding
+	// SNMP V3 Security Model parameters, currently only used for receiving traps.
+	//
+	// Deprecated: use GetTrapSecurityParametersTable / SetTrapSecurityParametersTable.
+	// Writes to this field are NOT safe concurrently with a running TrapListener.
 	TrapSecurityParametersTable *SnmpV3SecurityParametersTable
+
+	// trapSecParams holds the runtime-swappable security parameters table.
+	// Readers in the trap decode path load it atomically so the table can be
+	// replaced when the set of SNMPv3 users changes without racing with
+	// inbound packets.
+	trapSecParams atomic.Pointer[SnmpV3SecurityParametersTable]
 
 	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU.
 	ContextEngineID string
@@ -171,6 +180,23 @@ type GoSNMP struct {
 
 	// Internal - mutual exclusion allows us to idempotently perform operations
 	mu sync.Mutex
+}
+
+// SetTrapSecurityParametersTable atomically replaces the SNMPv3 security
+// parameters table used for decoding incoming traps. Safe to call while a
+// TrapListener is running.
+func (x *GoSNMP) SetTrapSecurityParametersTable(t *SnmpV3SecurityParametersTable) {
+	x.trapSecParams.Store(t)
+}
+
+// GetTrapSecurityParametersTable returns the table previously installed via
+// SetTrapSecurityParametersTable, falling back to the deprecated
+// TrapSecurityParametersTable field if no atomic value has been set.
+func (x *GoSNMP) GetTrapSecurityParametersTable() *SnmpV3SecurityParametersTable {
+	if t := x.trapSecParams.Load(); t != nil {
+		return t
+	}
+	return x.TrapSecurityParametersTable
 }
 
 // Default connection settings
