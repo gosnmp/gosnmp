@@ -686,7 +686,8 @@ func parseLength(bytes []byte) (int, int, error) {
 // that are assigned in a hierarchy.
 func parseObjectIdentifier(src []byte) (string, error) {
 	if len(src) == 0 {
-		return "", ErrInvalidOidLength
+		// net-snmp decodes a zero-length encoded OID as ".0.0"
+		return ".0.0", nil
 	}
 
 	// Worst-case: first byte expands to 5 chars (".2.39"), rest to 4 chars (".127")

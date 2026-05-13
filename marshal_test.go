@@ -2423,7 +2423,8 @@ func TestUnmarshalVBL(t *testing.T) {
 		{"truncated_base128_OID", buildVBL(buildSequence(append(buildTLVHeader(0x06, 3), 0x2b, 0x86, 0x86))), true, 0, nil},
 		{"overflow_base128_OID", buildVBL(buildSequence(append(buildTLVHeader(0x06, 7), 0x2b, 0x8F, 0x8F, 0x8F, 0x8F, 0x8F, 0x01))), true, 0, nil},
 		{"OID_length_exceeds_data", buildVBL(buildSequence(append(buildTLVHeader(0x06, 10), 0x2b, 0x06, 0x01))), true, 0, nil},
-		{"zero_length_OID", buildVBL(buildSequence(append([]byte{0x06, 0x00}, 0x04, 0x04, 0x74, 0x65, 0x73, 0x74))), true, 0, nil},
+		{"zero_length_OID", buildVBL(buildSequence(append([]byte{0x06, 0x00}, 0x04, 0x04, 0x74, 0x65, 0x73, 0x74))), false, 1,
+			[]wantPDU{{".0.0", OctetString, []byte("test")}}},
 
 		// Trailing bytes inside varbind body (value TLV doesn't fill SEQUENCE)
 		{"trailing_junk_after_Null", buildVBL(rawVB(0x01, []byte{0x05, 0x00, 0xFF})), true, 1,
