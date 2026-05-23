@@ -269,8 +269,6 @@ func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
 // ie check each varbind is working, then the varbind list, etc
 
 func TestEnmarshalVarbind(t *testing.T) {
-	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
-
 	for _, test := range testsEnmarshal {
 		for j, test2 := range test.vbPositions {
 			snmppdu := &SnmpPDU{Name: test2.oid, Type: test2.pduType, Value: test2.pduValue}
@@ -286,8 +284,6 @@ func TestEnmarshalVarbind(t *testing.T) {
 }
 
 func TestEnmarshalVBL(t *testing.T) {
-	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
-
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
 			Community: test.community,
@@ -306,8 +302,6 @@ func TestEnmarshalVBL(t *testing.T) {
 }
 
 func TestEnmarshalPDU(t *testing.T) {
-	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
-
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
 			Community: test.community,
@@ -327,8 +321,6 @@ func TestEnmarshalPDU(t *testing.T) {
 }
 
 func TestEnmarshalMsg(t *testing.T) {
-	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
-
 	for _, test := range testsEnmarshal {
 		x := &SnmpPacket{
 			Community: test.community,
@@ -345,8 +337,7 @@ func TestEnmarshalMsg(t *testing.T) {
 		}
 		checkByteEquality(t, test, testBytes, 0, test.finish)
 		t.Run(fmt.Sprintf("TestEnmarshalMsgUnmarshal/PDU[%v]/RequestID[%v]", test.requestType, test.requestid), func(t *testing.T) {
-			vhandle := GoSNMP{}
-			vhandle.Logger = Default.Logger
+			vhandle := GoSNMP{Logger: NewLogger(log.New(io.Discard, "", 0))}
 			result, err := vhandle.SnmpDecodePacket(testBytes)
 			if err != nil {
 				t.Errorf("#%s: SnmpDecodePacket() err returned: %v", test.funcName, err)
@@ -766,15 +757,12 @@ var testsUnmarshal = []struct {
 }
 
 func TestUnmarshalErrors(t *testing.T) {
-	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
-
 	for i, test := range testsUnmarshalErr {
 		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
 		splitedFuncName := strings.Split(funcName, ".")
 		funcName = splitedFuncName[len(splitedFuncName)-1]
 		t.Run(fmt.Sprintf("%v-%v", i, funcName), func(t *testing.T) {
-			vhandle := GoSNMP{}
-			vhandle.Logger = Default.Logger
+			vhandle := GoSNMP{Logger: NewLogger(log.New(io.Discard, "", 0))}
 			testBytes := test.in()
 			_, err := vhandle.SnmpDecodePacket(testBytes)
 			if err == nil {
@@ -794,7 +782,7 @@ func FuzzUnmarshal(f *testing.F) {
 	}
 
 	vhandle := GoSNMP{}
-	vhandle.Logger = Default.Logger
+	vhandle.Logger = NewLogger(log.New(io.Discard, "", 0))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		stime := time.Now()
 		_, _ = vhandle.SnmpDecodePacket(data)
@@ -806,15 +794,13 @@ func FuzzUnmarshal(f *testing.F) {
 }
 
 func TestUnmarshal(t *testing.T) {
-	Default.Logger = NewLogger(log.New(io.Discard, "", 0))
 
 	for i, test := range testsUnmarshal {
 		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
 		splitedFuncName := strings.Split(funcName, ".")
 		funcName = splitedFuncName[len(splitedFuncName)-1]
 		t.Run(fmt.Sprintf("%v-%v", i, funcName), func(t *testing.T) {
-			vhandle := GoSNMP{}
-			vhandle.Logger = Default.Logger
+			vhandle := GoSNMP{Logger: NewLogger(log.New(io.Discard, "", 0))}
 			testBytes := test.in()
 			res, err := vhandle.SnmpDecodePacket(testBytes)
 			if err != nil {
@@ -1620,7 +1606,7 @@ func TestUnmarshalEmptyPanic(t *testing.T) {
 	var in = []byte{}
 	var res = new(SnmpPacket)
 
-	_, err := Default.unmarshalHeader(in, res)
+	_, err := newTestGoSNMP().unmarshalHeader(in, res)
 	if err == nil {
 		t.Errorf("unmarshalHeader did not gracefully detect empty packet")
 	}
@@ -1642,7 +1628,7 @@ func TestV3USMInitialPacket(t *testing.T) {
 	if err != nil {
 		t.Errorf("#TestV3USMInitialPacket: marshalMsg() err returned: %v", err)
 	}
-	engine := GoSNMP{Logger: Default.Logger}
+	engine := GoSNMP{Logger: logger}
 	pktNew, errDecode := engine.SnmpDecodePacket(iBytes)
 	if errDecode != nil {
 		t.Logf("-->Bytes=%v", iBytes)

@@ -61,22 +61,7 @@ func getTarget(t *testing.T) (string, uint16) {
 	return envTarget, uint16(port)
 }
 
-func setupConnection(t *testing.T) {
-	target, port := getTarget(t)
-
-	Default.Target = target
-	Default.Port = port
-
-	err := Default.Connect()
-	if err != nil {
-		if len(target) > 0 {
-			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?\n(err: %v)",
-				target, port, err)
-		}
-	}
-}
-
-func setupConnectionInstance(gs *GoSNMP, t *testing.T) {
+func connectToTarget(t *testing.T, gs *GoSNMP) {
 	target, port := getTarget(t)
 
 	gs.Target = target
@@ -91,13 +76,13 @@ func setupConnectionInstance(gs *GoSNMP, t *testing.T) {
 	}
 }
 
-func setupConnectionIPv4(t *testing.T) {
+func connectToTargetIPv4(t *testing.T, gs *GoSNMP) {
 	target, port := getTarget(t)
 
-	Default.Target = target
-	Default.Port = port
+	gs.Target = target
+	gs.Port = port
 
-	err := Default.ConnectIPv4()
+	err := gs.ConnectIPv4()
 	if err != nil {
 		if len(target) > 0 {
 			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?\n(err: %v)",
@@ -107,14 +92,10 @@ func setupConnectionIPv4(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	gs := &GoSNMP{
-		Version:   Version2c,
-		Community: "public",
-		Timeout:   time.Second * 2,
-		Retries:   1,
-	}
+	gs := newTestGoSNMP()
+	gs.Retries = 1
 
-	setupConnectionInstance(gs, t)
+	connectToTarget(t, gs)
 
 	// Ensure connection is open
 	if gs.Conn == nil {
@@ -146,14 +127,11 @@ func TestClose_NilConnection(t *testing.T) {
 }
 
 func TestClose_Concurrent(t *testing.T) {
-	gs := &GoSNMP{
-		Version:   Version2c,
-		Community: "public",
-		Timeout:   time.Second,
-		Retries:   1,
-	}
+	gs := newTestGoSNMP()
+	gs.Timeout = time.Second
+	gs.Retries = 1
 
-	setupConnectionInstance(gs, t)
+	connectToTarget(t, gs)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ { // simulate 100 concurrent calls
@@ -174,36 +152,39 @@ func TestClose_Concurrent(t *testing.T) {
 /*
 TODO work out ipv6 networking, etc
 
-func setupConnectionIPv6(t *testing.T) {
+func setupConnectionIPv6(t *testing.T) *GoSNMP {
 	envTarget := os.Getenv("GOSNMP_TARGET_IPV6")
 	envPort := os.Getenv("GOSNMP_PORT_IPV6")
+	gs := newTestGoSNMP()
 
 	if len(envTarget) <= 0 {
 		t.Error("environment variable not set: GOSNMP_TARGET_IPV6")
 	}
-	Default.Target = envTarget
+	gs.Target = envTarget
 
 	if len(envPort) <= 0 {
 		t.Error("environment variable not set: GOSNMP_PORT_IPV6")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
-	Default.Port = uint16(port)
+	gs.Port = uint16(port)
 
-	err := Default.ConnectIPv6()
+	err := gs.ConnectIPv6()
 	if err != nil {
 		if len(envTarget) > 0 {
 			t.Fatalf("Connection failed. Is snmpd reachable on %s:%s?\n(err: %v)",
 				envTarget, envPort, err)
 		}
 	}
+	return gs
 }
 */
 
 func TestGenericBasicGet(t *testing.T) {
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMP()
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -220,10 +201,11 @@ func TestGenericBasicGet(t *testing.T) {
 }
 
 func TestGenericBasicGetIPv4Only(t *testing.T) {
-	setupConnectionIPv4(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMP()
+	connectToTargetIPv4(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -241,10 +223,10 @@ func TestGenericBasicGetIPv4Only(t *testing.T) {
 
 /*
 func TestGenericBasicGetIPv6Only(t *testing.T) {
-	setupConnectionIPv6(t)
-	defer Default.Conn.Close()
+	gs := setupConnectionIPv6(t)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -262,14 +244,15 @@ func TestGenericBasicGetIPv6Only(t *testing.T) {
 */
 
 func TestGenericMultiGet(t *testing.T) {
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMP()
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
 	oids := []string{
 		".1.3.6.1.2.1.1.1.0", // SNMP MIB-2 sysDescr
 		".1.3.6.1.2.1.1.5.0", // SNMP MIB-2 sysName
 	}
-	result, err := Default.Get(oids)
+	result, err := gs.Get(oids)
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -284,11 +267,12 @@ func TestGenericMultiGet(t *testing.T) {
 }
 
 func TestGenericGetNext(t *testing.T) {
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMP()
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
 	sysDescrOid := ".1.3.6.1.2.1.1.1.0" // SNMP MIB-2 sysDescr
-	result, err := Default.GetNext([]string{sysDescrOid})
+	result, err := gs.GetNext([]string{sysDescrOid})
 	if err != nil {
 		t.Fatalf("GetNext() failed with error => %v", err)
 	}
@@ -301,10 +285,11 @@ func TestGenericGetNext(t *testing.T) {
 }
 
 func TestGenericWalk(t *testing.T) {
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMP()
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.WalkAll("")
+	result, err := gs.WalkAll("")
 	if err != nil {
 		t.Fatalf("WalkAll() Failed with error => %v", err)
 	}
@@ -314,10 +299,11 @@ func TestGenericWalk(t *testing.T) {
 }
 
 func TestGenericBulkWalk(t *testing.T) {
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMP()
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.BulkWalkAll("")
+	result, err := gs.BulkWalkAll("")
 	if err != nil {
 		t.Fatalf("BulkWalkAll() Failed with error => %v", err)
 	}
@@ -327,10 +313,9 @@ func TestGenericBulkWalk(t *testing.T) {
 }
 
 func TestV1BulkWalkError(t *testing.T) {
-	g := &GoSNMP{
-		Version: Version1,
-	}
-	setupConnectionInstance(g, t)
+	g := newTestGoSNMP()
+	g.Version = Version1
+	connectToTarget(t, g)
 
 	g.Conn.Close()
 
@@ -343,31 +328,32 @@ func TestV1BulkWalkError(t *testing.T) {
 // Standard exception/error tests
 
 func TestMaxOids(t *testing.T) {
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMP()
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	Default.MaxOids = 1
+	gs.MaxOids = 1
 
 	var err error
 	oids := []string{".1.3.6.1.2.1.1.7.0",
 		".1.3.6.1.2.1.2.2.1.10.1"} // 2 arbitrary Oids
 	errString := "oid count (2) is greater than MaxOids (1)"
 
-	_, err = Default.Get(oids)
+	_, err = gs.Get(oids)
 	if err == nil {
 		t.Fatalf("Expected too many oids failure. Got nil")
 	} else if err.Error() != errString {
 		t.Fatalf("Expected too many oids failure. Got => %v", err)
 	}
 
-	_, err = Default.GetNext(oids)
+	_, err = gs.GetNext(oids)
 	if err == nil {
 		t.Fatalf("Expected too many oids failure. Got nil")
 	} else if err.Error() != errString {
 		t.Fatalf("Expected too many oids failure. Got => %v", err)
 	}
 
-	_, err = Default.GetBulk(oids, 0, 0)
+	_, err = gs.GetBulk(oids, 0, 0)
 	if err == nil {
 		t.Fatalf("Expected too many oids failure. Got nil")
 	} else if err.Error() != errString {
@@ -377,8 +363,9 @@ func TestMaxOids(t *testing.T) {
 
 func TestGenericFailureUnknownHost(t *testing.T) {
 	unknownHost := "nonexistent.invalid" // .invalid is guaranteed by RFC 2606 to never resolve.
-	Default.Target = unknownHost
-	err := Default.Connect()
+	gs := newTestGoSNMP()
+	gs.Target = unknownHost
+	err := gs.Connect()
 	if err == nil {
 		t.Fatalf("Expected connection failure due to unknown host")
 	}
@@ -388,7 +375,7 @@ func TestGenericFailureUnknownHost(t *testing.T) {
 		t.Fatalf("Expected connection error of type 'no such host' or 'i/o timeout'! Got => %v", err)
 	}
 
-	_, err = Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	_, err = gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
 		t.Fatalf("Expected get to fail due to missing connection")
 	}
@@ -401,12 +388,13 @@ func TestGenericFailureConnectionTimeout(t *testing.T) {
 		t.Skip("local testing - skipping this slow one")
 	}
 
-	Default.Target = "198.51.100.1" // Black hole
-	err := Default.Connect()
+	gs := newTestGoSNMP()
+	gs.Target = "198.51.100.1" // Black hole
+	err := gs.Connect()
 	if err != nil {
 		t.Fatalf("Did not expect connection error with IP address")
 	}
-	_, err = Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	_, err = gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
 		t.Fatalf("Expected Get() to fail due to invalid IP")
 	}
@@ -416,13 +404,14 @@ func TestGenericFailureConnectionTimeout(t *testing.T) {
 }
 
 func TestGenericFailureConnectionRefused(t *testing.T) {
-	Default.Target = "127.0.0.1"
-	Default.Port = 1 // Don't expect SNMP to be running here!
-	err := Default.Connect()
+	gs := newTestGoSNMP()
+	gs.Target = "127.0.0.1"
+	gs.Port = 1 // Don't expect SNMP to be running here!
+	err := gs.Connect()
 	if err != nil {
 		t.Fatalf("Did not expect connection error with IP address")
 	}
-	_, err = Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	_, err = gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err == nil {
 		t.Fatalf("Expected Get() to fail due to invalid port")
 	}
@@ -432,14 +421,11 @@ func TestGenericFailureConnectionRefused(t *testing.T) {
 }
 
 func TestSnmpV3NoAuthNoPrivBasicGet(t *testing.T) {
-	Default.Version = Version3
-	Default.MsgFlags = NoAuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, NoAuth, NoPriv)}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{UserName: getUserName(t, NoAuth, NoPriv)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -456,14 +442,11 @@ func TestSnmpV3AuthMD5NoPrivGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, MD5, NoPriv), AuthenticationProtocol: MD5, AuthenticationPassphrase: getAuthKey(t, MD5, NoPriv)}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMPv3(AuthNoPriv, &UsmSecurityParameters{UserName: getUserName(t, MD5, NoPriv), AuthenticationProtocol: MD5, AuthenticationPassphrase: getAuthKey(t, MD5, NoPriv)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -483,18 +466,15 @@ func TestSnmpV3AuthMD5PrivAES256CGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
 		UserName:               getUserName(t, MD5, AES256C),
 		AuthenticationProtocol: MD5, AuthenticationPassphrase: getAuthKey(t, MD5, AES256C),
 		PrivacyProtocol: AES256C, PrivacyPassphrase: getPrivKey(t, MD5, AES256C),
-	}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -514,14 +494,11 @@ func TestSnmpV3AuthSHANoPrivGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, NoPriv), AuthenticationProtocol: SHA, AuthenticationPassphrase: getAuthKey(t, SHA, NoPriv)}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMPv3(AuthNoPriv, &UsmSecurityParameters{UserName: getUserName(t, SHA, NoPriv), AuthenticationProtocol: SHA, AuthenticationPassphrase: getAuthKey(t, SHA, NoPriv)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -541,18 +518,15 @@ func TestSnmpV3AuthSHAPrivAESGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
 		UserName:               getUserName(t, SHA, AES),
 		AuthenticationProtocol: SHA, AuthenticationPassphrase: getAuthKey(t, SHA, AES),
 		PrivacyProtocol: AES, PrivacyPassphrase: getPrivKey(t, SHA, AES),
-	}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -572,18 +546,15 @@ func TestSnmpV3AuthSHAPrivAES256CGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
 		UserName:               getUserName(t, SHA, AES256C),
 		AuthenticationProtocol: SHA, AuthenticationPassphrase: getAuthKey(t, SHA, AES256C),
 		PrivacyProtocol: AES256C, PrivacyPassphrase: getPrivKey(t, SHA, AES256C),
-	}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -603,14 +574,11 @@ func TestSnmpV3AuthSHA224NoPrivGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA224, NoPriv), AuthenticationProtocol: SHA224, AuthenticationPassphrase: getAuthKey(t, SHA224, NoPriv)}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMPv3(AuthNoPriv, &UsmSecurityParameters{UserName: getUserName(t, SHA224, NoPriv), AuthenticationProtocol: SHA224, AuthenticationPassphrase: getAuthKey(t, SHA224, NoPriv)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -630,14 +598,11 @@ func TestSnmpV3AuthSHA256NoPrivGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA256, NoPriv), AuthenticationProtocol: SHA256, AuthenticationPassphrase: getAuthKey(t, SHA256, NoPriv)}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMPv3(AuthNoPriv, &UsmSecurityParameters{UserName: getUserName(t, SHA256, NoPriv), AuthenticationProtocol: SHA256, AuthenticationPassphrase: getAuthKey(t, SHA256, NoPriv)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -657,14 +622,11 @@ func TestSnmpV3AuthSHA384NoPrivGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA384, NoPriv), AuthenticationProtocol: SHA384, AuthenticationPassphrase: getAuthKey(t, SHA384, NoPriv)}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMPv3(AuthNoPriv, &UsmSecurityParameters{UserName: getUserName(t, SHA384, NoPriv), AuthenticationProtocol: SHA384, AuthenticationPassphrase: getAuthKey(t, SHA384, NoPriv)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -684,14 +646,11 @@ func TestSnmpV3AuthSHA512NoPrivGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA512, NoPriv), AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, NoPriv)}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	gs := newTestGoSNMPv3(AuthNoPriv, &UsmSecurityParameters{UserName: getUserName(t, SHA512, NoPriv), AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, NoPriv)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -709,19 +668,15 @@ func TestSnmpV3AuthSHA512NoPrivGet(t *testing.T) {
 
 func TestSnmpV3AuthSHA512PrivAES192Get(t *testing.T) {
 	t.Skip("AES-192 Blumenthal is currently known to have issues.")
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
 		UserName:               getUserName(t, SHA512, AES192),
 		AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, AES192),
 		PrivacyProtocol: AES192, PrivacyPassphrase: getPrivKey(t, SHA512, AES192),
-	}
+	})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	setupConnection(t)
-	defer Default.Conn.Close()
-
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -741,19 +696,15 @@ func TestSnmpV3AuthSHA512PrivAES192CGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
 		UserName:               getUserName(t, SHA512, AES192C),
 		AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, AES192C),
 		PrivacyProtocol: AES192C, PrivacyPassphrase: getPrivKey(t, SHA512, AES192C),
-	}
+	})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	setupConnection(t)
-	defer Default.Conn.Close()
-
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -774,18 +725,15 @@ func TestSnmpV3AuthSHA512PrivAES256CGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
 		UserName:               getUserName(t, SHA512, AES256C),
 		AuthenticationProtocol: SHA512, AuthenticationPassphrase: getAuthKey(t, SHA512, AES256C),
 		PrivacyProtocol: AES256C, PrivacyPassphrase: getPrivKey(t, SHA512, AES256C),
-	}
-	setupConnection(t)
-	defer Default.Conn.Close()
+	})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -805,20 +753,16 @@ func TestSnmpV3AuthMD5PrivDESGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
 
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, MD5, DES),
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{UserName: getUserName(t, MD5, DES),
 		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: getAuthKey(t, MD5, DES),
 		PrivacyProtocol:          DES,
-		PrivacyPassphrase:        getPrivKey(t, MD5, DES)}
+		PrivacyPassphrase:        getPrivKey(t, MD5, DES)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	setupConnection(t)
-	defer Default.Conn.Close()
-
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -838,19 +782,15 @@ func TestSnmpV3AuthSHAPrivDESGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, DES),
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{UserName: getUserName(t, SHA, DES),
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: getAuthKey(t, SHA, DES),
 		PrivacyProtocol:          DES,
-		PrivacyPassphrase:        getPrivKey(t, SHA, DES)}
+		PrivacyPassphrase:        getPrivKey(t, SHA, DES)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	setupConnection(t)
-	defer Default.Conn.Close()
-
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -870,20 +810,16 @@ func TestSnmpV3AuthMD5PrivAESGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
 
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, MD5, AES),
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{UserName: getUserName(t, MD5, AES),
 		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: getAuthKey(t, MD5, AES),
 		PrivacyProtocol:          AES,
-		PrivacyPassphrase:        getPrivKey(t, MD5, AES)}
+		PrivacyPassphrase:        getPrivKey(t, MD5, AES)})
+	connectToTarget(t, gs)
+	defer gs.Conn.Close()
 
-	setupConnection(t)
-	defer Default.Conn.Close()
-
-	result, err := Default.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
+	result, err := gs.Get([]string{".1.3.6.1.2.1.1.1.0"}) // SNMP MIB-2 sysDescr
 	if err != nil {
 		t.Fatalf("Get() failed with error => %v", err)
 	}
@@ -903,16 +839,17 @@ func TestSnmpV3PrivEmptyPrivatePassword(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, AES),
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.MsgFlags = AuthPriv
+	gs.SecurityModel = UserSecurityModel
+	gs.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, AES),
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: getAuthKey(t, SHA, AES),
 		PrivacyProtocol:          AES,
 		PrivacyPassphrase:        ""}
 
-	err := Default.Connect()
+	err := gs.Connect()
 	if err == nil {
 		t.Fatalf("Expected validation error for empty PrivacyPassphrase")
 	}
@@ -922,16 +859,17 @@ func TestSnmpV3AuthNoPrivEmptyPrivatePassword(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	Default.Version = Version3
-	Default.MsgFlags = AuthNoPriv
-	Default.SecurityModel = UserSecurityModel
-	Default.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, NoPriv),
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.MsgFlags = AuthNoPriv
+	gs.SecurityModel = UserSecurityModel
+	gs.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, NoPriv),
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: getAuthKey(t, SHA, NoPriv),
 		PrivacyProtocol:          AES,
 		PrivacyPassphrase:        getPrivKey(t, SHA, NoPriv)}
 
-	err := Default.Connect()
+	err := gs.Connect()
 	if err == nil {
 		t.Fatalf("Expected validation error for empty PrivacyPassphrase")
 	}

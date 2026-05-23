@@ -434,12 +434,8 @@ var testsInvalidSNMPResponses = []string{
 
 func TestInvalidSNMPResponses(t *testing.T) {
 
-	g := &GoSNMP{
-		Target:    "127.0.0.1",
-		Port:      161,
-		Community: "public",
-		Version:   Version2c,
-	}
+	g := newTestGoSNMP()
+	g.Target = "127.0.0.1"
 
 	for i, test := range testsInvalidSNMPResponses {
 		testBytes, _ := base64.StdEncoding.DecodeString(test)
