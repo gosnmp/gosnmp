@@ -205,57 +205,71 @@ func snmpV3AuthPrivTrap() []byte {
 		0xbc, 0x12, 0x12, 0xa6, 0xd6, 0x8f, 0x55, 0x6a, 0x55, 0xcb}
 }
 
-func makeTestTrapHandler(t *testing.T, done chan int, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
+func makeTestTrapHandler(done chan<- error, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
 	return func(packet *SnmpPacket, addr *net.UDPAddr) {
 		//log.Printf("got trapdata from %s\n", addr.IP)
-		defer close(done)
+		done <- checkTestTrap(packet, version)
+	}
+}
 
-		if version == Version1 {
-			if packet.Enterprise != trapTestEnterpriseOid {
-				t.Fatalf("incorrect trap Enterprise OID received, expected %s got %s", trapTestEnterpriseOid, packet.Enterprise)
-			}
-			if packet.AgentAddress != trapTestAgentAddress {
-				t.Fatalf("incorrect trap Agent Address received, expected %s got %s", trapTestAgentAddress, packet.AgentAddress)
-			}
-			if packet.GenericTrap != trapTestGenericTrap {
-				t.Fatalf("incorrect trap Generic Trap identifier received, expected %v got %v", trapTestGenericTrap, packet.GenericTrap)
-			}
-			if packet.SpecificTrap != trapTestSpecificTrap {
-				t.Fatalf("incorrect trap Specific Trap identifier received, expected %v got %v", trapTestSpecificTrap, packet.SpecificTrap)
-			}
-			if packet.Timestamp != trapTestTimestamp {
-				t.Fatalf("incorrect trap Timestamp received, expected %v got %v", trapTestTimestamp, packet.Timestamp)
-			}
+func checkTestTrap(packet *SnmpPacket, version SnmpVersion) error {
+	if version == Version1 {
+		if packet.Enterprise != trapTestEnterpriseOid {
+			return fmt.Errorf("incorrect trap Enterprise OID received, expected %s got %s", trapTestEnterpriseOid, packet.Enterprise)
 		}
-
-		for _, v := range packet.Variables {
-			switch v.Type {
-			case OctetString:
-				b := v.Value.([]byte)
-				// log.Printf("OID: %s, string: %x\n", v.Name, b)
-
-				// Only one OctetString in the payload, so it must be the expected one
-				if v.Name != trapTestOid {
-					t.Fatalf("incorrect trap OID received, expected %s got %s", trapTestOid, v.Name)
-				}
-				if string(b) != trapTestPayload {
-					t.Fatalf("incorrect trap payload received, expected %s got %x", trapTestPayload, b)
-				}
-			default:
-				// log.Printf("trap: %+v\n", v)
-			}
+		if packet.AgentAddress != trapTestAgentAddress {
+			return fmt.Errorf("incorrect trap Agent Address received, expected %s got %s", trapTestAgentAddress, packet.AgentAddress)
 		}
+		if packet.GenericTrap != trapTestGenericTrap {
+			return fmt.Errorf("incorrect trap Generic Trap identifier received, expected %v got %v", trapTestGenericTrap, packet.GenericTrap)
+		}
+		if packet.SpecificTrap != trapTestSpecificTrap {
+			return fmt.Errorf("incorrect trap Specific Trap identifier received, expected %v got %v", trapTestSpecificTrap, packet.SpecificTrap)
+		}
+		if packet.Timestamp != trapTestTimestamp {
+			return fmt.Errorf("incorrect trap Timestamp received, expected %v got %v", trapTestTimestamp, packet.Timestamp)
+		}
+	}
+
+	for _, v := range packet.Variables {
+		switch v.Type {
+		case OctetString:
+			b := v.Value.([]byte)
+			// log.Printf("OID: %s, string: %x\n", v.Name, b)
+
+			// Only one OctetString in the payload, so it must be the expected one
+			if v.Name != trapTestOid {
+				return fmt.Errorf("incorrect trap OID received, expected %s got %s", trapTestOid, v.Name)
+			}
+			if string(b) != trapTestPayload {
+				return fmt.Errorf("incorrect trap payload received, expected %s got %x", trapTestPayload, b)
+			}
+		default:
+			// log.Printf("trap: %+v\n", v)
+		}
+	}
+	return nil
+}
+
+func waitForTestTrap(t *testing.T, done <-chan error) {
+	t.Helper()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
 	}
 }
 
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendTrapBasic(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version2c)
 	tl.Params = newTestGoSNMP()
 
 	// listener goroutine
@@ -300,21 +314,17 @@ func TestSendTrapBasic(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 }
 
 // test sending a basic SNMP inform and receiving the response
 func TestSendInformBasic(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version2c)
 	tl.Params = newTestGoSNMP()
 
 	// listener goroutine
@@ -363,11 +373,7 @@ func TestSendInformBasic(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 	if resp.PDUType != GetResponse {
 		t.Fatal("Inform response is not a response PDU")
@@ -383,12 +389,12 @@ func TestSendInformBasic(t *testing.T) {
 
 // test the listener is not blocked if Listening is not used
 func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version2c)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version2c)
 	tl.Params = newTestGoSNMP()
 
 	errch := make(chan error)
@@ -437,7 +443,8 @@ func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 	// Wait for a response from the handler and restart the SendTrap
 	// if the listener wasn't ready.
 	select {
-	case <-done:
+	case err := <-done:
+		require.NoError(t, err)
 	case <-time.After(2 * time.Second):
 		_, err = gs.SendTrap(trap)
 		if err != nil {
@@ -445,23 +452,18 @@ func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 		}
 
 		t.Log("restarted")
-
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for trap to be received")
-		}
+		waitForTestTrap(t, done)
 	}
 }
 
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendV1Trap(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version1)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version1)
 	tl.Params = newTestGoSNMP()
 
 	// listener goroutine
@@ -512,15 +514,11 @@ func TestSendV1Trap(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 }
 
 func TestSendV3TrapNoAuthNoPriv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -532,7 +530,7 @@ func TestSendV3TrapNoAuthNoPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(NoAuthNoPriv, sp)
 
 	// listener goroutine
@@ -582,16 +580,12 @@ func TestSendV3TrapNoAuthNoPriv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 
 func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -605,7 +599,7 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthNoPriv, sp)
 
 	// listener goroutine
@@ -655,16 +649,12 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 
 func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -678,7 +668,7 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthNoPriv, sp)
 
 	// listener goroutine
@@ -728,15 +718,11 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -752,7 +738,7 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
 	// listener goroutine
@@ -802,16 +788,12 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 
 func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -827,7 +809,7 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
 	// listener goroutine
@@ -877,16 +859,12 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 
 func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -902,7 +880,7 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
 	// listener goroutine
@@ -952,15 +930,11 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -976,7 +950,7 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
 	// listener goroutine
@@ -1026,14 +1000,10 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 }
 func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -1049,7 +1019,7 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
 	// listener goroutine
@@ -1099,15 +1069,11 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
-	done := make(chan int)
+	done := make(chan error, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -1123,7 +1089,7 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
 	// listener goroutine
@@ -1173,11 +1139,7 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 	}
 
 	// wait for response from handler
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for trap to be received")
-	}
+	waitForTestTrap(t, done)
 
 }
 
@@ -1195,7 +1157,10 @@ func (l *testLogger) Print(v ...interface{}) {
 
 	if l.matcher != "" && l.out != nil {
 		if strings.Contains(fmt.Sprint(v...), l.matcher) {
-			l.out <- true
+			select {
+			case l.out <- true:
+			default:
+			}
 		}
 	}
 }
@@ -1207,14 +1172,17 @@ func (l *testLogger) Printf(format string, v ...interface{}) {
 
 	if l.matcher != "" && l.out != nil {
 		if strings.Contains(fmt.Sprintf(format, v...), l.matcher) {
-			l.out <- true
+			select {
+			case l.out <- true:
+			default:
+			}
 		}
 	}
 }
 
 func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
-	done := make(chan int)
-	found := make(chan bool)
+	done := make(chan error, 1)
+	found := make(chan bool, 1)
 
 	tl := NewTrapListener()
 	defer tl.Close()
@@ -1228,7 +1196,7 @@ func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	}
 
-	tl.OnNewTrap = makeTestTrapHandler(t, done, Version3)
+	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthNoPriv, sp)
 	tl.Params.Logger = NewLogger(&testLogger{matcher: "incoming packet is not authentic", out: found})
 
@@ -1281,7 +1249,8 @@ func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
 
 	// wait for response from handler
 	select {
-	case <-done:
+	case err := <-done:
+		require.NoError(t, err)
 		t.Fatal("received trap where we shouldn't")
 	case <-found:
 	case <-time.After(2 * time.Second):
