@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,11 +22,7 @@ import (
 
 const (
 	trapTestAddress = "127.0.0.1"
-
-	// TODO this is bad. Listen and Connect expect different address formats
-	// so we need an int version and a string version - they should be the same.
-	trapTestPort       = 9162
-	trapTestPortString = "9162"
+	trapTestPort    = 9162 // TODO: get rid of the last test using fixed port
 
 	trapTestOid     = ".1.2.1234.4.5"
 	trapTestPayload = "TRAPTEST1234"
@@ -262,6 +259,29 @@ func waitForTestTrap(t *testing.T, done <-chan error) {
 	}
 }
 
+func listenOnEphemeral(t *testing.T, tl *TrapListener) (addr string, port uint16) {
+	t.Helper()
+
+	errch := make(chan error, 1)
+	go func() {
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, "0"))
+		if err != nil {
+			errch <- err
+		}
+	}()
+
+	select {
+	case <-tl.Listening():
+		udpAddr := tl.conn.LocalAddr().(*net.UDPAddr)
+		return udpAddr.IP.String(), uint16(udpAddr.Port) //nolint:gosec
+	case err := <-errch:
+		t.Fatalf("error in listen: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for listener")
+	}
+	return "", 0
+}
+
 // test sending a basic SNMP trap, using our own listener to receive
 func TestSendTrapBasic(t *testing.T) {
 	done := make(chan error, 1)
@@ -272,25 +292,8 @@ func TestSendTrapBasic(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version2c)
 	tl.Params = newTestGoSNMP()
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		// defer close(errch)
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
 	gs := newTestGoSNMP()
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -327,26 +330,8 @@ func TestSendInformBasic(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version2c)
 	tl.Params = newTestGoSNMP()
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		// defer close(errch)
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMP()
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -403,7 +388,7 @@ func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 		// Reduce the chance of necessity for a restart.
 		listening <- true
 
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
+		err := tl.Listen(net.JoinHostPort(trapTestAddress, strconv.Itoa(trapTestPort)))
 		if err != nil {
 			errch <- err
 		}
@@ -466,25 +451,8 @@ func TestSendV1Trap(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version1)
 	tl.Params = newTestGoSNMP()
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMP()
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 	gs.Version = Version1
 
 	err := gs.Connect()
@@ -533,25 +501,8 @@ func TestSendV3TrapNoAuthNoPriv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(NoAuthNoPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(NoAuthNoPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -602,25 +553,8 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthNoPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthNoPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -671,25 +605,8 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthNoPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthNoPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -741,25 +658,8 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -812,25 +712,8 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -883,25 +766,8 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -953,25 +819,8 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -1022,25 +871,8 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -1092,25 +924,8 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 	tl.OnNewTrap = makeTestTrapHandler(done, Version3)
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(AuthPriv, sp)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	err := gs.Connect()
 	if err != nil {
@@ -1200,22 +1015,6 @@ func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
 	tl.Params = newTestGoSNMPv3(AuthNoPriv, sp)
 	tl.Params.Logger = NewLogger(&testLogger{matcher: "incoming packet is not authentic", out: found})
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	gs := newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{
 		UserName:                 "test",
 		AuthenticationProtocol:   NoAuth,
@@ -1223,8 +1022,7 @@ func TestSendV3TrapAuthNoPrivFailsWithNoAuthNoPriv(t *testing.T) {
 		AuthoritativeEngineTime:  1,
 		AuthoritativeEngineID:    string([]byte{0x80, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}),
 	})
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 
 	require.NoError(t, gs.Connect())
 	defer gs.Conn.Close()
@@ -1275,27 +1073,10 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 	}
 	tl.Params = newTestGoSNMPv3(AuthPriv, sp)
 
-	// listener goroutine
-	errch := make(chan error)
-	go func() {
-		err := tl.Listen(net.JoinHostPort(trapTestAddress, trapTestPortString))
-		if err != nil {
-			errch <- err
-		}
-	}()
-
-	// Wait until the listener is ready.
-	select {
-	case <-tl.Listening():
-	case err := <-errch:
-		t.Fatalf("error in listen: %v", err)
-	}
-
 	clientParams := sp.Copy()
 	clientParams.(*UsmSecurityParameters).AuthoritativeEngineID = ""
 	gs := newTestGoSNMPv3(AuthPriv, clientParams)
-	gs.Target = trapTestAddress
-	gs.Port = trapTestPort
+	gs.Target, gs.Port = listenOnEphemeral(t, tl)
 	require.NoError(t, gs.Connect())
 	defer gs.Conn.Close()
 
