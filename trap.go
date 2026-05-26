@@ -234,6 +234,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 	if err != nil {
 		return err
 	}
+	packetConn := newReflectorUDPConn(t.conn)
 
 	defer t.conn.Close()
 
@@ -248,7 +249,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 
 		default:
 			buf := make([]byte, t.buffSize)
-			rlen, remote, err := t.conn.ReadFromUDP(buf)
+			rlen, src, respond, err := packetConn.readUDPFrom(buf)
 			if err != nil {
 				if atomic.LoadInt32(&t.finish) == 1 {
 					// err most likely comes from reading from a closed connection
@@ -259,8 +260,8 @@ func (t *TrapListener) listenUDP(addr string) error {
 			}
 
 			msg := buf[:rlen]
-			t.handleTrapMessage(msg, remote, func(packet *SnmpPacket) error {
-				return packet.writeTo(func(b []byte) (int, error) { return t.conn.WriteTo(b, remote) })
+			t.handleTrapMessage(msg, src, func(packet *SnmpPacket) error {
+				return packet.writeTo(respond)
 			})
 		}
 	}
