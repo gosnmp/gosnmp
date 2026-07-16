@@ -19,6 +19,8 @@ linters:
     - unparam
     - whitespace
   settings:
+    goconst:
+      ignore-tests: true
     gocritic:
       disabled-checks:
         - exitAfterDefer
