@@ -340,3 +340,132 @@ func BenchmarkSingleHash(b *testing.B) {
 	b.Logf("cache size %d", len(passwordKeyHashCache))
 	passwordKeyHashMutex.RUnlock()
 }
+
+// The DES and AES branches of encryptPacket/decryptPacket index the privacy
+// key and the privacy parameters at fixed offsets. RFC 3414 8.1.1.1 and
+// RFC 3826 3.1.2.1 both fix the privacy parameters at 8 octets, but unmarshal
+// copies that field verbatim off the wire, so the length has to be checked
+// before it is used as IV material.
+func TestPrivacyMaterialLength(t *testing.T) {
+	tests := []struct {
+		name    string
+		priv    SnmpV3PrivProtocol
+		keyLen  int
+		saltLen int
+		wantErr string
+	}{
+		{"DES empty salt", DES, 16, 0, "invalid privacy parameters"},
+		{"DES short salt", DES, 16, 7, "invalid privacy parameters"},
+		{"DES long salt", DES, 16, 9, "invalid privacy parameters"},
+		{"DES no key", DES, 0, 8, "invalid DES privacy key"},
+		{"DES short key", DES, 15, 8, "invalid DES privacy key"},
+		{"DES ok", DES, 16, 8, ""},
+		{"AES empty salt", AES, 16, 0, "invalid privacy parameters"},
+		{"AES short salt", AES, 16, 7, "invalid privacy parameters"},
+		{"AES long salt", AES, 16, 9, "invalid privacy parameters"},
+		{"AES ok", AES, 16, 8, ""},
+		{"AES256C ok", AES256C, 32, 8, ""},
+		{"NoPriv is not checked", NoPriv, 0, 0, ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sp := &UsmSecurityParameters{
+				PrivacyProtocol:   test.priv,
+				PrivacyKey:        make([]byte, test.keyLen),
+				PrivacyParameters: make([]byte, test.saltLen),
+				Logger:            NewLogger(log.New(io.Discard, "", 0)),
+			}
+
+			// a well formed OCTET STRING holding one AES block, which is also
+			// a whole number of DES blocks
+			packet := append([]byte{byte(OctetString), 16}, make([]byte, 16)...)
+			_, decErr := sp.decryptPacket(packet, 0)
+			_, encErr := sp.encryptPacket(make([]byte, 16))
+
+			for _, err := range []error{decErr, encErr} {
+				if test.wantErr == "" {
+					require.NoError(t, err)
+					continue
+				}
+				require.ErrorContains(t, err, test.wantErr)
+			}
+		})
+	}
+}
+
+// authPriv DES GetRequest for .1.3.6.1.2.1.1.1.0, produced by SnmpEncodePacket
+// with the parameters of desPrivSession below, then the same packet with its
+// msgPrivacyParameters shortened to 0 and to 1 octet.
+func packetDESPriv(t *testing.T) []byte {
+	packet, err := hex.DecodeString("30790201033011020400000001020300ffff04010702010304373035040e80004fb805636c6f75644dab22cc02012b0203203ea50403757372040cc1e6d9a212ccfd01ff8dec5604080000002b92db5e0704280351ab9ef9395404ff63637520517fdf079e2ec6f45a1d6512c77f832fb4aff273aa24fcff6cfdbd")
+	require.NoError(t, err, "authPriv DES packet decoding failed.")
+	return packet
+}
+
+func packetDESPrivEmptySalt(t *testing.T) []byte {
+	packet, err := hex.DecodeString("30710201033011020400000001020300ffff040107020103042f302d040e80004fb805636c6f75644dab22cc02012b0203203ea50403757372040cc1e6d9a212ccfd01ff8dec56040004280351ab9ef9395404ff63637520517fdf079e2ec6f45a1d6512c77f832fb4aff273aa24fcff6cfdbd")
+	require.NoError(t, err, "empty salt packet decoding failed.")
+	return packet
+}
+
+func packetDESPrivOneByteSalt(t *testing.T) []byte {
+	packet, err := hex.DecodeString("30720201033011020400000001020300ffff0401070201030430302e040e80004fb805636c6f75644dab22cc02012b0203203ea50403757372040cc1e6d9a212ccfd01ff8dec560401a004280351ab9ef9395404ff63637520517fdf079e2ec6f45a1d6512c77f832fb4aff273aa24fcff6cfdbd")
+	require.NoError(t, err, "one byte salt packet decoding failed.")
+	return packet
+}
+
+func desPrivSession(t *testing.T) *GoSNMP {
+	sp := &UsmSecurityParameters{
+		UserName:                 "usr",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "authkey1",
+		PrivacyProtocol:          DES,
+		PrivacyPassphrase:        "privkey1",
+		AuthoritativeEngineID:    authorativeEngineID(t),
+		AuthoritativeEngineBoots: 43,
+		AuthoritativeEngineTime:  2113189,
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	}
+	require.NoError(t, sp.InitSecurityKeys(), "Generation of keys failed")
+
+	return newTestGoSNMPv3(AuthPriv, sp)
+}
+
+// SnmpDecodePacket reaches decryptPacket without an authentication check, so a
+// short msgPrivacyParameters used to take the DES branch out of bounds.
+func TestSnmpDecodePacketPrivacyParametersLength(t *testing.T) {
+	result, err := desPrivSession(t).SnmpDecodePacket(packetDESPriv(t))
+	require.NoError(t, err, "the unmodified packet must still decode")
+	require.Len(t, result.Variables, 1)
+	require.Equal(t, ".1.3.6.1.2.1.1.1.0", result.Variables[0].Name)
+
+	for name, packet := range map[string][]byte{
+		"empty salt":    packetDESPrivEmptySalt(t),
+		"one byte salt": packetDESPrivOneByteSalt(t),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := desPrivSession(t).SnmpDecodePacket(packet)
+			require.ErrorContains(t, err, "invalid privacy parameters")
+		})
+	}
+}
+
+// A TrapListener using TrapSecurityParametersTable authenticates with the
+// msgFlags of the received message, so a sender that clears the auth flag
+// skips the MAC check and still reaches decryptPacket - it is the scoped PDU
+// being an OCTET STRING, not the flags, that triggers decryption.
+func TestUnmarshalTrapPrivacyParametersLength(t *testing.T) {
+	packet := packetDESPrivOneByteSalt(t)
+	require.Equal(t, byte(AuthPriv|Reportable), packet[20], "msgFlags is not where it is expected")
+	packet[20] = byte(Reportable)
+
+	x := desPrivSession(t)
+	table := NewSnmpV3SecurityParametersTable(x.Logger)
+	securityParameters := x.SecurityParameters.Copy()
+	require.NoError(t, table.Add(securityParameters.getIdentifier(), securityParameters))
+	x.TrapSecurityParametersTable = table
+
+	_, err := x.UnmarshalTrap(packet, true)
+	require.ErrorContains(t, err, "invalid privacy parameters")
+}
