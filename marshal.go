@@ -508,6 +508,21 @@ func (packet *SnmpPacket) MarshalMsg() ([]byte, error) {
 	return packet.marshalMsg()
 }
 
+func (packet *SnmpPacket) writeTo(writer func([]byte) (int, error)) error {
+	b, err := packet.marshalMsg()
+	if err != nil {
+		return fmt.Errorf("error marshaling SnmpPacket: %w", err)
+	}
+
+	count, err := writer(b)
+	if err != nil {
+		return fmt.Errorf("error sending SnmpPacket: %w", err)
+	} else if count != len(b) { // This isn't fatal, but should be logged.
+		packet.Logger.Printf("Failed to send all bytes of SnmpPacket!\n")
+	}
+	return nil
+}
+
 // marshal an SNMP message
 func (packet *SnmpPacket) marshalMsg() ([]byte, error) {
 	var err error
