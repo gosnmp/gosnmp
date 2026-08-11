@@ -646,6 +646,12 @@ func TestIPAddressDecodeValue(t *testing.T) {
 			data:     []byte{0x40, 0x00},
 			wantNull: true,
 		},
+		{
+			name:     "8 byte payload treated as null",
+			data:     []byte{0x40, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+			wantNull: true,
+			wantErr:  false,
+		},
 		// Error cases
 		{
 			name:    "truncated IPv4 data",
@@ -658,8 +664,8 @@ func TestIPAddressDecodeValue(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "invalid length (not 0, 4, or 16)",
-			data:    []byte{0x40, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
+			name:    "invalid length (not 0, 4, 8, or 16)",
+			data:    []byte{0x40, 0x09, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09},
 			wantErr: true,
 		},
 		{
