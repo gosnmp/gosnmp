@@ -139,6 +139,7 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		ipLen := length - cursor
 		switch ipLen {
 		case 0: // real life, buggy devices returning bad data
+		case 8:
 			retVal.Value = nil
 			return nil
 		case 4: // IPv4
