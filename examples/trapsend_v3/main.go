@@ -26,7 +26,8 @@ func main() {
 		SecurityModel: g.UserSecurityModel,
 		MsgFlags:      g.AuthPriv,
 		Logger:        g.NewLogger(log.New(os.Stdout, "", 0)),
-		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",
+		SecurityParameters: &g.UsmSecurityParameters{
+			UserName:                 "user",
 			AuthoritativeEngineID:    "1234",
 			AuthenticationProtocol:   g.SHA,
 			AuthenticationPassphrase: "password",
