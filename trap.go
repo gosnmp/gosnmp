@@ -412,11 +412,15 @@ func (t *TrapListener) listenTCP(addr string) error {
 
 			// Listen for an incoming connection.
 			conn, err := l.Accept()
-			fmt.Printf("ACCEPT: %s", conn)
 			if err != nil {
+				if atomic.LoadInt32(&t.finish) == 1 {
+					// err most likely comes from reading from a closed connection
+					continue
+				}
 				fmt.Println("error accepting: ", err.Error())
 				return err
 			}
+			fmt.Printf("ACCEPT: %s", conn)
 			// Handle connections in a new goroutine.
 			go t.handleTCPRequest(conn)
 		}
