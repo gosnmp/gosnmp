@@ -183,8 +183,7 @@ func (packet *SnmpPacket) SafeString() string {
 
 // GoSNMP
 // send/receive one snmp request
-func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
-	wait bool) (result *SnmpPacket, err error) {
+func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	// allMsgIDs := make([]uint32, 0, x.Retries+1) // unused
 
@@ -237,13 +236,13 @@ sendRetry:
 		}
 
 		// Request ID is an atomic counter that wraps to 0 at max int32.
-		reqID := (atomic.AddUint32(&(x.requestID), 1) & 0x7FFFFFFF)
+		reqID := (atomic.AddUint32(&x.requestID, 1) & 0x7FFFFFFF)
 		allReqIDs = append(allReqIDs, reqID)
 
 		packetOut.RequestID = reqID
 
 		if x.Version == Version3 {
-			msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
+			msgID := (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
 
 			// allMsgIDs = append(allMsgIDs, msgID) // unused
 
@@ -434,7 +433,7 @@ sendRetry:
 func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			var buf = make([]byte, 8192)
+			buf := make([]byte, 8192)
 			runtime.Stack(buf, true)
 
 			err = fmt.Errorf("recover: %v Stack:%v", e, string(buf))

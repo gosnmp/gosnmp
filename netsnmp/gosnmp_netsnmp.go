@@ -19,6 +19,7 @@ u_char* getPktStart(u_char* pkt, ulong len, ulong off){
 }
 */
 import "C"
+
 import (
 	"errors"
 	"fmt"
@@ -113,7 +114,6 @@ func verToSnmpVer(in gosnmp.SnmpVersion) (C.int, error) {
 }
 
 func netSnmpPduPkt(fname string, gopdu gosnmp.SnmpPDU, gosess *gosnmp.GoSNMP, reqid uint32, verbose bool) ([]byte, error) {
-
 	var errout *C.char
 	var err error
 
@@ -123,20 +123,20 @@ func netSnmpPduPkt(fname string, gopdu gosnmp.SnmpPDU, gosess *gosnmp.GoSNMP, re
 		netSnmpEnableLogging()
 	}
 
-	//enable reverse encode
+	// enable reverse encode
 	C.netsnmp_ds_set_boolean(C.NETSNMP_DS_LIBRARY_ID,
 		C.NETSNMP_DS_LIB_REVERSE_ENCODE,
 		C.NETSNMP_DEFAULT_ASNENCODING_DIRECTION)
 
-	//create session
+	// create session
 	sess := &C.struct_snmp_session{
 		version:       C.SNMP_DEFAULT_VERSION,
-		community:     (*C.uchar)((unsafe.Pointer)(C.CString(gosess.Community))),
+		community:     (*C.uchar)(unsafe.Pointer(C.CString(gosess.Community))),
 		community_len: C.size_t(len(gosess.Community)),
 	}
 	defer C.free(unsafe.Pointer(sess.community))
 
-	//create pdu
+	// create pdu
 	pdu := C.snmp_pdu_create(C.SNMP_MSG_SET)
 	defer C.free(unsafe.Pointer(pdu))
 	tmp, err := verToSnmpVer(gosess.Version)
@@ -165,7 +165,7 @@ func netSnmpPduPkt(fname string, gopdu gosnmp.SnmpPDU, gosess *gosnmp.GoSNMP, re
 		return nil, err
 	}
 
-	//render packet
+	// render packet
 	sz := 2048
 	pktout := (*C.uchar)(C.malloc(C.size_t(sz)))
 	pktoutlen := C.size_t(sz)
@@ -180,7 +180,6 @@ func netSnmpPduPkt(fname string, gopdu gosnmp.SnmpPDU, gosess *gosnmp.GoSNMP, re
 	defer C.free(unsafe.Pointer(pktout))
 
 	return C.GoBytes(unsafe.Pointer(C.getPktStart(pktout, pktoutlen, pktoutoffset)), C.int(pktoutoffset)), nil
-
 }
 
 func netSnmpEnableLogging() {
