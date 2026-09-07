@@ -41,7 +41,7 @@ func TestTrapSecurityParametersTable_ConcurrentSetGet(t *testing.T) {
 
 	// Writers: repeatedly install a fresh table, as a config-reload
 	// goroutine would.
-	for i := 0; i < writers; i++ {
+	for range writers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -54,7 +54,7 @@ func TestTrapSecurityParametersTable_ConcurrentSetGet(t *testing.T) {
 
 	// Readers: repeatedly load, as the trap decode path would before
 	// calling t.Get(user).
-	for i := 0; i < readers; i++ {
+	for range readers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
