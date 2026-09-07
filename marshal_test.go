@@ -149,8 +149,11 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x1c, // vbl start
 		0x32, // finish
 		[]testsEnmarshalVarbindPosition{
-			{".1.3.6.1.4.1.2863.205.1.1.75.1.0",
-				0x1e, 0x32, OctetString, []byte{0x80}},
+			{
+				".1.3.6.1.4.1.2863.205.1.1.75.1.0",
+				0x1e, 0x32, OctetString,
+				[]byte{0x80},
+			},
 		},
 	},
 	{
@@ -165,8 +168,10 @@ var testsEnmarshal = []testsEnmarshalT{
 		0x1c, // vbl start
 		0x37, // finish
 		[]testsEnmarshalVarbindPosition{
-			{".1.3.6.1.4.1.2863.205.1.1.75.2.0",
-				0x1e, 0x36, OctetString, []byte("telnet")},
+			{
+				".1.3.6.1.4.1.2863.205.1.1.75.2.0",
+				0x1e, 0x36, OctetString, []byte("telnet"),
+			},
 		},
 	},
 	// MrSpock Set stuff
@@ -237,13 +242,13 @@ func vbPosPdus(test testsEnmarshalT) (pdus []SnmpPDU) {
 		pdu := SnmpPDU{Name: vbp.oid, Type: vbp.pduType, Value: vbp.pduValue}
 		pdus = append(pdus, pdu)
 	}
-	return
+	return pdus
 }
 
 // checkByteEquality walks the bytes in testBytes, and compares them to goodBytes
 func checkByteEquality(t *testing.T, test testsEnmarshalT, testBytes []byte,
-	start int, finish int) {
-
+	start, finish int,
+) {
 	testBytesLen := len(testBytes)
 
 	goodBytes := test.goodBytes()
@@ -347,7 +352,7 @@ func TestEnmarshalMsg(t *testing.T) {
 				t.Errorf("#%s: marshal() err returned: %v", test.funcName, err)
 			}
 			if len(newResultTestBytes) == 0 {
-				t.Errorf("#%s: marshal() length of result is 0 : %v", test.funcName, (newResultTestBytes))
+				t.Errorf("#%s: marshal() length of result is 0 : %v", test.funcName, newResultTestBytes)
 				return
 			}
 			checkByteEquality(t, test, newResultTestBytes, 0, test.finish)
@@ -396,7 +401,8 @@ var testsUnmarshal = []struct {
 	in  func() []byte
 	out *SnmpPacket
 }{
-	{kyoceraResponseBytes,
+	{
+		kyoceraResponseBytes,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -448,7 +454,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{ciscoResponseBytes,
+	{
+		ciscoResponseBytes,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -510,7 +517,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{portOnIncoming1,
+	{
+		portOnIncoming1,
 		&SnmpPacket{
 			Version:    Version1,
 			Community:  "privatelab",
@@ -527,7 +535,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{portOffIncoming1,
+	{
+		portOffIncoming1,
 		&SnmpPacket{
 			Version:    Version1,
 			Community:  "privatelab",
@@ -544,7 +553,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{ciscoGetnextResponseBytes,
+	{
+		ciscoGetnextResponseBytes,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -586,7 +596,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{ciscoGetbulkResponseBytes,
+	{
+		ciscoGetbulkResponseBytes,
 		&SnmpPacket{
 			Version:        Version2c,
 			Community:      "public",
@@ -648,7 +659,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{emptyErrResponse,
+	{
+		emptyErrResponse,
 		&SnmpPacket{
 			Version:   Version2c,
 			Community: "public",
@@ -658,7 +670,8 @@ var testsUnmarshal = []struct {
 			Variables: []SnmpPDU{},
 		},
 	},
-	{counter64Response,
+	{
+		counter64Response,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -675,7 +688,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{opaqueFloatResponse,
+	{
+		opaqueFloatResponse,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -692,7 +706,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{opaqueResponse,
+	{
+		opaqueResponse,
 		&SnmpPacket{
 			Version:    Version1,
 			Community:  "public",
@@ -709,7 +724,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{opaqueDoubleResponse,
+	{
+		opaqueDoubleResponse,
 		&SnmpPacket{
 			Version:    Version2c,
 			Community:  "public",
@@ -726,7 +742,8 @@ var testsUnmarshal = []struct {
 			},
 		},
 	},
-	{snmpv3HelloRequest,
+	{
+		snmpv3HelloRequest,
 		&SnmpPacket{
 			Version:    Version3,
 			PDUType:    GetRequest,
@@ -737,7 +754,8 @@ var testsUnmarshal = []struct {
 			Variables:  []SnmpPDU{},
 		},
 	},
-	{snmpv3HelloResponse,
+	{
+		snmpv3HelloResponse,
 		&SnmpPacket{
 			Version:    Version3,
 			PDUType:    Report,
@@ -794,7 +812,6 @@ func FuzzUnmarshal(f *testing.F) {
 }
 
 func TestUnmarshal(t *testing.T) {
-
 	for i, test := range testsUnmarshal {
 		funcName := runtime.FuncForPC(reflect.ValueOf(test.in).Pointer()).Name()
 		splitedFuncName := strings.Split(funcName, ".")
@@ -885,7 +902,6 @@ func TestUnmarshal(t *testing.T) {
 					t.Fatalf("#%s: SnmpDecodePacket() err returned: %v", funcName, err)
 				}
 				assert.EqualValues(t, res, resNew)
-
 			})
 		})
 
@@ -1603,8 +1619,8 @@ func opaqueDoubleResponse() []byte {
 }
 
 func TestUnmarshalEmptyPanic(t *testing.T) {
-	var in = []byte{}
-	var res = new(SnmpPacket)
+	in := []byte{}
+	res := new(SnmpPacket)
 
 	_, err := newTestGoSNMP().unmarshalHeader(in, res)
 	if err == nil {
@@ -1636,7 +1652,6 @@ func TestV3USMInitialPacket(t *testing.T) {
 		t.Logf("-->got=%v", pktNew)
 		t.Errorf("#TestV3USMInitialPacket: SnmpDecodePacket() err returned: %v. ", errDecode)
 	}
-
 }
 
 func TestSendOneRequest_dups(t *testing.T) {
@@ -1959,7 +1974,8 @@ func trap1() []byte {
 		0x75, 0x6d, 0x70, 0x63, 0x61, 0x70, 0x02, 0x00, 0x08, 0x00, 0x74, 0x3a, 0x05, 0x00, 0xdf, 0xba,
 		0x27, 0x0c, 0x03, 0x00, 0x08, 0x00, 0x74, 0x3a, 0x05, 0x00, 0x18, 0x94, 0x67, 0x0c, 0x04, 0x00,
 		0x08, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6c, 0x00, 0x00, 0x00}
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6c, 0x00, 0x00, 0x00,
+	}
 }
 
 // Simple Network Management Protocol
@@ -1979,7 +1995,8 @@ func trap1() []byte {
 //         plaintext
 
 func snmpv3HelloRequest() []byte {
-	return []byte{0x30, 0x52, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02,
+	return []byte{
+		0x30, 0x52, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02,
 		0x04, 0x05, 0x6d, 0x2b, 0x82, 0x02, 0x03, 0x00,
 		0xff, 0xe3, 0x04, 0x01, 0x04, 0x02, 0x01, 0x03,
 		0x04, 0x10, 0x30, 0x0e, 0x04, 0x00, 0x02, 0x01,
@@ -1989,7 +2006,8 @@ func snmpv3HelloRequest() []byte {
 		0x6f, 0x72, 0x6d, 0x61, 0x74, 0x73, 0x2f, 0x6c,
 		0x69, 0x6e, 0x75, 0x78, 0xa0, 0x0e, 0x02, 0x04,
 		0x44, 0xfa, 0x16, 0xe1, 0x02, 0x01, 0x00, 0x02,
-		0x01, 0x00, 0x30, 0x00}
+		0x01, 0x00, 0x30, 0x00,
+	}
 }
 
 // msgData: plaintext (0)
@@ -2042,7 +2060,7 @@ func dumpBytes1(data []byte, msg string, maxlength int) {
 	if len(data) < maxlength {
 		length = len(data)
 	}
-	length *= 2 //One Byte Symbols Two Hex
+	length *= 2 // One Byte Symbols Two Hex
 	hexStr := hex.EncodeToString(data)
 	for i := 0; length >= i+16; i += 16 {
 		buffer.WriteString("\n")
@@ -2361,24 +2379,42 @@ func TestUnmarshalVBL(t *testing.T) {
 		wantPDUs []wantPDU
 	}{
 		// Well-formed packets
-		{"OctetString", buildVBL(goodVB(0x01, OctetString, []byte("test")), goodVB(0x02, OctetString, []byte("data"))), false, 2,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte("test")}, {".1.3.6.2", OctetString, []byte("data")}}},
-		{"Integer", buildVBL(goodVB(0x01, Integer, []byte{0x01})), false, 1,
-			[]wantPDU{{".1.3.6.1", Integer, 1}}},
-		{"Counter32", buildVBL(goodVB(0x01, Counter32, []byte{0x00, 0x01, 0x00, 0x00})), false, 1,
-			[]wantPDU{{".1.3.6.1", Counter32, uint(65536)}}},
-		{"Counter64", buildVBL(goodVB(0x01, Counter64, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00})), false, 1,
-			[]wantPDU{{".1.3.6.1", Counter64, uint64(65536)}}},
-		{"Gauge32", buildVBL(goodVB(0x01, Gauge32, []byte{0x00, 0x00, 0x00, 0x2a})), false, 1,
-			[]wantPDU{{".1.3.6.1", Gauge32, uint(42)}}},
-		{"TimeTicks", buildVBL(goodVB(0x01, TimeTicks, []byte{0x00, 0x01, 0x51, 0x80})), false, 1,
-			[]wantPDU{{".1.3.6.1", TimeTicks, uint32(86400)}}},
-		{"IPAddress", buildVBL(goodVB(0x01, IPAddress, []byte{0x0a, 0x00, 0x00, 0x01})), false, 1,
-			[]wantPDU{{".1.3.6.1", IPAddress, "10.0.0.1"}}},
-		{"ObjectIdentifier", buildVBL(goodVB(0x01, ObjectIdentifier, []byte{0x2b, 0x06, 0x01})), false, 1,
-			[]wantPDU{{".1.3.6.1", ObjectIdentifier, ".1.3.6.1"}}},
-		{"Null", buildVBL(goodVB(0x01, Null, nil)), false, 1,
-			[]wantPDU{{".1.3.6.1", Null, nil}}},
+		{
+			"OctetString", buildVBL(goodVB(0x01, OctetString, []byte("test")), goodVB(0x02, OctetString, []byte("data"))), false, 2,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("test")}, {".1.3.6.2", OctetString, []byte("data")}},
+		},
+		{
+			"Integer", buildVBL(goodVB(0x01, Integer, []byte{0x01})), false, 1,
+			[]wantPDU{{".1.3.6.1", Integer, 1}},
+		},
+		{
+			"Counter32", buildVBL(goodVB(0x01, Counter32, []byte{0x00, 0x01, 0x00, 0x00})), false, 1,
+			[]wantPDU{{".1.3.6.1", Counter32, uint(65536)}},
+		},
+		{
+			"Counter64", buildVBL(goodVB(0x01, Counter64, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00})), false, 1,
+			[]wantPDU{{".1.3.6.1", Counter64, uint64(65536)}},
+		},
+		{
+			"Gauge32", buildVBL(goodVB(0x01, Gauge32, []byte{0x00, 0x00, 0x00, 0x2a})), false, 1,
+			[]wantPDU{{".1.3.6.1", Gauge32, uint(42)}},
+		},
+		{
+			"TimeTicks", buildVBL(goodVB(0x01, TimeTicks, []byte{0x00, 0x01, 0x51, 0x80})), false, 1,
+			[]wantPDU{{".1.3.6.1", TimeTicks, uint32(86400)}},
+		},
+		{
+			"IPAddress", buildVBL(goodVB(0x01, IPAddress, []byte{0x0a, 0x00, 0x00, 0x01})), false, 1,
+			[]wantPDU{{".1.3.6.1", IPAddress, "10.0.0.1"}},
+		},
+		{
+			"ObjectIdentifier", buildVBL(goodVB(0x01, ObjectIdentifier, []byte{0x2b, 0x06, 0x01})), false, 1,
+			[]wantPDU{{".1.3.6.1", ObjectIdentifier, ".1.3.6.1"}},
+		},
+		{
+			"Null", buildVBL(goodVB(0x01, Null, nil)), false, 1,
+			[]wantPDU{{".1.3.6.1", Null, nil}},
+		},
 		{"empty_VBL_short_form", []byte{0x30, 0x00}, false, 0, nil},
 		{"empty_VBL_long_form_BER", []byte{0x30, 0x82, 0x00, 0x00}, false, 0, nil},
 
@@ -2404,10 +2440,14 @@ func TestUnmarshalVBL(t *testing.T) {
 		{"unknown_type_overdeclared_by_one", buildVBL(rawVB(0x01, []byte{0xC0, 0x01})), true, 0, nil},
 
 		// Malformed varbind at different positions
-		{"valid,bad", buildVBL(goodVB(0x01, OctetString, []byte("good")), badVB(0x02, OctetString, []byte("bad"), 10)), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte("good")}}},
-		{"valid,bad,valid", buildVBL(goodVB(0x01, OctetString, []byte("first")), badVB(0x02, OctetString, []byte("x"), 5), goodVB(0x03, OctetString, []byte("third"))), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte("first")}}},
+		{
+			"valid,bad", buildVBL(goodVB(0x01, OctetString, []byte("good")), badVB(0x02, OctetString, []byte("bad"), 10)), true, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("good")}},
+		},
+		{
+			"valid,bad,valid", buildVBL(goodVB(0x01, OctetString, []byte("first")), badVB(0x02, OctetString, []byte("x"), 5), goodVB(0x03, OctetString, []byte("third"))), true, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("first")}},
+		},
 		{"bad,bad,valid", buildVBL(badVB(0x01, OctetString, []byte("a"), 5), badVB(0x02, OctetString, []byte("b"), 5), goodVB(0x03, OctetString, []byte("ok"))), true, 0, nil},
 
 		// Malformed OID
@@ -2415,7 +2455,10 @@ func TestUnmarshalVBL(t *testing.T) {
 		{"truncated_base128_OID", buildVBL(buildSequence(append(buildTLVHeader(0x06, 3), 0x2b, 0x86, 0x86))), true, 0, nil},
 		{"overflow_base128_OID", buildVBL(buildSequence(append(buildTLVHeader(0x06, 7), 0x2b, 0x8F, 0x8F, 0x8F, 0x8F, 0x8F, 0x01))), true, 0, nil},
 		{"OID_length_exceeds_data", buildVBL(buildSequence(append(buildTLVHeader(0x06, 10), 0x2b, 0x06, 0x01))), true, 0, nil},
-		{"zero_length_OID", buildVBL(buildSequence(append([]byte{0x06, 0x00}, 0x04, 0x04, 0x74, 0x65, 0x73, 0x74))), true, 0, nil},
+		{
+			"zero_length_OID", buildVBL(buildSequence(append([]byte{0x06, 0x00}, 0x04, 0x04, 0x74, 0x65, 0x73, 0x74))), false, 1,
+			[]wantPDU{{".0.0", OctetString, []byte("test")}},
+		},
 
 		// Trailing bytes inside varbind body (value TLV doesn't fill SEQUENCE)
 		// Structural validation rejects these before decodeValue runs.
@@ -2423,12 +2466,16 @@ func TestUnmarshalVBL(t *testing.T) {
 		{"trailing_junk_after_OctetString", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0xFF})), true, 0, nil},
 		{"multiple_value_TLVs", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0x02, 0x01, 0x01})), true, 0, nil},
 		{"short_value_with_padding", buildVBL(rawVB(0x01, []byte{0x04, 0x01, 0x41, 0x00, 0x00})), true, 0, nil},
-		{"valid,trailing_junk", buildVBL(goodVB(0x01, OctetString, []byte("ok")), rawVB(0x02, []byte{0x05, 0x00, 0xFF})), true, 1,
-			[]wantPDU{{".1.3.6.1", OctetString, []byte("ok")}}},
+		{
+			"valid,trailing_junk", buildVBL(goodVB(0x01, OctetString, []byte("ok")), rawVB(0x02, []byte{0x05, 0x00, 0xFF})), true, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("ok")}},
+		},
 
 		// Unknown type
-		{"unknown_type_well_formed", buildVBL(rawVB(0x01, []byte{0xC0, 0x02, 0x01, 0x02})), false, 1,
-			[]wantPDU{{".1.3.6.1", UnknownType, nil}}},
+		{
+			"unknown_type_well_formed", buildVBL(rawVB(0x01, []byte{0xC0, 0x02, 0x01, 0x02})), false, 1,
+			[]wantPDU{{".1.3.6.1", UnknownType, nil}},
+		},
 		{"unknown_type_malformed_length", buildVBL(rawVB(0x01, []byte{0xC0, 0x05})), true, 0, nil},
 
 		// Varbind SEQUENCE length exceeds VBL boundary

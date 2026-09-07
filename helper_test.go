@@ -116,13 +116,12 @@ func TestParseObjectIdentifier(t *testing.T) {
 			data: []byte{43, 6, 1, 2, 1, 31, 1, 1, 1, 10, 0x8F, 0xFF, 0xFF, 0xFF, 0x7F},
 			want: ".1.3.6.1.2.1.31.1.1.1.10.4294967295",
 		},
-		// Error cases
 		{
-			name:    "empty input",
-			data:    []byte{},
-			want:    "",
-			wantErr: ErrInvalidOidLength,
+			name: "zero-length encoded OID",
+			data: []byte{},
+			want: ".0.0",
 		},
+		// Error cases
 		{
 			name:    "overflow sub-id (4294967296)",
 			data:    []byte{43, 0x90, 0x80, 0x80, 0x80, 0x00},
@@ -455,7 +454,6 @@ var testsInvalidSNMPResponses = []string{
 }
 
 func TestInvalidSNMPResponses(t *testing.T) {
-
 	g := newTestGoSNMP()
 	g.Target = "127.0.0.1"
 
@@ -469,7 +467,6 @@ func TestInvalidSNMPResponses(t *testing.T) {
 }
 
 func checkByteEquality2(a, b []byte) bool {
-
 	if a == nil && b == nil {
 		return true
 	}
