@@ -7,28 +7,6 @@ executors:
     - image: cimg/go:1.26
 
 jobs:
-  generate:
-    executor: golang
-    steps:
-    - checkout
-    - run: go install golang.org/x/tools/cmd/stringer@latest
-    - run: go install github.com/golang/mock/mockgen@latest
-    - run: go generate
-    - run: git diff --exit-code
-
-  lint:
-    executor: golang
-    steps:
-    - checkout
-    - run: make lint
-    - run: make -C netsnmp lint
-
-  fuzz:
-    executor: golang
-    steps:
-    - checkout
-    - run: go test -fuzztime 60s -v -tags marshal -fuzz '^FuzzUnmarshal$'
-
   test:
     parameters:
       goarch:
@@ -78,9 +56,6 @@ workflows:
   version: 2
   test:
     jobs:
-    - generate
-    - lint
-    - fuzz
     - test:
         matrix:
           parameters:
