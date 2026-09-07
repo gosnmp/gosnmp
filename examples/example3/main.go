@@ -21,7 +21,8 @@ func main() {
 		SecurityModel: g.UserSecurityModel,
 		MsgFlags:      g.AuthPriv,
 		Timeout:       time.Duration(30) * time.Second,
-		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",
+		SecurityParameters: &g.UsmSecurityParameters{
+			UserName:                 "user",
 			AuthenticationProtocol:   g.SHA,
 			AuthenticationPassphrase: "password",
 			PrivacyProtocol:          g.DES,

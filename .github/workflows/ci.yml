@@ -1,0 +1,117 @@
+---
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master, 'release-*']
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: 1.27.x
+      - run: go install golang.org/x/tools/cmd/stringer@latest
+      - run: go install github.com/golang/mock/mockgen@latest
+      - run: go generate
+      - run: git diff --exit-code
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: 1.27.x
+      - run: make lint
+      - run: make -C netsnmp lint
+
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: 1.27.x
+      - run: go test -fuzztime 60s -v -tags marshal -fuzz '^FuzzUnmarshal$'
+
+  net-snmp-test:
+    name: Test net-snmp
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: 1.27.x
+      - run: sudo apt-get -y install libsnmp-dev
+      - run: make -C netsnmp test_netsnmp
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go_arch:
+          - "amd64"
+          - "386"
+        go_version:
+          - "1.24.x"
+          - "1.25.x"
+          - "1.26.x"
+          - "1.27.x"
+    env:
+      GOARCH: ${{ matrix.go_arch }}
+      GOSNMP_TARGET: "127.0.0.1"
+      GOSNMP_PORT: "161"
+      GOSNMP_TARGET_IPV4: "127.0.0.1"
+      GOSNMP_PORT_IPV4: "161"
+      GOSNMP_TARGET_IPV6: "::1"
+      GOSNMP_PORT_IPV6: "161"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ matrix.go_version }}
+      - run: sudo apt-get update
+      - run: sudo apt-get -y install snmpd
+      - run: sudo ./snmp_users.sh
+      - run: sudo sed -i -e 's/^agentaddress.*$/agentaddress 127.0.0.1/' /etc/snmp/snmpd.conf
+      - run: sudo service snmpd restart
+      - run: go test -v -tags helper
+      - run: go test -v -tags marshal
+      - run: go test -v -tags misc
+      - run: go test -v -tags api
+      - run: go test -v -tags end2end
+      - run: make -C netsnmp test
+      - if: matrix.go_arch == 'amd64'
+        run: go test -v -tags all -race
