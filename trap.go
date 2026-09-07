@@ -472,13 +472,14 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 	}
 	// If there are multiple users configured and the SNMP trap is v3, see which user has valid credentials
 	// by iterating through the list matching the identifier and seeing which credentials are authentic / can be used to decrypt
-	if x.TrapSecurityParametersTable != nil && version == Version3 {
+	trapSecParamsTable := x.GetTrapSecurityParametersTable()
+	if trapSecParamsTable != nil && version == Version3 {
 		identifier, err := x.getTrapIdentifier(trap)
 		if err != nil {
 			x.Logger.Printf("UnmarshalTrap V3 get trap identifier: %s\n", err)
 			return nil, err
 		}
-		secParamsList, err := x.TrapSecurityParametersTable.Get(identifier)
+		secParamsList, err := trapSecParamsTable.Get(identifier)
 		if err != nil {
 			x.Logger.Printf("UnmarshalTrap V3 get security parameters from table: %s\n", err)
 			return nil, err

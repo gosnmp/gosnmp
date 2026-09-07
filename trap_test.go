@@ -138,7 +138,7 @@ func TestUnmarshalTrapWithMultipleUsers(t *testing.T) {
 		usmMap.Add(sp.UserName, sp)
 	}
 	gs := newTestGoSNMP()
-	gs.TrapSecurityParametersTable = usmMap
+	gs.SetTrapSecurityParametersTable(usmMap)
 	gs.Version = Version3
 SANITY:
 	for i, test := range testsUnmarshalTrap {
