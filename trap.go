@@ -7,6 +7,7 @@ package gosnmp
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
@@ -128,6 +129,7 @@ type TrapListener struct {
 
 	// CloseTimeout is the max wait time for the socket to gracefully signal its closure.
 	CloseTimeout time.Duration
+	listenCloser io.Closer
 
 	// These unexported fields are for letting test cases
 	// know we are ready.
@@ -202,11 +204,11 @@ func (t *TrapListener) Close() {
 		t.Lock()
 		defer t.Unlock()
 
-		if t.conn == nil {
+		if t.listenCloser == nil {
 			return
 		}
 
-		if err := t.conn.Close(); err != nil {
+		if err := t.listenCloser.Close(); err != nil {
 			t.Params.Logger.Printf("failed to Close() the TrapListener socket: %s", err)
 		}
 
@@ -249,6 +251,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 	if err != nil {
 		return err
 	}
+	t.listenCloser = t.conn
 
 	defer t.conn.Close()
 
@@ -395,8 +398,7 @@ func (t *TrapListener) listenTCP(addr string) error {
 	if err != nil {
 		return err
 	}
-
-	defer l.Close()
+	t.listenCloser = l
 
 	// Mark that we are listening now.
 	t.listening <- true
@@ -410,11 +412,15 @@ func (t *TrapListener) listenTCP(addr string) error {
 
 			// Listen for an incoming connection.
 			conn, err := l.Accept()
-			fmt.Printf("ACCEPT: %s", conn)
 			if err != nil {
+				if atomic.LoadInt32(&t.finish) == 1 {
+					// err most likely comes from reading from a closed connection
+					continue
+				}
 				fmt.Println("error accepting: ", err.Error())
 				return err
 			}
+			fmt.Printf("ACCEPT: %s", conn)
 			// Handle connections in a new goroutine.
 			go t.handleTCPRequest(conn)
 		}
