@@ -25,7 +25,6 @@ import (
 	"log"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -48,14 +47,14 @@ const (
 // return usmStatsUnknownUserNames for post-discovery authenticated requests,
 // simulating an agent that does not recognise the user credentials.
 type mockAgentUnknownUserNames struct {
-	conn               *net.UDPConn
-	engineID           string
-	boots              uint32
-	engineTime         uint32
-	logger             Logger
-	done               chan struct{}
-	errs               chan error
-	failAuthRequests   bool
+	conn                 *net.UDPConn
+	engineID             string
+	boots                uint32
+	engineTime           uint32
+	logger               Logger
+	done                 chan struct{}
+	errs                 chan error
+	failAuthRequests     bool
 	omitEngineIDInReport bool // send usmStatsUnknownUserNames with empty AuthoritativeEngineID
 }
 
@@ -228,21 +227,14 @@ func (m *mockAgentUnknownUserNames) marshalGetResponse(req *SnmpPacket) ([]byte,
 // NoAuthNoPriv SNMPv3 with an empty AuthoritativeEngineID so that
 // discoveryRequired() triggers engine-ID discovery on the first request.
 func newV3NoAuthClientForDiscoveryTest(port uint16) *GoSNMP {
-	return &GoSNMP{
-		Target:        "127.0.0.1",
-		Port:          port,
-		Version:       Version3,
-		Timeout:       2 * time.Second,
-		Retries:       0,
-		MaxOids:       MaxOids,
-		Logger:        NewLogger(log.New(io.Discard, "", 0)),
-		SecurityModel: UserSecurityModel,
-		MsgFlags:      NoAuthNoPriv,
-		SecurityParameters: &UsmSecurityParameters{
-			UserName: "testUser",
-			// AuthoritativeEngineID intentionally empty to trigger discovery.
-		},
-	}
+	gs := newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{
+		UserName: "testUser",
+		// AuthoritativeEngineID intentionally empty to trigger discovery.
+	})
+	gs.Target = "127.0.0.1"
+	gs.Port = port
+	gs.Retries = 0
+	return gs
 }
 
 // setupDiscoveryTest creates a mock agent and a connected SNMPv3 client for

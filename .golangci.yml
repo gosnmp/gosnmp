@@ -19,6 +19,8 @@ linters:
     - unparam
     - whitespace
   settings:
+    goconst:
+      ignore-tests: true
     gocritic:
       disabled-checks:
         - exitAfterDefer
@@ -45,7 +47,18 @@ linters:
         path: _test.go
 formatters:
   enable:
+    - gci
+    - gofumpt
     - goimports
   settings:
-    gofmt:
-      simplify: true
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/gosnmp/gosnmp)
+    gofumpt:
+      extra:
+        group-params: true
+    goimports:
+      local-prefixes:
+        - github.com/gosnmp/gosnmp

@@ -58,6 +58,22 @@ func TestParseObjectIdentifier(t *testing.T) {
 			data: []byte{40}, // 1*40 + 0 = 40
 			want: ".1.0",
 		},
+		// Multi-byte first sub-identifier (X.690 8.19.5)
+		{
+			name: "joint-iso-itu-t 2.999 (X.690 example)",
+			data: []byte{0x88, 0x37, 0x03}, // first sub-id 1079 = 2*40+999, then arc 3
+			want: ".2.999.3",
+		},
+		{
+			name: "joint-iso-itu-t 2.48",
+			data: []byte{0x81, 0x00}, // first sub-id 128 = 2*40+48
+			want: ".2.48",
+		},
+		{
+			name: "joint-iso-itu-t 2.100 (stdlib test vector)",
+			data: []byte{0x81, 0x34, 0x03}, // first sub-id 180 = 2*40+100, then arc 3
+			want: ".2.100.3",
+		},
 		// Standard OIDs
 		{
 			name: "sysDescr (1.3.6.1.2.1.1.1)",
@@ -100,18 +116,23 @@ func TestParseObjectIdentifier(t *testing.T) {
 			data: []byte{43, 6, 1, 2, 1, 31, 1, 1, 1, 10, 0x8F, 0xFF, 0xFF, 0xFF, 0x7F},
 			want: ".1.3.6.1.2.1.31.1.1.1.10.4294967295",
 		},
-		// Error cases
 		{
-			name:    "empty input",
-			data:    []byte{},
-			want:    "",
-			wantErr: ErrInvalidOidLength,
+			name: "zero-length encoded OID",
+			data: []byte{},
+			want: ".0.0",
 		},
+		// Error cases
 		{
 			name:    "overflow sub-id (4294967296)",
 			data:    []byte{43, 0x90, 0x80, 0x80, 0x80, 0x00},
 			want:    "",
 			wantErr: ErrBase128IntegerTooLarge,
+		},
+		{
+			name:    "truncated first sub-id",
+			data:    []byte{0x80}, // continuation byte as only byte
+			want:    "",
+			wantErr: ErrBase128IntegerTruncated,
 		},
 		{
 			name:    "truncated multi-byte sub-id",
@@ -283,6 +304,102 @@ func TestParseBase128Uint32(t *testing.T) {
 	}
 }
 
+func TestMarshalObjectIdentifier(t *testing.T) {
+	tests := []struct {
+		name    string
+		oid     string
+		want    []byte
+		wantErr bool
+	}{
+		// Standard OIDs
+		{
+			name: "sysDescr (1.3.6.1.2.1.1.1)",
+			oid:  ".1.3.6.1.2.1.1.1",
+			want: []byte{43, 6, 1, 2, 1, 1, 1},
+		},
+		{
+			name: "minimal 0.0",
+			oid:  ".0.0",
+			want: []byte{0x00},
+		},
+		// Multi-byte first sub-identifier (X.690 8.19.5)
+		{
+			name: "joint-iso-itu-t 2.999.3 (X.690 example)",
+			oid:  ".2.999.3",
+			want: []byte{0x88, 0x37, 0x03},
+		},
+		{
+			name: "joint-iso-itu-t 2.100.3 (stdlib test vector)",
+			oid:  ".2.100.3",
+			want: []byte{0x81, 0x34, 0x03},
+		},
+		{
+			name: "joint-iso-itu-t 2.48",
+			oid:  ".2.48",
+			want: []byte{0x81, 0x00},
+		},
+		{
+			name: "second arc 40 allowed under arc 2",
+			oid:  ".2.40",
+			want: []byte{0x78},
+		},
+		{
+			name: "largest second arc under arc 2",
+			oid:  ".2.4294967215", // MaxObjectSubIdentifierValue - 80
+			want: []byte{0x8F, 0xFF, 0xFF, 0xFF, 0x7F},
+		},
+		// Invalid OIDs
+		{
+			name:    "first arc greater than 2",
+			oid:     ".3.1",
+			wantErr: true,
+		},
+		{
+			name:    "second arc 40 under arc 1",
+			oid:     ".1.40",
+			wantErr: true,
+		},
+		{
+			name:    "second arc too large under arc 2",
+			oid:     ".2.4294967216", // MaxObjectSubIdentifierValue - 79
+			wantErr: true,
+		},
+		{
+			name:    "sub-identifier exceeds uint32",
+			oid:     ".1.3.4294967296",
+			wantErr: true,
+		},
+		{
+			name:    "sub-identifier overflows int64 accumulator",
+			oid:     ".1.3.18446744073709551617", // 2^64 + 1
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := marshalObjectIdentifier(tt.oid)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("marshalObjectIdentifier() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("marshalObjectIdentifier() = % X, want % X", got, tt.want)
+			}
+			// Round-trip through the decoder
+			back, err := parseObjectIdentifier(got)
+			if err != nil {
+				t.Fatalf("parseObjectIdentifier() roundtrip error = %v", err)
+			}
+			if back != tt.oid {
+				t.Errorf("roundtrip = %q, want %q", back, tt.oid)
+			}
+		})
+	}
+}
+
 func BenchmarkParseObjectIdentifier(b *testing.B) {
 	oid := []byte{43, 6, 3, 30, 11, 1, 10}
 	for i := 0; i < b.N; i++ {
@@ -433,13 +550,8 @@ var testsInvalidSNMPResponses = []string{
 }
 
 func TestInvalidSNMPResponses(t *testing.T) {
-
-	g := &GoSNMP{
-		Target:    "127.0.0.1",
-		Port:      161,
-		Community: "public",
-		Version:   Version2c,
-	}
+	g := newTestGoSNMP()
+	g.Target = "127.0.0.1"
 
 	for i, test := range testsInvalidSNMPResponses {
 		testBytes, _ := base64.StdEncoding.DecodeString(test)
@@ -451,7 +563,6 @@ func TestInvalidSNMPResponses(t *testing.T) {
 }
 
 func checkByteEquality2(a, b []byte) bool {
-
 	if a == nil && b == nil {
 		return true
 	}

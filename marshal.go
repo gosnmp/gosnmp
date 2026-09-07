@@ -183,8 +183,7 @@ func (packet *SnmpPacket) SafeString() string {
 
 // GoSNMP
 // send/receive one snmp request
-func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket,
-	wait bool) (result *SnmpPacket, err error) {
+func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
 	allReqIDs := make([]uint32, 0, x.Retries+1)
 	// allMsgIDs := make([]uint32, 0, x.Retries+1) // unused
 
@@ -237,13 +236,13 @@ sendRetry:
 		}
 
 		// Request ID is an atomic counter that wraps to 0 at max int32.
-		reqID := (atomic.AddUint32(&(x.requestID), 1) & 0x7FFFFFFF)
+		reqID := (atomic.AddUint32(&x.requestID, 1) & 0x7FFFFFFF)
 		allReqIDs = append(allReqIDs, reqID)
 
 		packetOut.RequestID = reqID
 
 		if x.Version == Version3 {
-			msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
+			msgID := (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
 
 			// allMsgIDs = append(allMsgIDs, msgID) // unused
 
@@ -434,7 +433,7 @@ sendRetry:
 func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			var buf = make([]byte, 8192)
+			buf := make([]byte, 8192)
 			runtime.Stack(buf, true)
 
 			err = fmt.Errorf("recover: %v Stack:%v", e, string(buf))
@@ -1231,7 +1230,7 @@ func (x *GoSNMP) unmarshalTrapV1(packet []byte, response *SnmpPacket) error {
 
 // unmarshal a Varbind list
 func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
-	var cursor, cursorInc int
+	var cursor int
 	var vblLength int
 
 	if len(packet) == 0 || cursor > len(packet) {
@@ -1266,43 +1265,53 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 			return fmt.Errorf("expected a sequence when unmarshalling a VB, got %x", packet[cursor])
 		}
 
-		_, cursorInc, err = parseLength(packet[cursor:])
+		vbLength, cursorInc, err := parseLength(packet[cursor:])
 		if err != nil {
 			return err
 		}
-		cursor += cursorInc
-		if cursor > len(packet) {
-			return fmt.Errorf("error parsing OID Value: packet %d cursor %d", len(packet), cursor)
+		vbEnd := cursor + vbLength
+		if vbEnd > vblLength {
+			return fmt.Errorf("varbind SEQUENCE length exceeds remaining VBL (vbEnd %d, vblLength %d)", vbEnd, vblLength)
 		}
+		cursor += cursorInc
 
 		// Parse OID
-		rawOid, oidLength, err := parseRawField(x.Logger, packet[cursor:], "OID")
+		rawOid, oidLength, err := parseRawField(x.Logger, packet[cursor:vbEnd], "OID")
 		if err != nil {
 			return fmt.Errorf("error parsing OID Value: %w", err)
 		}
 		cursor += oidLength
-		if cursor < 0 || cursor > len(packet) {
-			return fmt.Errorf("error parsing OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
-		}
+
 		oid, ok := rawOid.(string)
 		if !ok {
 			return fmt.Errorf("unable to type assert rawOid |%v| to string", rawOid)
 		}
 		x.Logger.Printf("OID: %s", oid)
-		// Parse Value
-		var decodedVal variable
-		if err = x.decodeValue(packet[cursor:], &decodedVal); err != nil {
-			return fmt.Errorf("error decoding value: %w", err)
+
+		valueSlice := packet[cursor:vbEnd]
+		valueLength, valueCursor, err := parseLength(valueSlice)
+		if err != nil {
+			return fmt.Errorf("error parsing value TLV in varbind: %w", err)
 		}
 
-		valueLength, _, err := parseLength(packet[cursor:])
-		if err != nil {
-			return err
+		var decodedVal variable
+		switch {
+		case valueLength == len(valueSlice):
+			if err = x.decodeValue(valueSlice, &decodedVal); err != nil {
+				return fmt.Errorf("error decoding value: %w", err)
+			}
+		case len(valueSlice) > 0 &&
+			valueLength == len(valueSlice)+1 &&
+			Asn1BER(valueSlice[0]) == OctetString:
+			// Some MikroTik responses overdeclare OctetString lengths by one byte.
+			// The enclosing varbind provides the content boundary for this case.
+			x.Logger.Printf("OctetString in varbind %s declares one byte beyond its SEQUENCE; using %d available content bytes", oid, len(valueSlice)-valueCursor)
+			decodedVal = variable{Type: OctetString, Value: valueSlice[valueCursor:]}
+		default:
+			return fmt.Errorf("value TLV length mismatch in varbind (TLV %d, remaining %d)", valueLength, len(valueSlice))
 		}
-		cursor += valueLength
-		if cursor < 0 || cursor > len(packet) {
-			return fmt.Errorf("error decoding OID Value: truncated, packet length %d cursor %d", len(packet), cursor)
-		}
+
+		cursor = vbEnd
 
 		response.Variables = append(response.Variables, SnmpPDU{Name: oid, Type: decodedVal.Type, Value: decodedVal.Value})
 	}
