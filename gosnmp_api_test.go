@@ -95,6 +95,6 @@ func TestAPIWalkAllMethodSignature(t *testing.T) {
 
 func TestAPIWalkFuncSignature(t *testing.T) {
 	var f gosnmp.WalkFunc
-	f = func(du gosnmp.SnmpPDU) (err error) { return }
+	f = func(du gosnmp.SnmpPDU) (err error) { return err }
 	_ = f
 }
