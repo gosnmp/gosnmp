@@ -1288,20 +1288,27 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 		}
 		x.Logger.Printf("OID: %s", oid)
 
-		// Validate value TLV fills remaining varbind body exactly
 		valueSlice := packet[cursor:vbEnd]
-		valueLength, _, err := parseLength(valueSlice)
+		valueLength, valueCursor, err := parseLength(valueSlice)
 		if err != nil {
 			return fmt.Errorf("error parsing value TLV in varbind: %w", err)
 		}
-		if valueLength != len(valueSlice) {
-			return fmt.Errorf("value TLV length mismatch in varbind (TLV %d, remaining %d)", valueLength, len(valueSlice))
-		}
 
-		// Parse Value
 		var decodedVal variable
-		if err = x.decodeValue(valueSlice, &decodedVal); err != nil {
-			return fmt.Errorf("error decoding value: %w", err)
+		switch {
+		case valueLength == len(valueSlice):
+			if err = x.decodeValue(valueSlice, &decodedVal); err != nil {
+				return fmt.Errorf("error decoding value: %w", err)
+			}
+		case len(valueSlice) > 0 &&
+			valueLength == len(valueSlice)+1 &&
+			Asn1BER(valueSlice[0]) == OctetString:
+			// Some MikroTik responses overdeclare OctetString lengths by one byte.
+			// The enclosing varbind provides the content boundary for this case.
+			x.Logger.Printf("OctetString in varbind %s declares one byte beyond its SEQUENCE; using %d available content bytes", oid, len(valueSlice)-valueCursor)
+			decodedVal = variable{Type: OctetString, Value: valueSlice[valueCursor:]}
+		default:
+			return fmt.Errorf("value TLV length mismatch in varbind (TLV %d, remaining %d)", valueLength, len(valueSlice))
 		}
 
 		cursor = vbEnd

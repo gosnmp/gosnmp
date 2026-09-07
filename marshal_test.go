@@ -2418,15 +2418,26 @@ func TestUnmarshalVBL(t *testing.T) {
 		{"empty_VBL_short_form", []byte{0x30, 0x00}, false, 0, nil},
 		{"empty_VBL_long_form_BER", []byte{0x30, 0x82, 0x00, 0x00}, false, 0, nil},
 
-		// Malformed value length — bounded parsing catches errors within the
-		// offending varbind, preventing cross-varbind data leakage.
-		{"bad_OctetString_length,valid", buildVBL(badVB(0x01, OctetString, []byte("test"), 5), goodVB(0x02, OctetString, []byte("data"))), true, 0, nil},
+		// Recoverable OctetString lengths
+		{"OctetString_overdeclared_by_one,valid", buildVBL(badVB(0x01, OctetString, []byte("test"), 5), goodVB(0x02, OctetString, []byte("data"))), false, 2,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("test")}, {".1.3.6.2", OctetString, []byte("data")}}},
+		{"OctetString_overdeclared_by_one_last", buildVBL(badVB(0x01, OctetString, []byte("test"), 5)), false, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("test")}}},
+		{"OctetString_empty_overdeclared_by_one", buildVBL(badVB(0x01, OctetString, nil, 1)), false, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte{}}}},
+		{"OctetString_overdeclared_by_one_long_form,valid", buildVBL(badVB(0x01, OctetString, largeContent, 201), goodVB(0x02, OctetString, []byte("ok"))), false, 2,
+			[]wantPDU{{".1.3.6.1", OctetString, largeContent}, {".1.3.6.2", OctetString, []byte("ok")}}},
+		{"large_OctetString_off_by_one_last", buildVBL(badVB(0x01, OctetString, largeString, 448)), false, 1,
+			[]wantPDU{{".1.3.6.1", OctetString, largeString}}},
+		{"large_OctetString_off_by_one,valid", buildVBL(badVB(0x01, OctetString, largeString, 448), goodVB(0x02, OctetString, []byte("ok"))), false, 2,
+			[]wantPDU{{".1.3.6.1", OctetString, largeString}, {".1.3.6.2", OctetString, []byte("ok")}}},
+
+		// Invalid value lengths
+		{"OctetString_overdeclared_by_two", buildVBL(badVB(0x01, OctetString, []byte("test"), 6)), true, 0, nil},
+		{"OctetString_overdeclared_by_two_long_form", buildVBL(badVB(0x01, OctetString, largeContent, 202)), true, 0, nil},
 		{"bad_Integer_length,valid", buildVBL(badVB(0x01, Integer, []byte{0x01}, 3), goodVB(0x02, OctetString, []byte("data"))), true, 0, nil},
 		{"bad_Counter32_length,valid", buildVBL(badVB(0x01, Counter32, []byte{0x00, 0x00, 0x00, 0x2a}, 5), goodVB(0x02, OctetString, []byte("data"))), true, 0, nil},
-		{"bad_length_last", buildVBL(badVB(0x01, OctetString, []byte("test"), 5)), true, 0, nil},
-		{"bad_length_long_form_BER,valid", buildVBL(badVB(0x01, OctetString, largeContent, 201), goodVB(0x02, OctetString, []byte("ok"))), true, 0, nil},
-		{"large_OctetString_off_by_one_last", buildVBL(badVB(0x01, OctetString, largeString, 448)), true, 0, nil},
-		{"large_OctetString_off_by_one,valid", buildVBL(badVB(0x01, OctetString, largeString, 448), goodVB(0x02, OctetString, []byte("ok"))), true, 0, nil},
+		{"unknown_type_overdeclared_by_one", buildVBL(rawVB(0x01, []byte{0xC0, 0x01})), true, 0, nil},
 
 		// Malformed varbind at different positions
 		{
@@ -2474,9 +2485,9 @@ func TestUnmarshalVBL(t *testing.T) {
 			return vbl
 		}(), true, 0, nil},
 
-		// Cross-varbind data leakage: bounded parsing prevents value from
-		// reading past varbind SEQUENCE boundary into adjacent varbind data.
-		{"cross_contamination", buildVBL(badVB(0x01, OctetString, []byte("AAAA"), 5), goodVB(0x02, OctetString, []byte("SECRET"))), true, 0, nil},
+		// Varbind boundary isolation
+		{"cross_contamination", buildVBL(badVB(0x01, OctetString, []byte("AAAA"), 5), goodVB(0x02, OctetString, []byte("SECRET"))), false, 2,
+			[]wantPDU{{".1.3.6.1", OctetString, []byte("AAAA")}, {".1.3.6.2", OctetString, []byte("SECRET")}}},
 	}
 
 	for _, tt := range tests {
