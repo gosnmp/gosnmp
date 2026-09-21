@@ -66,13 +66,13 @@ func main() {
 	}
 
 	gs := &g.GoSNMP{
-		Port:                        161,
-		Transport:                   "udp",
-		Version:                     g.Version3, // Always using version3 for traps, only option that works with all SNMP versions simultaneously
-		SecurityModel:               g.UserSecurityModel,
-		SecurityParameters:          &g.UsmSecurityParameters{AuthoritativeEngineID: "12345"}, // Use for server's engine ID
-		TrapSecurityParametersTable: usmTable,
+		Port:               161,
+		Transport:          "udp",
+		Version:            g.Version3, // Always using version3 for traps, only option that works with all SNMP versions simultaneously
+		SecurityModel:      g.UserSecurityModel,
+		SecurityParameters: &g.UsmSecurityParameters{AuthoritativeEngineID: "12345"}, // Use for server's engine ID
 	}
+	gs.SetTrapSecurityParametersTable(usmTable)
 	tl.Params = gs
 	tl.Params.Logger = g.NewLogger(log.New(os.Stdout, "", 0))
 
