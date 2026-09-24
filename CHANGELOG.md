@@ -1,7 +1,7 @@
 ## unreleased
 
 * [CHANGE]
-* [FEATURE]
+* [FEATURE] Add ErrMaxRetriesExceeded sentinel error for errors.Is() support #523
 * [ENHANCEMENT]
 * [BUGFIX]
 
