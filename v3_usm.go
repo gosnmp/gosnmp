@@ -1069,6 +1069,13 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		if sp.AuthenticationProtocol <= NoAuth {
 			return 0, errors.New("error parsing SNMPv3 User Security Model: authentication parameters are not configured to parse incoming authenticated message")
 		}
+		// An authenticated message must carry an msgAuthenticationParameters
+		// field whose length matches the digest length of the configured
+		// protocol. Without this check the blanking copy below indexes past the
+		// field (and past the packet) when a peer sends a shorter field.
+		if count != len(macVarbinds[sp.AuthenticationProtocol]) {
+			return 0, fmt.Errorf("error parsing SNMPv3 User Security Model: msgAuthenticationParameters length %d does not match %s digest length %d", count-2, sp.AuthenticationProtocol, len(macVarbinds[sp.AuthenticationProtocol])-2)
+		}
 		copy(packet[cursor+2:cursor+len(macVarbinds[sp.AuthenticationProtocol])], macVarbinds[sp.AuthenticationProtocol][2:])
 	}
 	cursor += count
