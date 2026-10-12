@@ -906,6 +906,12 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
 			return nil, errors.New("error decrypting ScopedPDU: not multiple of des block size")
 		}
+		// msgPrivacyParameters is wire-controlled and used as the DES pre-IV
+		// salt (RFC 3414 8.1.1.1); a conformant message always carries 8 bytes.
+		// Reject a short field before indexing it to avoid an out-of-range panic.
+		if len(sp.PrivacyParameters) < des.BlockSize {
+			return nil, errors.New("error decrypting ScopedPDU: DES privacy parameters too short")
+		}
 		preiv := sp.PrivacyKey[8:]
 		var iv [8]byte
 		for i := range len(iv) {

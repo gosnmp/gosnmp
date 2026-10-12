@@ -340,3 +340,26 @@ func BenchmarkSingleHash(b *testing.B) {
 	b.Logf("cache size %d", len(passwordKeyHashCache))
 	passwordKeyHashMutex.RUnlock()
 }
+
+// TestDecryptPacketDESShortPrivacyParameters verifies that decryptPacket
+// returns an error rather than panicking when a DES-encrypted message carries
+// a msgPrivacyParameters field shorter than the 8-byte DES pre-IV salt.
+//
+// msgPrivacyParameters is parsed straight off the wire; the DES branch used it
+// as the CBC pre-IV salt by indexing bytes 0..7 without checking its length, so
+// a short field triggered an index out of range panic during decryption.
+func TestDecryptPacketDESShortPrivacyParameters(t *testing.T) {
+	sp := &UsmSecurityParameters{
+		PrivacyProtocol:   DES,
+		PrivacyKey:        make([]byte, 16),
+		PrivacyParameters: []byte{0x01, 0x02}, // shorter than des.BlockSize (8)
+		Logger:            NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	// OctetString TLV (0x04) of length 8 followed by 8 ciphertext bytes so the
+	// payload is a multiple of the DES block size and reaches the pre-IV salt.
+	packet := []byte{0x04, 0x08, 1, 2, 3, 4, 5, 6, 7, 8}
+
+	_, err := sp.decryptPacket(packet, 0)
+	require.Error(t, err, "short DES privacy parameters should be rejected")
+}
