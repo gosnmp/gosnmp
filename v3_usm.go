@@ -887,6 +887,9 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 
 	switch sp.PrivacyProtocol {
 	case AES, AES192, AES256, AES192C, AES256C:
+		if len(sp.PrivacyParameters) != 8 {
+			return nil, errors.New("error decrypting ScopedPDU: invalid AES privacy parameters length")
+		}
 		var iv [16]byte
 		binary.BigEndian.PutUint32(iv[:], sp.AuthoritativeEngineBoots)
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)

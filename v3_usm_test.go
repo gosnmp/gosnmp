@@ -320,20 +320,12 @@ func TestUnmarshalTruncatedUSMSequence(t *testing.T) {
 	}
 }
 
-// TestDecryptPacketDESInvalidPrivacyParameters verifies that decryptPacket
-// returns an error rather than panicking when a received packet carries
-// msgPrivacyParameters that are not exactly 8 octets long (RFC 3414 8.3.2).
-func TestDecryptPacketDESInvalidPrivacyParameters(t *testing.T) {
-	newSP := func(privParams []byte) *UsmSecurityParameters {
-		return &UsmSecurityParameters{
-			Logger:            NewLogger(log.New(io.Discard, "", 0)),
-			PrivacyProtocol:   DES,
-			PrivacyKey:        make([]byte, 16),
-			PrivacyParameters: privParams,
-		}
-	}
-
-	// OCTET STRING header followed by a single DES block of ciphertext.
+// TestDecryptPacketInvalidPrivacyParameters verifies that decryptPacket
+// returns an error rather than panicking or silently decrypting with a bad IV
+// when a received packet carries msgPrivacyParameters that are not exactly
+// 8 octets long (RFC 3414 8.3.2 for DES, RFC 3826 3.3.2 for AES).
+func TestDecryptPacketInvalidPrivacyParameters(t *testing.T) {
+	// OCTET STRING header followed by a single block of ciphertext.
 	packet := append([]byte{byte(OctetString), 0x08}, make([]byte, 8)...)
 
 	tests := []struct {
@@ -346,27 +338,40 @@ func TestDecryptPacketDESInvalidPrivacyParameters(t *testing.T) {
 		{name: "too long", privParams: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pkt := append([]byte(nil), packet...)
-			require.NotPanics(t, func() {
-				_, err := newSP(tt.privParams).decryptPacket(pkt, 0)
-				require.Error(t, err)
+	for _, proto := range []SnmpV3PrivProtocol{DES, AES} {
+		newSP := func(privParams []byte) *UsmSecurityParameters {
+			return &UsmSecurityParameters{
+				Logger:            NewLogger(log.New(io.Discard, "", 0)),
+				PrivacyProtocol:   proto,
+				PrivacyKey:        make([]byte, 16),
+				PrivacyParameters: privParams,
+			}
+		}
+
+		t.Run(proto.String(), func(t *testing.T) {
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					pkt := append([]byte(nil), packet...)
+					require.NotPanics(t, func() {
+						_, err := newSP(tt.privParams).decryptPacket(pkt, 0)
+						require.Error(t, err)
+					})
+				})
+			}
+
+			t.Run("valid length round trip", func(t *testing.T) {
+				sp := newSP([]byte{1, 2, 3, 4, 5, 6, 7, 8})
+				plaintext := []byte{0x30, 0x03, 0x02, 0x01, 0x2a}
+
+				encrypted, err := sp.encryptPacket(append([]byte(nil), plaintext...))
+				require.NoError(t, err)
+
+				decrypted, err := sp.decryptPacket(encrypted, 0)
+				require.NoError(t, err)
+				require.Equal(t, plaintext, decrypted[:len(plaintext)])
 			})
 		})
 	}
-
-	t.Run("valid length round trip", func(t *testing.T) {
-		sp := newSP([]byte{1, 2, 3, 4, 5, 6, 7, 8})
-		plaintext := []byte{0x30, 0x03, 0x02, 0x01, 0x2a}
-
-		encrypted, err := sp.encryptPacket(append([]byte(nil), plaintext...))
-		require.NoError(t, err)
-
-		decrypted, err := sp.decryptPacket(encrypted, 0)
-		require.NoError(t, err)
-		require.Equal(t, plaintext, decrypted[:len(plaintext)])
-	})
 }
 
 func BenchmarkSingleHash(b *testing.B) {
