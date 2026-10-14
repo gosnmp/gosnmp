@@ -903,6 +903,9 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		copy(packet[cursor:], plaintext)
 		packet = packet[:cursor+len(plaintext)]
 	case DES:
+		if len(sp.PrivacyParameters) != 8 {
+			return nil, errors.New("error decrypting ScopedPDU: invalid DES privacy parameters length")
+		}
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
 			return nil, errors.New("error decrypting ScopedPDU: not multiple of des block size")
 		}
