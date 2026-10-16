@@ -157,6 +157,33 @@ SANITY:
 	}
 }
 
+// A trap for a user configured with authentication must not be accepted
+// when the sender clears the auth bit in msgFlags.
+func TestUnmarshalTrapRejectsSecurityLevelDowngrade(t *testing.T) {
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	for _, sp := range secParamsList {
+		usmMap.Add(sp.UserName, sp)
+	}
+	gs := newTestGoSNMP()
+	gs.TrapSecurityParametersTable = usmMap
+	gs.Version = Version3
+
+	buf := genericV3Trap()
+	// msgFlags of the authNoPriv trap for "myuser"
+	require.Equal(t, byte(AuthNoPriv), buf[21])
+	buf[21] = byte(NoAuthNoPriv)
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.Error(t, err)
+	require.Nil(t, res)
+
+	gs.TrapSecurityParametersTable = nil
+	gs.SecurityParameters = secParamsList[0].Copy()
+	res, err = gs.UnmarshalTrap(buf, true)
+	require.Error(t, err)
+	require.Nil(t, res)
+}
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
