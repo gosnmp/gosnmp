@@ -320,6 +320,144 @@ func TestUnmarshalTruncatedUSMSequence(t *testing.T) {
 	}
 }
 
+// buildUSMAuthParams assembles a minimal USM securityParameters SEQUENCE with an
+// empty engineID/username and the given msgAuthenticationParameters and trailing
+// msgPrivacyParameters fields, as they appear on the wire.
+func buildUSMAuthParams(authParams, privacy []byte) []byte {
+	body := []byte{
+		0x04, 0x00, // msgAuthoritativeEngineID ""
+		0x02, 0x01, 0x00, // msgAuthoritativeEngineBoots 0
+		0x02, 0x01, 0x00, // msgAuthoritativeEngineTime 0
+		0x04, 0x00, // msgUserName ""
+	}
+	body = append(body, authParams...)
+	body = append(body, privacy...)
+	return append([]byte{0x30, byte(len(body))}, body...) //nolint:gosec
+}
+
+// octetString wraps value as a BER OCTET STRING (tag 0x04).
+func octetString(value []byte) []byte {
+	return append([]byte{0x04, byte(len(value))}, value...) //nolint:gosec
+}
+
+// TestUnmarshalAuthParamsLengthMismatch covers the msgAuthenticationParameters
+// blanking copy. unmarshal rewrites the field using the locally configured MAC
+// length (macVarbinds[AuthenticationProtocol]); a wire field whose length differs
+// from that must be rejected before the copy, otherwise a short field panics with
+// a slice-bounds error (remote unauthenticated DoS) or silently overwrites the
+// following msgPrivacyParameters field. Sibling of TestUnmarshalTruncatedUSMSequence.
+func TestUnmarshalAuthParamsLengthMismatch(t *testing.T) {
+	sp := &UsmSecurityParameters{
+		Logger: NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	privacy := octetString([]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88})
+
+	tests := []struct {
+		name       string
+		proto      SnmpV3AuthProtocol
+		authParams []byte
+		privacy    []byte
+		wantErr    bool
+	}{
+		{
+			// Short field with no trailing bytes: the fixed-length copy reads
+			// past the end of the packet buffer and panics without the guard.
+			name:       "SHA short field at packet end",
+			proto:      SHA,
+			authParams: octetString([]byte{0xAA, 0xBB}),
+			wantErr:    true,
+		},
+		{
+			// Short field followed by msgPrivacyParameters: no panic, but the
+			// copy silently zeroes the trailing privacy field without the guard.
+			name:       "SHA short field corrupts trailing privacy",
+			proto:      SHA,
+			authParams: octetString([]byte{0xAA, 0xBB}),
+			privacy:    privacy,
+			wantErr:    true,
+		},
+		{
+			// Over-declared field (longer than the MAC) is equally illegal per
+			// USM and mis-blanks; equality, not a lower bound, must reject it.
+			name:       "SHA over-declared field",
+			proto:      SHA,
+			authParams: octetString(make([]byte, 20)),
+			privacy:    privacy,
+			wantErr:    true,
+		},
+		{
+			// A SHA-sized (12-byte) field is the wrong length for SHA256 (24).
+			name:       "SHA-sized field wrong for SHA256",
+			proto:      SHA256,
+			authParams: octetString(make([]byte, 12)),
+			privacy:    privacy,
+			wantErr:    true,
+		},
+		{
+			name:       "MD5 correct length",
+			proto:      MD5,
+			authParams: octetString(make([]byte, 12)),
+			privacy:    octetString(nil),
+		},
+		{
+			name:       "SHA correct length",
+			proto:      SHA,
+			authParams: octetString(make([]byte, 12)),
+			privacy:    octetString(nil),
+		},
+		{
+			name:       "SHA224 correct length",
+			proto:      SHA224,
+			authParams: octetString(make([]byte, 16)),
+			privacy:    octetString(nil),
+		},
+		{
+			name:       "SHA256 correct length",
+			proto:      SHA256,
+			authParams: octetString(make([]byte, 24)),
+			privacy:    octetString(nil),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp.AuthenticationProtocol = tt.proto
+			packet := buildUSMAuthParams(tt.authParams, tt.privacy)
+			before := append([]byte(nil), packet...)
+
+			require.NotPanics(t, func() {
+				_, err := sp.unmarshal(AuthNoPriv, packet, 0)
+				if tt.wantErr {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+			})
+
+			// A rejected packet must be left untouched: the blanking copy must
+			// not run before the length check.
+			if tt.wantErr && len(tt.privacy) > 0 {
+				require.Equal(t, before, packet, "packet buffer modified despite rejection")
+			}
+		})
+	}
+}
+
+// TestUnmarshalAuthParamsMisconfigured preserves the pre-existing behaviour: an
+// authenticated message received while no auth protocol is configured is rejected.
+func TestUnmarshalAuthParamsMisconfigured(t *testing.T) {
+	sp := &UsmSecurityParameters{
+		AuthenticationProtocol: NoAuth,
+		Logger:                 NewLogger(log.New(io.Discard, "", 0)),
+	}
+	packet := buildUSMAuthParams(octetString(make([]byte, 12)), octetString(nil))
+	require.NotPanics(t, func() {
+		_, err := sp.unmarshal(AuthNoPriv, packet, 0)
+		require.Error(t, err)
+	})
+}
+
 func BenchmarkSingleHash(b *testing.B) {
 	SetPwdCache()
 
