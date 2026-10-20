@@ -35,13 +35,13 @@ const (
 )
 
 var secParamsList = []*UsmSecurityParameters{
-	&UsmSecurityParameters{
+	{
 		UserName:                 "myuser",
 		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: "mypassword",
 		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
 	},
-	&UsmSecurityParameters{
+	{
 		UserName:                 "myuser1",
 		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: "mypassword1",
@@ -49,7 +49,7 @@ var secParamsList = []*UsmSecurityParameters{
 		PrivacyPassphrase:        "myprivacy1",
 		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
 	},
-	&UsmSecurityParameters{
+	{
 		UserName:                 "myuser2",
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: "mypassword2",
@@ -57,7 +57,7 @@ var secParamsList = []*UsmSecurityParameters{
 		PrivacyPassphrase:        "myprivacy2",
 		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
 	},
-	&UsmSecurityParameters{
+	{
 		UserName:                 "myuser2",
 		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: "mypassword2",
@@ -71,7 +71,8 @@ var testsUnmarshalTrap = []struct {
 	in  func() []byte
 	out *SnmpPacket
 }{
-	{genericV3Trap,
+	{
+		genericV3Trap,
 		&SnmpPacket{
 			Version:   Version3,
 			PDUType:   SNMPv2Trap,
@@ -112,7 +113,7 @@ SANITY:
 	for i, test := range testsUnmarshalTrap {
 
 		gs.SecurityParameters = test.out.SecurityParameters.Copy()
-		var buf = test.in()
+		buf := test.in()
 		res, err := gs.UnmarshalTrap(buf, true)
 		require.NoError(t, err, "unmarshalTrap failed")
 		if res == nil {
@@ -141,7 +142,7 @@ func TestUnmarshalTrapWithMultipleUsers(t *testing.T) {
 	gs.Version = Version3
 SANITY:
 	for i, test := range testsUnmarshalTrap {
-		var buf = test.in()
+		buf := test.in()
 		res, err := gs.UnmarshalTrap(buf, true)
 		require.NoError(t, err, "unmarshalTrap failed")
 		if res == nil {
@@ -176,7 +177,8 @@ func genericV3Trap() []byte {
 		0x70, 0x30, 0x0d, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x07,
 		0x00, 0x02, 0x01, 0x05, 0x30, 0x14, 0x06, 0x07, 0x2b, 0x06, 0x01, 0x02,
 		0x01, 0x01, 0x02, 0x06, 0x09, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x02, 0x03,
-		0x04, 0x05}
+		0x04, 0x05,
+	}
 }
 
 /*
@@ -199,7 +201,8 @@ func snmpV3AuthPrivTrap() []byte {
 		0x17, 0x08, 0xb8, 0xc6, 0x67, 0x14, 0xb5, 0x91, 0x4d, 0x6b, 0xd8, 0xbf,
 		0x94, 0x24, 0x22, 0x0f, 0x21, 0x4f, 0xde, 0x6f, 0x41, 0x51, 0xa6, 0x10,
 		0x86, 0xf2, 0x01, 0xd1, 0xd6, 0xa9, 0x3c, 0x88, 0xea, 0x41, 0x25, 0x25,
-		0xbc, 0x12, 0x12, 0xa6, 0xd6, 0x8f, 0x55, 0x6a, 0x55, 0xcb}
+		0xbc, 0x12, 0x12, 0xa6, 0xd6, 0x8f, 0x55, 0x6a, 0x55, 0xcb,
+	}
 }
 
 func makeTestTrapHandler(done chan<- error, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
@@ -532,7 +535,6 @@ func TestSendV3TrapNoAuthNoPriv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
 
 func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
@@ -584,7 +586,6 @@ func TestSendV3TrapMD5AuthNoPriv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
 
 func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
@@ -636,8 +637,8 @@ func TestSendV3TrapSHAAuthNoPriv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
+
 func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 	done := make(chan error, 1)
 
@@ -689,7 +690,6 @@ func TestSendV3TrapSHAAuthDESPriv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
 
 func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
@@ -743,7 +743,6 @@ func TestSendV3TrapSHAAuthAESPriv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
 
 func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
@@ -797,8 +796,8 @@ func TestSendV3TrapSHAAuthAES192Priv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
+
 func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 	done := make(chan error, 1)
 
@@ -851,6 +850,7 @@ func TestSendV3TrapSHAAuthAES192CPriv(t *testing.T) {
 	// wait for response from handler
 	waitForTestTrap(t, done)
 }
+
 func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 	done := make(chan error, 1)
 
@@ -902,8 +902,8 @@ func TestSendV3TrapSHAAuthAES256Priv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
+
 func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 	done := make(chan error, 1)
 
@@ -955,7 +955,6 @@ func TestSendV3TrapSHAAuthAES256CPriv(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
-
 }
 
 type testLogger struct {

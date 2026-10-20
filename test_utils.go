@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// newTestGoSNMP is only used in tests.
+//
+//nolint:unused
 func newTestGoSNMP() *GoSNMP {
 	return &GoSNMP{
 		Port:               161,
@@ -24,6 +27,9 @@ func newTestGoSNMP() *GoSNMP {
 	}
 }
 
+// newTestGoSNMPv3 is only used in tests.
+//
+//nolint:unused
 func newTestGoSNMPv3(msgFlags SnmpV3MsgFlags, sp SnmpV3SecurityParameters) *GoSNMP {
 	gs := newTestGoSNMP()
 	gs.Version = Version3

@@ -335,8 +335,10 @@ func TestMaxOids(t *testing.T) {
 	gs.MaxOids = 1
 
 	var err error
-	oids := []string{".1.3.6.1.2.1.1.7.0",
-		".1.3.6.1.2.1.2.2.1.10.1"} // 2 arbitrary Oids
+	oids := []string{
+		".1.3.6.1.2.1.1.7.0",
+		".1.3.6.1.2.1.2.2.1.10.1",
+	} // 2 arbitrary Oids
 	errString := "oid count (2) is greater than MaxOids (1)"
 
 	_, err = gs.Get(oids)
@@ -754,11 +756,13 @@ func TestSnmpV3AuthMD5PrivDESGet(t *testing.T) {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
 
-	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{UserName: getUserName(t, MD5, DES),
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
+		UserName:                 getUserName(t, MD5, DES),
 		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: getAuthKey(t, MD5, DES),
 		PrivacyProtocol:          DES,
-		PrivacyPassphrase:        getPrivKey(t, MD5, DES)})
+		PrivacyPassphrase:        getPrivKey(t, MD5, DES),
+	})
 	connectToTarget(t, gs)
 	defer gs.Conn.Close()
 
@@ -782,11 +786,13 @@ func TestSnmpV3AuthSHAPrivDESGet(t *testing.T) {
 	if !isUsingSnmpLabs() {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
-	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{UserName: getUserName(t, SHA, DES),
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
+		UserName:                 getUserName(t, SHA, DES),
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: getAuthKey(t, SHA, DES),
 		PrivacyProtocol:          DES,
-		PrivacyPassphrase:        getPrivKey(t, SHA, DES)})
+		PrivacyPassphrase:        getPrivKey(t, SHA, DES),
+	})
 	connectToTarget(t, gs)
 	defer gs.Conn.Close()
 
@@ -811,11 +817,13 @@ func TestSnmpV3AuthMD5PrivAESGet(t *testing.T) {
 		t.Skip("This test is currently only working when using demo.snmplabs.com as test device.")
 	}
 
-	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{UserName: getUserName(t, MD5, AES),
+	gs := newTestGoSNMPv3(AuthPriv, &UsmSecurityParameters{
+		UserName:                 getUserName(t, MD5, AES),
 		AuthenticationProtocol:   MD5,
 		AuthenticationPassphrase: getAuthKey(t, MD5, AES),
 		PrivacyProtocol:          AES,
-		PrivacyPassphrase:        getPrivKey(t, MD5, AES)})
+		PrivacyPassphrase:        getPrivKey(t, MD5, AES),
+	})
 	connectToTarget(t, gs)
 	defer gs.Conn.Close()
 
@@ -843,11 +851,13 @@ func TestSnmpV3PrivEmptyPrivatePassword(t *testing.T) {
 	gs.Version = Version3
 	gs.MsgFlags = AuthPriv
 	gs.SecurityModel = UserSecurityModel
-	gs.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, AES),
+	gs.SecurityParameters = &UsmSecurityParameters{
+		UserName:                 getUserName(t, SHA, AES),
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: getAuthKey(t, SHA, AES),
 		PrivacyProtocol:          AES,
-		PrivacyPassphrase:        ""}
+		PrivacyPassphrase:        "",
+	}
 
 	err := gs.Connect()
 	if err == nil {
@@ -863,11 +873,13 @@ func TestSnmpV3AuthNoPrivEmptyPrivatePassword(t *testing.T) {
 	gs.Version = Version3
 	gs.MsgFlags = AuthNoPriv
 	gs.SecurityModel = UserSecurityModel
-	gs.SecurityParameters = &UsmSecurityParameters{UserName: getUserName(t, SHA, NoPriv),
+	gs.SecurityParameters = &UsmSecurityParameters{
+		UserName:                 getUserName(t, SHA, NoPriv),
 		AuthenticationProtocol:   SHA,
 		AuthenticationPassphrase: getAuthKey(t, SHA, NoPriv),
 		PrivacyProtocol:          AES,
-		PrivacyPassphrase:        getPrivKey(t, SHA, NoPriv)}
+		PrivacyPassphrase:        getPrivKey(t, SHA, NoPriv),
+	}
 
 	err := gs.Connect()
 	if err == nil {
