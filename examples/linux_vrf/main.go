@@ -1,3 +1,5 @@
+//go:build linux
+
 // Copyright 2012 The GoSNMP Authors. All rights reserved.  Use of this
 // source code is governed by a BSD-style license that can be found in the
 // LICENSE file.
@@ -27,7 +29,7 @@ func main() {
 		// https://www.kernel.org/doc/Documentation/networking/vrf.txt
 		Control: func(_, _ string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				_ = syscall.BindToDevice(int(fd), "VRF1") //nolint:gosec
+				_ = syscall.BindToDevice(int(fd), "VRF1")
 			})
 		},
 		// Specify an IP address within the VRF

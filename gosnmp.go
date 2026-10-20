@@ -200,9 +200,11 @@ type SnmpPDU struct {
 	Type Asn1BER
 }
 
-const AsnContext = 0x80
-const AsnExtensionID = 0x1F
-const AsnExtensionTag = (AsnContext | AsnExtensionID) // 0x9F
+const (
+	AsnContext      = 0x80
+	AsnExtensionID  = 0x1F
+	AsnExtensionTag = (AsnContext | AsnExtensionID) // 0x9F
+)
 
 //go:generate stringer -type Asn1BER
 
@@ -520,12 +522,12 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 	pkt := x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
 
 	// Request ID is an atomic counter that wraps to 0 at max int32.
-	reqID := (atomic.AddUint32(&(x.requestID), 1) & 0x7FFFFFFF)
+	reqID := (atomic.AddUint32(&x.requestID, 1) & 0x7FFFFFFF)
 
 	pkt.RequestID = reqID
 
 	if x.Version == Version3 {
-		msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
+		msgID := (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
 
 		pkt.MsgID = msgID
 

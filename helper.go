@@ -466,7 +466,7 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 	// This ratio holds at base-128 boundaries; smaller values use more chars per byte
 	out := make([]byte, 0, oidLength/2)
 
-	oidBase := 0
+	var firstArc int64
 	i := 0
 	for j := 0; j < oidLength; {
 		if oid[j] == '.' {
@@ -481,24 +481,30 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 			}
 			val *= 10
 			val += ch
+			// Bounding each sub-identifier here also keeps the int64
+			// accumulator from wrapping on absurdly long digit runs
+			if val > MaxObjectSubIdentifierValue {
+				return nil, fmt.Errorf("unable to marshal OID: Value out of range")
+			}
 			j++
 		}
 		switch i {
 		case 0:
-			if val > 6 {
+			if val > 2 {
 				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
-			oidBase = int(val * 40)
+			firstArc = val
 		case 1:
-			if val >= 40 {
+			// First sub-identifier encodes arc1 and arc2 as (arc1*40 + arc2)
+			// in base 128; arc2 <= 39 when arc1 < 2 (X.690 8.19)
+			if firstArc < 2 && val >= 40 {
 				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
-			oidBase += int(val)
-			out = append(out, byte(oidBase))
-		default:
-			if val > MaxObjectSubIdentifierValue {
+			if val > MaxObjectSubIdentifierValue-80 {
 				return nil, fmt.Errorf("unable to marshal OID: Value out of range")
 			}
+			out = appendBase128Int(out, firstArc*40+val)
+		default:
 			out = appendBase128Int(out, val)
 		}
 		i++
@@ -686,20 +692,31 @@ func parseLength(bytes []byte) (int, int, error) {
 // that are assigned in a hierarchy.
 func parseObjectIdentifier(src []byte) (string, error) {
 	if len(src) == 0 {
-		return "", ErrInvalidOidLength
+		// net-snmp decodes a zero-length encoded OID as ".0.0"
+		return ".0.0", nil
 	}
 
 	// Worst-case: first byte expands to 5 chars (".2.39"), rest to 4 chars (".127")
 	out := make([]byte, 0, len(src)*4+1)
 
+	// First sub-identifier encodes arc1 and arc2 as (arc1*40 + arc2);
+	// arc1 is 0, 1, or 2, with arc2 <= 39 when arc1 < 2.
+	// Remaining arcs are encoded individually.
+	v, offset, err := parseBase128Uint32(src, 0)
+	if err != nil {
+		return "", err
+	}
 	out = append(out, '.')
-	out = strconv.AppendUint(out, uint64(src[0]/40), 10)
-	out = append(out, '.')
-	out = strconv.AppendUint(out, uint64(src[0]%40), 10)
+	if v < 80 {
+		out = strconv.AppendUint(out, uint64(v/40), 10)
+		out = append(out, '.')
+		out = strconv.AppendUint(out, uint64(v%40), 10)
+	} else {
+		out = append(out, '2', '.')
+		out = strconv.AppendUint(out, uint64(v-80), 10)
+	}
 
-	var v uint32
-	var err error
-	for offset := 1; offset < len(src); {
+	for offset < len(src) {
 		out = append(out, '.')
 		v, offset, err = parseBase128Uint32(src, offset)
 		if err != nil {
