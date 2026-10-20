@@ -13,7 +13,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"net"
@@ -23,7 +22,7 @@ import (
 
 // variable struct is used by decodeValue()
 type variable struct {
-	Value interface{}
+	Value any
 	Type  Asn1BER
 }
 
@@ -91,7 +90,7 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		retVal.Type = Asn1BER(data[0])
 		switch Asn1BER(data[0]) {
 		case Uinteger32:
-			retVal.Value = uint32(ret)
+			retVal.Value = uint32(ret) //nolint:gosec
 		default:
 			retVal.Value = ret
 		}
@@ -132,28 +131,30 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 		// 0x40
 		x.Logger.Print("decodeValue: type is IPAddress")
 		retVal.Type = IPAddress
-		if len(data) < 2 {
-			return fmt.Errorf("not enough data for ipv4 address: %x", data)
+		length, cursor, err := parseLength(data)
+		if err != nil {
+			return err
 		}
-
-		switch data[1] {
+		// length includes header bytes, ipLen is just the address bytes
+		ipLen := length - cursor
+		switch ipLen {
 		case 0: // real life, buggy devices returning bad data
 			retVal.Value = nil
 			return nil
 		case 4: // IPv4
-			if len(data) < 6 {
+			if len(data) < cursor+4 {
 				return fmt.Errorf("not enough data for ipv4 address: %x", data)
 			}
-			retVal.Value = net.IPv4(data[2], data[3], data[4], data[5]).String()
+			retVal.Value = net.IP(data[cursor : cursor+4]).String()
 		case 16: // IPv6
-			if len(data) < 18 {
+			if len(data) < cursor+16 {
 				return fmt.Errorf("not enough data for ipv6 address: %x", data)
 			}
 			d := make(net.IP, 16)
-			copy(d, data[2:17])
+			copy(d, data[cursor:cursor+16])
 			retVal.Value = d.String()
 		default:
-			return fmt.Errorf("got ipaddress len %d, expected 4 or 16", data[1])
+			return fmt.Errorf("got ipaddress len %d, expected 4 or 16", ipLen)
 		}
 	case Counter32:
 		// 0x41. unsigned
@@ -261,30 +262,29 @@ func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 	return nil
 }
 
-func marshalBase128Int(out io.ByteWriter, n int64) (err error) {
+// appendBase128Int appends a base-128 encoded integer to the given slice.
+// Returns the extended slice.
+func appendBase128Int(dst []byte, n int64) []byte {
 	if n == 0 {
-		err = out.WriteByte(0)
-		return
+		return append(dst, 0)
 	}
 
+	// Count number of 7-bit groups needed
 	l := 0
 	for i := n; i > 0; i >>= 7 {
 		l++
 	}
 
+	// Encode from most significant to least significant 7-bit group
 	for i := l - 1; i >= 0; i-- {
-		o := byte(n >> uint(i*7))
-		o &= 0x7f
+		o := byte(n>>uint(i*7)) & 0x7f //nolint:gosec
 		if i != 0 {
 			o |= 0x80
 		}
-		err = out.WriteByte(o)
-		if err != nil {
-			return
-		}
+		dst = append(dst, o)
 	}
 
-	return nil
+	return dst
 }
 
 /*
@@ -307,7 +307,7 @@ func marshalInt32(value int) ([]byte, error) {
 	const mask1 uint32 = 0xFFFFFF80
 	const mask2 uint32 = 0xFFFF8000
 	const mask3 uint32 = 0xFF800000
-	const mask4 uint32 = 0x80000000
+	// const mask4 uint32 = 0x80000000
 	// ITU-T Rec. X.690 (2002) 8.3.2
 	// If the contents octets of an integer value encoding consist of more than
 	// one octet, then the bits of the first octet and bit 8 of the second octet:
@@ -315,7 +315,7 @@ func marshalInt32(value int) ([]byte, error) {
 	//  b) shall not all be zero
 	// These rules ensure that an integer value is always encoded in the smallest
 	// possible number of octets.
-	val := uint32(value)
+	val := uint32(value) //nolint:gosec
 	switch {
 	case val&mask1 == 0 || val&mask1 == mask1:
 		return []byte{byte(val)}, nil
@@ -328,22 +328,41 @@ func marshalInt32(value int) ([]byte, error) {
 	}
 }
 
-func marshalUint64(v interface{}) []byte {
+// marshalUint64 encodes a uint64 into BER-compliant bytes for SNMP Counter64.
+// It trims leading zero bytes and prepends one if MSB is set (per X.690 §8.3.2)
+func marshalUint64(v any) ([]byte, error) {
+	// gracefully handle type assertion to uint64
+	source, ok := v.(uint64)
+	if !ok {
+		return nil, fmt.Errorf("marshalUint64: input is not a uint64")
+	}
+	// Step 1: Encode uint64 in big-endian (8 bytes)
 	bs := make([]byte, 8)
-	source := v.(uint64)
-	binary.BigEndian.PutUint64(bs, source) // will panic on failure
-	// truncate leading zeros. Cleaner technique?
-	return bytes.TrimLeft(bs, "\x00")
+	binary.BigEndian.PutUint64(bs, source)
+
+	// Step 2: Trim leading 0x00 bytes (X.690 §8.3.2: use minimal number of octets)
+	trimmed := bytes.TrimLeft(bs, "\x00")
+
+	// Step 3: Ensure at least one byte remains
+	if len(trimmed) == 0 {
+		return []byte{0}, nil
+	}
+
+	// Step 4: If the MSB of the first byte is set, prepend 0x00 to indicate positive value
+	if trimmed[0]&0x80 > 0 {
+		trimmed = append([]byte{0}, trimmed...)
+	}
+	return trimmed, nil
 }
 
 // Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
-func marshalUint32(v interface{}) ([]byte, error) {
+func marshalUint32(v any) ([]byte, error) {
 	var source uint32
 	switch val := v.(type) {
 	case uint32:
 		source = val
 	case uint:
-		source = uint32(val)
+		source = uint32(val) //nolint:gosec
 	case uint8:
 		source = uint32(val)
 	case SNMPError:
@@ -369,18 +388,24 @@ func marshalUint32(v interface{}) ([]byte, error) {
 	return buf, nil
 }
 
-func marshalFloat32(v interface{}) ([]byte, error) {
-	source := v.(float32)
-	out := bytes.NewBuffer(nil)
-	err := binary.Write(out, binary.BigEndian, source)
-	return out.Bytes(), err
+func marshalFloat32(v any) ([]byte, error) {
+	source, ok := v.(float32)
+	if !ok {
+		return nil, fmt.Errorf("marshalFloat32: expected float32, got %T", v)
+	}
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, math.Float32bits(source))
+	return buf, nil
 }
 
-func marshalFloat64(v interface{}) ([]byte, error) {
-	source := v.(float64)
-	out := bytes.NewBuffer(nil)
-	err := binary.Write(out, binary.BigEndian, source)
-	return out.Bytes(), err
+func marshalFloat64(v any) ([]byte, error) {
+	source, ok := v.(float64)
+	if !ok {
+		return nil, fmt.Errorf("marshalFloat64: expected float64, got %T", v)
+	}
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, math.Float64bits(source))
+	return buf, nil
 }
 
 // marshalLength builds a byte representation of length
@@ -397,35 +422,51 @@ func marshalFloat64(v interface{}) ([]byte, error) {
 func marshalLength(length int) ([]byte, error) {
 	// more convenient to pass length as int than uint64. Therefore check < 0
 	if length < 0 {
-		return nil, fmt.Errorf("length must be greater than zero")
-	} else if length < 127 {
+		return nil, fmt.Errorf("length must be >= 0")
+	}
+	if length <= 127 {
 		return []byte{byte(length)}, nil
 	}
 
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, uint64(length))
+	// Encode length as big-endian uint64 and find first non-zero byte
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], uint64(length))
+
+	// Find first non-zero byte to trim leading zeros
+	start := 0
+	for start < 8 && buf[start] == 0 {
+		start++
+	}
+
+	// Build result: header byte + length bytes
+	numBytes := 8 - start
+	result := make([]byte, 1+numBytes)
+	result[0] = byte(128 | numBytes) //nolint:gosec
+	copy(result[1:], buf[start:])
+	return result, nil
+}
+
+// marshalTLV writes a BER TLV (type-length-value) to buf using proper length
+// encoding. Handles values of any size, including those exceeding 127 bytes.
+func marshalTLV(buf *bytes.Buffer, tag byte, value []byte) error {
+	length, err := marshalLength(len(value))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	bufBytes := buf.Bytes()
-
-	// strip leading zeros
-	for idx, octect := range bufBytes {
-		if octect != 00 {
-			bufBytes = bufBytes[idx:]
-			break
-		}
-	}
-
-	header := []byte{byte(128 | len(bufBytes))}
-	return append(header, bufBytes...), nil
+	buf.WriteByte(tag)
+	buf.Write(length)
+	buf.Write(value)
+	return nil
 }
 
 func marshalObjectIdentifier(oid string) ([]byte, error) {
-	out := new(bytes.Buffer)
 	oidLength := len(oid)
-	oidBase := 0
-	var err error
+
+	// Worst-case: 2 chars per output byte (e.g., ".128" = 4 chars → 2 bytes)
+	// This ratio holds at base-128 boundaries; smaller values use more chars per byte
+	out := make([]byte, 0, oidLength/2)
+
+	var firstArc int64
 	i := 0
 	for j := 0; j < oidLength; {
 		if oid[j] == '.' {
@@ -436,44 +477,43 @@ func marshalObjectIdentifier(oid string) ([]byte, error) {
 		for j < oidLength && oid[j] != '.' {
 			ch := int64(oid[j] - '0')
 			if ch > 9 {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
 			val *= 10
 			val += ch
+			// Bounding each sub-identifier here also keeps the int64
+			// accumulator from wrapping on absurdly long digit runs
+			if val > MaxObjectSubIdentifierValue {
+				return nil, fmt.Errorf("unable to marshal OID: Value out of range")
+			}
 			j++
 		}
 		switch i {
 		case 0:
-			if val > 6 {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			if val > 2 {
+				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
-			oidBase = int(val * 40)
+			firstArc = val
 		case 1:
-			if val >= 40 {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			// First sub-identifier encodes arc1 and arc2 as (arc1*40 + arc2)
+			// in base 128; arc2 <= 39 when arc1 < 2 (X.690 8.19)
+			if firstArc < 2 && val >= 40 {
+				return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 			}
-			oidBase += int(val)
-			err = out.WriteByte(byte(oidBase))
-			if err != nil {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			if val > MaxObjectSubIdentifierValue-80 {
+				return nil, fmt.Errorf("unable to marshal OID: Value out of range")
 			}
-
+			out = appendBase128Int(out, firstArc*40+val)
 		default:
-			if val > MaxObjectSubIdentifierValue {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Value out of range")
-			}
-			err = marshalBase128Int(out, val)
-			if err != nil {
-				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
-			}
+			out = appendBase128Int(out, val)
 		}
 		i++
 	}
 	if i < 2 || i > 128 {
-		return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+		return nil, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 	}
 
-	return out.Bytes(), nil
+	return out, nil
 }
 
 // TODO no tests
@@ -539,21 +579,20 @@ func parseOpaque(logger Logger, data []byte, retVal *variable) error {
 	return nil
 }
 
-// parseBase128Int parses a base-128 encoded int from the given offset in the
-// given byte slice. It returns the value and the new offset.
-func parseBase128Int(bytes []byte, initOffset int) (int64, int, error) {
-	var ret int64
-	var offset = initOffset
-	for shifted := 0; offset < len(bytes); shifted++ {
-		if shifted > 4 {
+// parseBase128Uint32 parses a base-128 encoded unsigned integer from the given
+// offset in the given byte slice. Returns the value and the new offset.
+func parseBase128Uint32(bytes []byte, initOffset int) (uint32, int, error) {
+	var ret uint64
+	offset := initOffset
+	for offset < len(bytes) {
+		b := bytes[offset]
+		offset++
+		ret = (ret << 7) | uint64(b&0x7f)
+		if ret > math.MaxUint32 {
 			return 0, 0, ErrBase128IntegerTooLarge
 		}
-		ret <<= 7
-		b := bytes[offset]
-		ret |= int64(b & 0x7f)
-		offset++
 		if b&0x80 == 0 {
-			return ret, offset, nil
+			return uint32(ret), offset, nil
 		}
 	}
 	return 0, 0, ErrBase128IntegerTruncated
@@ -573,13 +612,13 @@ func parseInt64(bytes []byte) (int64, error) {
 		return 0, ErrIntegerTooLarge
 	}
 	var ret int64
-	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
+	for bytesRead := range bytes {
 		ret <<= 8
 		ret |= int64(bytes[bytesRead])
 	}
 	// Shift up and down in order to sign extend the result.
-	ret <<= 64 - uint8(len(bytes))*8
-	ret >>= 64 - uint8(len(bytes))*8
+	ret <<= 64 - uint8(len(bytes))*8 //nolint:gosec
+	ret >>= 64 - uint8(len(bytes))*8 //nolint:gosec
 	return ret, nil
 }
 
@@ -611,7 +650,7 @@ func parseInt(bytes []byte) (int, error) {
 func parseLength(bytes []byte) (int, int, error) {
 	var cursor, length int
 	switch {
-	case len(bytes) <= 2:
+	case len(bytes) < 2:
 		// handle null octet strings ie "0x04 0x00"
 		cursor = len(bytes)
 		length = len(bytes)
@@ -619,9 +658,14 @@ func parseLength(bytes []byte) (int, int, error) {
 		length = int(bytes[1])
 		length += 2
 		cursor += 2
+	case bytes[1] == 0x80:
+		// Indefinite length encoding (0x80) is prohibited in SNMP per RFC 3417 Section 8:
+		// "When encoding the length field, only the definite form is used;
+		// use of the indefinite form encoding is prohibited."
+		return 0, 0, fmt.Errorf("indefinite length encoding (0x80) is not permitted in SNMP")
 	default:
 		numOctets := int(bytes[1]) & 127
-		for i := 0; i < numOctets; i++ {
+		for i := range numOctets {
 			length <<= 8
 			if len(bytes) < 2+i+1 {
 				// Invalid data detected, return an error
@@ -648,30 +692,42 @@ func parseLength(bytes []byte) (int, int, error) {
 // that are assigned in a hierarchy.
 func parseObjectIdentifier(src []byte) (string, error) {
 	if len(src) == 0 {
-		return "", ErrInvalidOidLength
+		// net-snmp decodes a zero-length encoded OID as ".0.0"
+		return ".0.0", nil
 	}
 
-	out := new(bytes.Buffer)
+	// Worst-case: first byte expands to 5 chars (".2.39"), rest to 4 chars (".127")
+	out := make([]byte, 0, len(src)*4+1)
 
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])/40), 10))
-	out.WriteByte('.')
-	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
+	// First sub-identifier encodes arc1 and arc2 as (arc1*40 + arc2);
+	// arc1 is 0, 1, or 2, with arc2 <= 39 when arc1 < 2.
+	// Remaining arcs are encoded individually.
+	v, offset, err := parseBase128Uint32(src, 0)
+	if err != nil {
+		return "", err
+	}
+	out = append(out, '.')
+	if v < 80 {
+		out = strconv.AppendUint(out, uint64(v/40), 10)
+		out = append(out, '.')
+		out = strconv.AppendUint(out, uint64(v%40), 10)
+	} else {
+		out = append(out, '2', '.')
+		out = strconv.AppendUint(out, uint64(v-80), 10)
+	}
 
-	var v int64
-	var err error
-	for offset := 1; offset < len(src); {
-		out.WriteByte('.')
-		v, offset, err = parseBase128Int(src, offset)
+	for offset < len(src) {
+		out = append(out, '.')
+		v, offset, err = parseBase128Uint32(src, offset)
 		if err != nil {
 			return "", err
 		}
-		out.WriteString(strconv.FormatInt(v, 10))
+		out = strconv.AppendUint(out, uint64(v), 10)
 	}
-	return out.String(), nil
+	return string(out), nil
 }
 
-func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, error) {
+func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
 	if len(data) == 0 {
 		return nil, 0, fmt.Errorf("empty data passed to parseRawField")
 	}
@@ -719,24 +775,22 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		oid, err := parseObjectIdentifier(data[cursor:length])
 		return oid, length, err
 	case IPAddress:
-		length, _, err := parseLength(data)
+		length, cursor, err := parseLength(data)
 		if err != nil {
 			return nil, 0, err
 		}
-		if len(data) < 2 {
-			return nil, 0, fmt.Errorf("not enough data for ipv4 address: %x", data)
-		}
-
-		switch data[1] {
+		// length includes header bytes, ipLen is just the address bytes
+		ipLen := length - cursor
+		switch ipLen {
 		case 0: // real life, buggy devices returning bad data
 			return nil, length, nil
 		case 4: // IPv4
-			if len(data) < 6 {
+			if len(data) < cursor+4 {
 				return nil, 0, fmt.Errorf("not enough data for ipv4 address: %x", data)
 			}
-			return net.IPv4(data[2], data[3], data[4], data[5]).String(), length, nil
+			return net.IP(data[cursor : cursor+4]).String(), length, nil
 		default:
-			return nil, 0, fmt.Errorf("got ipaddress len %d, expected 4", data[1])
+			return nil, 0, fmt.Errorf("got ipaddress len %d, expected 4", ipLen)
 		}
 	case TimeTicks:
 		length, cursor, err := parseLength(data)
@@ -767,7 +821,7 @@ func parseUint64(bytes []byte) (uint64, error) {
 		// We'll overflow a uint64 in this case.
 		return 0, ErrIntegerTooLarge
 	}
-	for bytesRead := 0; bytesRead < len(bytes); bytesRead++ {
+	for bytesRead := range bytes {
 		ret <<= 8
 		ret |= uint64(bytes[bytesRead])
 	}
@@ -781,7 +835,7 @@ func parseUint32(bytes []byte) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint32(ret), nil
+	return uint32(ret), nil //nolint:gosec
 }
 
 // parseUint treats the given bytes as a big-endian, signed integer and returns

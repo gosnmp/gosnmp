@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine
+FROM golang:1.22-alpine
 
 # Install deps
 RUN apk add --no-cache  \
@@ -23,16 +23,13 @@ RUN addgroup -g 1001                \
             -G gosnmp gosnmp
 
 RUN chmod -R a+rw /etc/snmp /var/lib/net-snmp/
-RUN pip install snmpsim
 
 # Copy local branch into container
 USER gosnmp
 WORKDIR /go/src/github.com/gosnmp/gosnmp
 COPY --chown=gosnmp . .
 
-RUN go get github.com/stretchr/testify/assert && \
-    make tools && \
-    make lint
+RUN make lint
 
 ENV GOSNMP_TARGET=127.0.0.1
 ENV GOSNMP_PORT=1024

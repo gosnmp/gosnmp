@@ -1,6 +1,16 @@
 version: 2
 updates:
   - package-ecosystem: "gomod"
+    directories:
+      - /
+      - /netsnmp
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    groups:
+      codeql:
+        patterns:
+          - "github/codeql-action*"

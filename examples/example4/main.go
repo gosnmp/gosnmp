@@ -9,16 +9,17 @@ import (
 	"log"
 	"os"
 	"time"
+
 	g "github.com/gosnmp/gosnmp"
 )
 
 const (
 	On  int = 1
-	Off     = 2
+	Off int = 2
 )
 
 func main() {
-	var Client = &g.GoSNMP{
+	Client := &g.GoSNMP{
 		Target:    "192.168.91.20",
 		Port:      161,
 		Community: "private",
@@ -31,7 +32,7 @@ func main() {
 		log.Fatalf("Connect() err: %v", err)
 	}
 	defer Client.Conn.Close()
-	var mySnmpPDU = []g.SnmpPDU{{
+	mySnmpPDU := []g.SnmpPDU{{
 		Name:  "1.3.6.1.4.1.318.1.1.4.4.2.1.3.15",
 		Type:  g.Integer,
 		Value: On,

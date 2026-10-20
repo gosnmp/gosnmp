@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -27,9 +28,6 @@ const (
 	// strangely. 60 seems to be a common value that works, but you will want
 	// to change this in the GoSNMP struct
 	MaxOids = 60
-
-	// Base OID for MIB-2 defined SNMP variables
-	baseOid = ".1.3.6.1.2.1"
 
 	// Max oid sub-identifier value
 	// https://tools.ietf.org/html/rfc2578#section-7.1.3
@@ -111,8 +109,7 @@ type GoSNMP struct {
 	// See comments in https://github.com/gosnmp/gosnmp/issues/100
 	MaxRepetitions uint32
 
-	// NonRepeaters sets the GETBULK max-repeaters used by BulkWalk*.
-	// (default: 0 as per RFC 1905)
+	// Deprecated: This parameter is not used and ignored
 	NonRepeaters int
 
 	// UseUnconnectedUDPSocket if set, changes net.Conn to be unconnected UDP socket.
@@ -139,7 +136,7 @@ type GoSNMP struct {
 	// - 'c: do not check returned OIDs are increasing' - use AppOpts = map[string]interface{"c":true} with
 	//   Walk() or BulkWalk(). The library user needs to implement their own policy for terminating walks.
 	// - 'p,i,I,t,E' -> pull requests welcome
-	AppOpts map[string]interface{}
+	AppOpts map[string]any
 
 	// Internal - used to sync requests to responses.
 	requestID uint32
@@ -171,6 +168,9 @@ type GoSNMP struct {
 
 	// Internal - we use to send packets if using unconnected socket.
 	uaddr *net.UDPAddr
+
+	// Internal - mutual exclusion allows us to idempotently perform operations
+	mu sync.Mutex
 }
 
 // Default connection settings
@@ -191,7 +191,7 @@ var Default = &GoSNMP{
 type SnmpPDU struct {
 	// The value to be set by the SNMP set, or the value when
 	// sending a trap
-	Value interface{}
+	Value any
 
 	// Name is an oid in string format eg ".1.3.6.1.4.9.27"
 	Name string
@@ -200,9 +200,11 @@ type SnmpPDU struct {
 	Type Asn1BER
 }
 
-const AsnContext = 0x80
-const AsnExtensionID = 0x1F
-const AsnExtensionTag = (AsnContext | AsnExtensionID) // 0x9F
+const (
+	AsnContext      = 0x80
+	AsnExtensionID  = 0x1F
+	AsnExtensionTag = (AsnContext | AsnExtensionID) // 0x9F
+)
 
 //go:generate stringer -type Asn1BER
 
@@ -287,6 +289,23 @@ func (x *GoSNMP) ConnectIPv6() error {
 	return x.connect("6")
 }
 
+// Close closes the underlaying connection.
+//
+// This method is safe to call multiple times and from concurrent goroutines.
+// Only the first call will close the connection; subsequent calls are no-ops.
+func (x *GoSNMP) Close() error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+
+	if x.Conn == nil {
+		return nil
+	}
+
+	err := x.Conn.Close()
+	x.Conn = nil
+	return err
+}
+
 // connect to address addr on the given network
 //
 // https://golang.org/pkg/net/#Dial gives acceptable network values as:
@@ -309,7 +328,7 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 		if err != nil {
 			return fmt.Errorf("error occurred while generating random: %w", err)
 		}
-		x.random = uint32(n.Uint64())
+		x.random = uint32(n.Uint64()) //nolint:gosec
 	}
 	// http://tools.ietf.org/html/rfc3412#section-6 - msgID only uses the first 31 bits
 	// msgID INTEGER (0..2147483647)
@@ -503,12 +522,12 @@ func (x *GoSNMP) SnmpEncodePacket(pdutype PDUType, pdus []SnmpPDU, nonRepeaters 
 	pkt := x.mkSnmpPacket(pdutype, pdus, nonRepeaters, maxRepetitions)
 
 	// Request ID is an atomic counter that wraps to 0 at max int32.
-	reqID := (atomic.AddUint32(&(x.requestID), 1) & 0x7FFFFFFF)
+	reqID := (atomic.AddUint32(&x.requestID, 1) & 0x7FFFFFFF)
 
 	pkt.RequestID = reqID
 
 	if x.Version == Version3 {
-		msgID := (atomic.AddUint32(&(x.msgID), 1) & 0x7FFFFFFF)
+		msgID := (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
 
 		pkt.MsgID = msgID
 
@@ -657,7 +676,7 @@ func Partition(currentPosition, partitionSize, sliceLength int) bool {
 // This is a convenience function to make working with SnmpPDU's easier - it
 // reduces the need for type assertions. A big.Int is convenient, as SNMP can
 // return int32, uint32, and uint64.
-func ToBigInt(value interface{}) *big.Int {
+func ToBigInt(value any) *big.Int {
 	var val int64
 
 	switch value := value.(type) { // shadow
@@ -672,7 +691,7 @@ func ToBigInt(value interface{}) *big.Int {
 	case int64:
 		val = value
 	case uint:
-		val = int64(value)
+		val = int64(value) //nolint:gosec
 	case uint8:
 		val = int64(value)
 	case uint16:

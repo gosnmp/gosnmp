@@ -14,24 +14,23 @@ import (
 )
 
 func main() {
-
-	stdout_logger := g.NewLogger(log.New(os.Stdout, "", 0)) // enable logging with stdout
-	disabled_logger := g.NewLogger(nil)                     // disable logging
+	stdoutLogger := g.NewLogger(log.New(os.Stdout, "", 0)) // enable logging with stdout
+	disabledLogger := g.NewLogger(nil)                     // disable logging
 
 	params := &g.GoSNMP{
 		Target:    "127.0.0.1",
 		Port:      uint16(1161),
 		Community: "public",
 	}
-	params.Connect() // no logger specified, logging is disabled
+	_ = params.Connect() // no logger specified, logging is disabled
 	params.Conn.Close()
 
-	params.Logger = stdout_logger
-	params.Connect() // logging enabled using stdout
+	params.Logger = stdoutLogger
+	_ = params.Connect() // logging enabled using stdout
 	params.Conn.Close()
 
-	params.Logger = disabled_logger
-	params.Connect() // logging is disabled
+	params.Logger = disabledLogger
+	_ = params.Connect() // logging is disabled
 	params.Conn.Close()
 }
 

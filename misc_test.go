@@ -3,7 +3,6 @@
 // LICENSE file.
 
 //go:build all || misc
-// +build all misc
 
 package gosnmp
 
@@ -27,7 +26,10 @@ var testsMarshalLength = []struct {
 	length   int
 	expected []byte
 }{
+	{0, []byte{0x00}},
 	{1, []byte{0x01}},
+	{127, []byte{0x7f}},
+	{128, []byte{0x81, 0x80}},
 	{129, []byte{0x81, 0x81}},
 	{256, []byte{0x82, 0x01, 0x00}},
 	{272, []byte{0x82, 0x01, 0x10}},
@@ -214,18 +216,18 @@ func TestMarshalTimeticks(t *testing.T) {
 func parseBitString(bytes []byte) (ret BitStringValue, err error) {
 	if len(bytes) == 0 {
 		err = errors.New("zero length BIT STRING")
-		return
+		return ret, err
 	}
 	paddingBits := int(bytes[0])
 	if paddingBits > 7 ||
 		len(bytes) == 1 && paddingBits > 0 ||
 		bytes[len(bytes)-1]&((1<<bytes[0])-1) != 0 {
 		err = errors.New("invalid padding bits in BIT STRING")
-		return
+		return ret, err
 	}
 	ret.BitLength = (len(bytes)-1)*8 - paddingBits
 	ret.Bytes = bytes[1:]
-	return
+	return ret, err
 }
 
 // ---------------------------------------------------------------------

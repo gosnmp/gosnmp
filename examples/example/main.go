@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	// Default is a pointer to a GoSNMP struct that contains sensible defaults
 	// eg port 161, community public, etc
 	g.Default.Target = "192.168.1.10"

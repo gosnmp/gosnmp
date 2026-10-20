@@ -53,6 +53,46 @@ func packetSHA224AuthenticationParams(t *testing.T) string {
 	return string(params)
 }
 
+func TestIsAuthenticWrongUsername(t *testing.T) {
+	var err error
+
+	sp := UsmSecurityParameters{
+		localAESSalt:             0,
+		localDESSalt:             0,
+		AuthoritativeEngineBoots: 43,
+		AuthoritativeEngineID:    authorativeEngineID(t),
+		AuthoritativeEngineTime:  2113189,
+		UserName:                 "usr-sha224-none",
+		AuthenticationParameters: packetSHA224AuthenticationParams(t),
+		PrivacyParameters:        nil,
+		AuthenticationProtocol:   SHA224,
+		PrivacyProtocol:          0,
+		AuthenticationPassphrase: "authkey1",
+		PrivacyPassphrase:        "",
+		SecretKey:                nil,
+		PrivacyKey:               nil,
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	sp.SecretKey, err = genlocalkey(sp.AuthenticationProtocol,
+		sp.AuthenticationPassphrase,
+		sp.AuthoritativeEngineID)
+
+	require.NoError(t, err, "Generation of key failed")
+	require.Equal(t, correctKeySHA224(t), sp.SecretKey, "Wrong key generated")
+
+	srcPacket := packetSHA224NoAuthentication(t)
+
+	snmpPacket := SnmpPacket{
+		SecurityParameters: sp.Copy(),
+	}
+	snmpPacket.SecurityParameters.(*UsmSecurityParameters).UserName = "foo"
+
+	authentic, err := sp.isAuthentic(srcPacket, &snmpPacket)
+	require.NoError(t, err, "Authentication check of key failed")
+	require.False(t, authentic, "Packet was considered to be authentic")
+}
+
 func TestAuthenticationSHA224(t *testing.T) {
 	var err error
 
@@ -88,7 +128,7 @@ func TestAuthenticationSHA224(t *testing.T) {
 	require.Equal(t, packetSHA224Authenticated(t), srcPacket, "Wrong message authentication parameters.")
 }
 
-func TestIsAuthenticaSHA224(t *testing.T) {
+func TestIsAuthenticSHA224(t *testing.T) {
 	var err error
 
 	sp := UsmSecurityParameters{
@@ -190,7 +230,7 @@ func TestAuthenticationSHA512(t *testing.T) {
 	require.Equal(t, packetSHA512Authenticated(t), srcPacket, "Wrong message authentication parameters.")
 }
 
-func TestIsAuthenticaSHA512(t *testing.T) {
+func TestIsAuthenticSHA512(t *testing.T) {
 	var err error
 
 	sp := UsmSecurityParameters{
@@ -227,6 +267,57 @@ func TestIsAuthenticaSHA512(t *testing.T) {
 	authentic, err := sp.isAuthentic(srcPacket, &snmpPacket)
 	require.NoError(t, err, "Authentication check of key failed")
 	require.True(t, authentic, "Packet was not considered to be authentic")
+}
+
+// TestUnmarshalTruncatedUSMSequence verifies that unmarshal returns an error
+// rather than panicking when the USM SEQUENCE body is truncated.
+//
+// The bounds check at v3_usm.go:991 originally compared cursorTmp (the BER
+// length-header size, a small relative increment) against len(packet) rather
+// than cursor (the updated absolute position). Because parseLength guarantees
+// cursorTmp <= len(packet[cursor:]), cursor after incrementing is at most
+// len(packet) and the check never fires either way. The fix uses the correct
+// variable so the check reflects its intended purpose.
+func TestUnmarshalTruncatedUSMSequence(t *testing.T) {
+	sp := &UsmSecurityParameters{
+		Logger: NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	tests := []struct {
+		name   string
+		packet []byte
+		cursor int
+	}{
+		{
+			name:   "short-form length zero",
+			packet: []byte{0x30, 0x00},
+			cursor: 0,
+		},
+		{
+			name: "long-form length one extra byte truncated body",
+			// 0x81 signals long-form with 1 extra length byte; body is absent.
+			// cursorTmp = 3 (2 + 1); cursor advances to 3 == len(packet).
+			// Old check: cursorTmp(3) > len(packet)(3) → false (check is dead).
+			// New check: cursor(3)    > len(packet)(3) → false (boundary, not past end).
+			// Either way execution reaches parseRawField with an empty slice → error.
+			packet: []byte{0x30, 0x81, 0x05},
+			cursor: 0,
+		},
+		{
+			name:   "long-form with non-zero starting cursor",
+			packet: []byte{0xff, 0xff, 0x30, 0x81, 0x05},
+			cursor: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				_, err := sp.unmarshal(NoAuthNoPriv, tt.packet, tt.cursor)
+				require.Error(t, err)
+			})
+		})
+	}
 }
 
 func BenchmarkSingleHash(b *testing.B) {

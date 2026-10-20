@@ -13,7 +13,6 @@ import (
 )
 
 func main() {
-
 	// build our own GoSNMP struct, rather than using g.Default
 	params := &g.GoSNMP{
 		Target:        "192.168.91.20",
@@ -22,7 +21,8 @@ func main() {
 		SecurityModel: g.UserSecurityModel,
 		MsgFlags:      g.AuthPriv,
 		Timeout:       time.Duration(30) * time.Second,
-		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",
+		SecurityParameters: &g.UsmSecurityParameters{
+			UserName:                 "user",
 			AuthenticationProtocol:   g.SHA,
 			AuthenticationPassphrase: "password",
 			PrivacyProtocol:          g.DES,

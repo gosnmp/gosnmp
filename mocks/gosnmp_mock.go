@@ -289,20 +289,6 @@ func (mr *MockHandlerMockRecorder) MsgFlags() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MsgFlags", reflect.TypeOf((*MockHandler)(nil).MsgFlags))
 }
 
-// NonRepeaters mocks base method.
-func (m *MockHandler) NonRepeaters() int {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NonRepeaters")
-	ret0, _ := ret[0].(int)
-	return ret0
-}
-
-// NonRepeaters indicates an expected call of NonRepeaters.
-func (mr *MockHandlerMockRecorder) NonRepeaters() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NonRepeaters", reflect.TypeOf((*MockHandler)(nil).NonRepeaters))
-}
-
 // Port mocks base method.
 func (m *MockHandler) Port() uint16 {
 	m.ctrl.T.Helper()
@@ -483,18 +469,6 @@ func (m *MockHandler) SetMsgFlags(msgFlags gosnmp.SnmpV3MsgFlags) {
 func (mr *MockHandlerMockRecorder) SetMsgFlags(msgFlags interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMsgFlags", reflect.TypeOf((*MockHandler)(nil).SetMsgFlags), msgFlags)
-}
-
-// SetNonRepeaters mocks base method.
-func (m *MockHandler) SetNonRepeaters(nonRepeaters int) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetNonRepeaters", nonRepeaters)
-}
-
-// SetNonRepeaters indicates an expected call of SetNonRepeaters.
-func (mr *MockHandlerMockRecorder) SetNonRepeaters(nonRepeaters interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNonRepeaters", reflect.TypeOf((*MockHandler)(nil).SetNonRepeaters), nonRepeaters)
 }
 
 // SetPort mocks base method.

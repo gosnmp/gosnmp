@@ -15,7 +15,6 @@ import (
 )
 
 func main() {
-
 	// Default is a pointer to a GoSNMP struct that contains sensible defaults
 	// eg port 161, community public, etc
 
@@ -27,7 +26,8 @@ func main() {
 		SecurityModel: g.UserSecurityModel,
 		MsgFlags:      g.AuthPriv,
 		Logger:        g.NewLogger(log.New(os.Stdout, "", 0)),
-		SecurityParameters: &g.UsmSecurityParameters{UserName: "user",
+		SecurityParameters: &g.UsmSecurityParameters{
+			UserName:                 "user",
 			AuthoritativeEngineID:    "1234",
 			AuthenticationProtocol:   g.SHA,
 			AuthenticationPassphrase: "password",

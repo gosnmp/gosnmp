@@ -147,12 +147,6 @@ type Handler interface {
 	// SetMaxRepetitions sets the maxRepetitions
 	SetMaxRepetitions(maxRepetitions uint32)
 
-	// NonRepeaters gets the nonRepeaters
-	NonRepeaters() int
-
-	// SetNonRepeaters sets the nonRepeaters
-	SetNonRepeaters(nonRepeaters int)
-
 	// MsgFlags gets the MsgFlags
 	MsgFlags() SnmpV3MsgFlags
 
@@ -253,11 +247,11 @@ func (x *snmpHandler) SetRetries(retries int) {
 }
 
 func (x *snmpHandler) GetExponentialTimeout() bool {
-	return x.GoSNMP.ExponentialTimeout
+	return x.ExponentialTimeout
 }
 
 func (x *snmpHandler) SetExponentialTimeout(value bool) {
-	x.GoSNMP.ExponentialTimeout = value
+	x.ExponentialTimeout = value
 }
 
 func (x *snmpHandler) Logger() Logger {
@@ -283,14 +277,6 @@ func (x *snmpHandler) MaxRepetitions() uint32 {
 // SetMaxRepetitions wraps to 0 at max int32.
 func (x *snmpHandler) SetMaxRepetitions(maxRepetitions uint32) {
 	x.GoSNMP.MaxRepetitions = (maxRepetitions & 0x7FFFFFFF)
-}
-
-func (x *snmpHandler) NonRepeaters() int {
-	return x.GoSNMP.NonRepeaters
-}
-
-func (x *snmpHandler) SetNonRepeaters(nonRepeaters int) {
-	x.GoSNMP.NonRepeaters = nonRepeaters
 }
 
 func (x *snmpHandler) MsgFlags() SnmpV3MsgFlags {
@@ -335,5 +321,5 @@ func (x *snmpHandler) SetContextName(contextName string) {
 
 func (x *snmpHandler) Close() error {
 	// not x.Conn for consistency
-	return x.GoSNMP.Conn.Close()
+	return x.Conn.Close()
 }

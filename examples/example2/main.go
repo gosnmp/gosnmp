@@ -53,14 +53,13 @@ import (
 )
 
 func main() {
-
 	// get Target and Port from environment
 	envTarget := os.Getenv("GOSNMP_TARGET")
 	envPort := os.Getenv("GOSNMP_PORT")
-	if len(envTarget) <= 0 {
+	if len(envTarget) == 0 {
 		log.Fatalf("environment variable not set: GOSNMP_TARGET")
 	}
-	if len(envPort) <= 0 {
+	if len(envPort) == 0 {
 		log.Fatalf("environment variable not set: GOSNMP_PORT")
 	}
 	port, _ := strconv.ParseUint(envPort, 10, 16)
@@ -83,10 +82,10 @@ func main() {
 
 	// Function handles for collecting metrics on query latencies.
 	var sent time.Time
-	params.OnSent = func(x *g.GoSNMP) {
+	params.OnSent = func(_ *g.GoSNMP) {
 		sent = time.Now()
 	}
-	params.OnRecv = func(x *g.GoSNMP) {
+	params.OnRecv = func(_ *g.GoSNMP) {
 		log.Println("Query latency in seconds:", time.Since(sent).Seconds())
 	}
 
