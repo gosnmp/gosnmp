@@ -1396,9 +1396,7 @@ func (x *GoSNMP) receiveStream() ([]byte, error) {
 		return nil, fmt.Errorf("error reading from socket: %w", err)
 	}
 
-	resp := make([]byte, length)
-	copy(resp, buf[:length])
-	return resp, nil
+	return buf[:length], nil
 }
 
 func shrinkAndWriteUint(buf io.Writer, in int) error {
