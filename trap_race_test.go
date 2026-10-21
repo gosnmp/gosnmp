@@ -92,3 +92,25 @@ func TestTrapSecurityParametersTable_DeprecatedFieldFallback(t *testing.T) {
 		t.Fatalf("after Set, Get returned %p, want %p", got, replacement)
 	}
 }
+
+func TestTrapSecurityParametersTable_Clear(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		replace bool
+	}{
+		{name: "legacy to nil"},
+		{name: "legacy to replacement to nil", replace: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := &GoSNMP{TrapSecurityParametersTable: NewSnmpV3SecurityParametersTable(Logger{})}
+			if test.replace {
+				client.SetTrapSecurityParametersTable(NewSnmpV3SecurityParametersTable(Logger{}))
+			}
+
+			client.SetTrapSecurityParametersTable(nil)
+			if got := client.GetTrapSecurityParametersTable(); got != nil {
+				t.Fatalf("after Set(nil), Get returned %p, want nil", got)
+			}
+		})
+	}
+}

@@ -166,7 +166,7 @@ type GoSNMP struct {
 	// Readers in the trap decode path load it atomically so the table can be
 	// replaced when the set of SNMPv3 users changes without racing with
 	// inbound packets.
-	trapSecParams atomic.Pointer[SnmpV3SecurityParametersTable]
+	trapSecParams atomic.Pointer[trapSecurityParametersTableState]
 
 	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU.
 	ContextEngineID string
@@ -184,19 +184,24 @@ type GoSNMP struct {
 	mu sync.Mutex
 }
 
+type trapSecurityParametersTableState struct {
+	table *SnmpV3SecurityParametersTable
+}
+
 // SetTrapSecurityParametersTable atomically replaces the SNMPv3 security
 // parameters table used for decoding incoming traps. Safe to call while a
-// TrapListener is running.
+// TrapListener is running. A nil table clears the table without restoring
+// the deprecated TrapSecurityParametersTable field.
 func (x *GoSNMP) SetTrapSecurityParametersTable(t *SnmpV3SecurityParametersTable) {
-	x.trapSecParams.Store(t)
+	x.trapSecParams.Store(&trapSecurityParametersTableState{table: t})
 }
 
 // GetTrapSecurityParametersTable returns the table previously installed via
 // SetTrapSecurityParametersTable, falling back to the deprecated
-// TrapSecurityParametersTable field if no atomic value has been set.
+// TrapSecurityParametersTable field only if the setter has never been called.
 func (x *GoSNMP) GetTrapSecurityParametersTable() *SnmpV3SecurityParametersTable {
-	if t := x.trapSecParams.Load(); t != nil {
-		return t
+	if state := x.trapSecParams.Load(); state != nil {
+		return state.table
 	}
 	return x.TrapSecurityParametersTable
 }
