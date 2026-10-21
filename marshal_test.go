@@ -2508,3 +2508,145 @@ func TestUnmarshalVBL(t *testing.T) {
 		})
 	}
 }
+
+// TestSendOneRequest_TCP_SegmentedResponse checks that a response which is
+// delivered over TCP in several segments is reassembled before decoding
+// (https://github.com/gosnmp/gosnmp/issues/591).
+func TestSendOneRequest_TCP_SegmentedResponse(t *testing.T) {
+	listen, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to set up test listener: %v", err)
+	}
+	defer listen.Close()
+	port := listen.Addr().(*net.TCPAddr).Port
+
+	const numVars = 50
+	value := bytes.Repeat([]byte("x"), 100)
+
+	go func() {
+		conn, err := listen.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		if tc, ok := conn.(*net.TCPConn); ok {
+			_ = tc.SetNoDelay(true)
+		}
+
+		srv := &GoSNMP{Version: Version2c, Community: "public", Logger: NewLogger(log.New(io.Discard, "", 0))}
+		buf := make([]byte, 2048)
+		n, err := conn.Read(buf)
+		if err != nil {
+			return
+		}
+		var reqPkt SnmpPacket
+		cursor, err := srv.unmarshalHeader(buf[:n], &reqPkt)
+		if err != nil {
+			return
+		}
+		if err = srv.unmarshalPayload(buf[:n], cursor, &reqPkt); err != nil {
+			return
+		}
+
+		pdus := make([]SnmpPDU, numVars)
+		for i := range pdus {
+			pdus[i] = SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.2.2.1.2.%d", i+1), Type: OctetString, Value: value}
+		}
+		rspPkt := srv.mkSnmpPacket(GetResponse, pdus, 0, 0)
+		rspPkt.RequestID = reqPkt.RequestID
+		outBuf, err := rspPkt.marshalMsg()
+		if err != nil {
+			return
+		}
+
+		// Send the response in small chunks, as a TCP stream may deliver it.
+		for len(outBuf) > 0 {
+			chunk := min(len(outBuf), 1000)
+			if _, err := conn.Write(outBuf[:chunk]); err != nil {
+				return
+			}
+			outBuf = outBuf[chunk:]
+			time.Sleep(20 * time.Millisecond)
+		}
+		// Keep the connection open until the client is done.
+		_, _ = conn.Read(buf)
+	}()
+
+	x := &GoSNMP{
+		Target:    "127.0.0.1",
+		Port:      uint16(port),
+		Transport: "tcp",
+		Community: "public",
+		Version:   Version2c,
+		Timeout:   2 * time.Second,
+		Retries:   0,
+		Logger:    NewLogger(log.New(io.Discard, "", 0)),
+	}
+	if err := x.Connect(); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer x.Conn.Close()
+
+	result, err := x.Get([]string{".1.3.6.1.2.1.1.1.0"})
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if len(result.Variables) != numVars {
+		t.Fatalf("expected %d variables, got %d", numVars, len(result.Variables))
+	}
+	for i, v := range result.Variables {
+		if got, ok := v.Value.([]byte); !ok || !bytes.Equal(got, value) {
+			t.Fatalf("variable %d: unexpected value %v", i, v.Value)
+		}
+	}
+}
+
+// TestReceive_TCP_Framing checks that receive() returns exactly one SNMP
+// message per call on a stream transport, both when a message is split over
+// several reads and when several messages arrive in a single read.
+func TestReceive_TCP_Framing(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	x := &GoSNMP{
+		Transport: "tcp",
+		Conn:      client,
+		Logger:    NewLogger(log.New(io.Discard, "", 0)),
+		rxBuf:     new([rxBufSize]byte),
+	}
+
+	msgs := make([][]byte, 3)
+	for i := range msgs {
+		pkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{
+			{Name: ".1.3.6.1.2.1.1.5.0", Type: OctetString, Value: bytes.Repeat([]byte{'a' + byte(i)}, 200*(i+1))},
+		}, 0, 0)
+		pkt.Version = Version2c
+		pkt.Community = "public"
+		pkt.RequestID = uint32(i + 1)
+		b, err := pkt.marshalMsg()
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		msgs[i] = b
+	}
+
+	go func() {
+		// First message split in three writes (including inside the header),
+		// then the next two messages coalesced into one write.
+		_, _ = server.Write(msgs[0][:1])
+		_, _ = server.Write(msgs[0][1:50])
+		_, _ = server.Write(msgs[0][50:])
+		_, _ = server.Write(append(append([]byte{}, msgs[1]...), msgs[2]...))
+	}()
+
+	for i, want := range msgs {
+		got, err := x.receive()
+		if err != nil {
+			t.Fatalf("message %d: receive failed: %v", i, err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("message %d: got %d bytes, want %d bytes", i, len(got), len(want))
+		}
+	}
+}
