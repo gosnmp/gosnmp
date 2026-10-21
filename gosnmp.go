@@ -184,6 +184,9 @@ type GoSNMP struct {
 	mu sync.Mutex
 }
 
+// trapSecurityParametersTableState distinguishes an unset atomic pointer from
+// an explicitly cleared table. A non-nil state with a nil table prevents
+// SetTrapSecurityParametersTable(nil) from restoring the deprecated field fallback.
 type trapSecurityParametersTableState struct {
 	table *SnmpV3SecurityParametersTable
 }
