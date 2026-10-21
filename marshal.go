@@ -204,7 +204,7 @@ sendRetry:
 			}
 			if retries > x.Retries {
 				if err == nil {
-					err = fmt.Errorf("max retries (%d) exceeded: %w", x.Retries, ErrMaxRetriesExceeded)
+					err = fmt.Errorf("%w: %d retries", ErrMaxRetriesExceeded, x.Retries)
 				}
 				if strings.Contains(err.Error(), "timeout") {
 					err = fmt.Errorf("request timeout (after %d retries): %w", retries-1, ErrMaxRetriesExceeded)
