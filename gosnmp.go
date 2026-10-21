@@ -153,9 +153,20 @@ type GoSNMP struct {
 	// SecurityParameters is an SNMPV3 Security Model parameters struct.
 	SecurityParameters SnmpV3SecurityParameters
 
-	// TrapSecurityParametersTable is a mapping of identifiers to corresponding SNMP V3 Security Model parameters
-	// right now only supported for receiving traps, variable name to make that clear
+	// TrapSecurityParametersTable is a mapping of identifiers to corresponding
+	// SNMP V3 Security Model parameters, currently only used for receiving traps.
+	//
+	// Deprecated: use GetTrapSecurityParametersTable / SetTrapSecurityParametersTable.
+	// Writes to this field are NOT safe concurrently with a running TrapListener,
+	// and are IGNORED if SetTrapSecurityParametersTable has ever been called on
+	// this *GoSNMP instance.
 	TrapSecurityParametersTable *SnmpV3SecurityParametersTable
+
+	// trapSecParams holds the runtime-swappable security parameters table.
+	// Readers in the trap decode path load it atomically so the table can be
+	// replaced when the set of SNMPv3 users changes without racing with
+	// inbound packets.
+	trapSecParams atomic.Pointer[trapSecurityParametersTableState]
 
 	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU.
 	ContextEngineID string
@@ -171,6 +182,28 @@ type GoSNMP struct {
 
 	// Internal - mutual exclusion allows us to idempotently perform operations
 	mu sync.Mutex
+}
+
+type trapSecurityParametersTableState struct {
+	table *SnmpV3SecurityParametersTable
+}
+
+// SetTrapSecurityParametersTable atomically replaces the SNMPv3 security
+// parameters table used for decoding incoming traps. Safe to call while a
+// TrapListener is running. A nil table clears the table without restoring
+// the deprecated TrapSecurityParametersTable field.
+func (x *GoSNMP) SetTrapSecurityParametersTable(t *SnmpV3SecurityParametersTable) {
+	x.trapSecParams.Store(&trapSecurityParametersTableState{table: t})
+}
+
+// GetTrapSecurityParametersTable returns the table previously installed via
+// SetTrapSecurityParametersTable, falling back to the deprecated
+// TrapSecurityParametersTable field only if the setter has never been called.
+func (x *GoSNMP) GetTrapSecurityParametersTable() *SnmpV3SecurityParametersTable {
+	if state := x.trapSecParams.Load(); state != nil {
+		return state.table
+	}
+	return x.TrapSecurityParametersTable
 }
 
 // Default connection settings
