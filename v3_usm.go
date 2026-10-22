@@ -823,8 +823,42 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 	return subtle.ConstantTimeCompare(msgDigest, signature) == 1, nil
 }
 
+// usmSaltLength is the length of the USM privacy parameter, in octets. Both
+// RFC 3414 section 8.1.1.1 (DES) and RFC 3826 section 3.1.2.1 (AES) fix it at 8.
+const usmSaltLength = 8
+
+// desKeyLength is the amount of localized key material the DES branches need:
+// 8 octets of DES key followed by 8 octets of pre-IV (RFC 3414 section 8.1.1.1).
+const desKeyLength = 16
+
+// checkPrivacyMaterial validates the key and the salt that the DES and AES
+// branches of encryptPacket and decryptPacket index at fixed offsets.
+// PrivacyParameters is copied verbatim off the wire by unmarshal, so without
+// this check a peer can make those branches read out of bounds, or - on AES,
+// where the salt is copied rather than indexed - quietly decrypt with an IV
+// that is part zero.
+func (sp *UsmSecurityParameters) checkPrivacyMaterial() error {
+	switch sp.PrivacyProtocol {
+	case DES:
+		if len(sp.PrivacyKey) < desKeyLength {
+			return fmt.Errorf("invalid DES privacy key: %d octets, need %d", len(sp.PrivacyKey), desKeyLength)
+		}
+	case AES, AES192, AES256, AES192C, AES256C:
+	default:
+		return nil
+	}
+	if len(sp.PrivacyParameters) != usmSaltLength {
+		return fmt.Errorf("invalid privacy parameters: %d octets, need %d", len(sp.PrivacyParameters), usmSaltLength)
+	}
+	return nil
+}
+
 func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error) {
 	var b []byte
+
+	if err := sp.checkPrivacyMaterial(); err != nil {
+		return nil, err
+	}
 
 	switch sp.PrivacyProtocol {
 	case AES, AES192, AES256, AES192C, AES256C:
@@ -876,6 +910,10 @@ func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error)
 }
 
 func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byte, error) {
+	if err := sp.checkPrivacyMaterial(); err != nil {
+		return nil, fmt.Errorf("error decrypting ScopedPDU: %w", err)
+	}
+
 	_, cursorTmp, err := parseLength(packet[cursor:])
 	if err != nil {
 		return nil, err
