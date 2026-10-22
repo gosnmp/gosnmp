@@ -534,6 +534,19 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 
 	if result.Version == Version3 {
 		if result.SecurityModel == UserSecurityModel {
+			if useResponseSecurityParameters {
+				// msgFlags come from the sender, so do not let it pick a
+				// lower security level than the one configured for the user
+				if usp, ok := result.SecurityParameters.(*UsmSecurityParameters); ok {
+					securityLevel := result.MsgFlags & AuthPriv
+					if (usp.AuthenticationProtocol > NoAuth && securityLevel&AuthNoPriv == 0) ||
+						(usp.PrivacyProtocol > NoPriv && securityLevel != AuthPriv) {
+						err = fmt.Errorf("incoming trap security level %s is below the level configured for user %s", securityLevel, usp.UserName)
+						x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+						return nil, err
+					}
+				}
+			}
 			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
 				x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)

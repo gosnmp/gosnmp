@@ -157,6 +157,60 @@ SANITY:
 	}
 }
 
+// genericV3Trap is an authNoPriv trap from "myuser", which is configured
+// with MD5 authentication. If the sender clears the auth bit in msgFlags,
+// the incoming security level (noAuthNoPriv) is below the level configured
+// for the user (authNoPriv) and the trap must be rejected instead of being
+// accepted without an authentication check.
+func TestUnmarshalTrapRejectsSecurityLevelDowngrade(t *testing.T) {
+	const msgFlagsOffset = 21
+	const wantErr = "incoming trap security level NoAuthNoPriv is below the level configured for user myuser"
+
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	for _, sp := range secParamsList {
+		usmMap.Add(sp.UserName, sp)
+	}
+
+	tests := []struct {
+		name  string
+		setup func(gs *GoSNMP)
+	}{
+		{
+			name: "security parameters table",
+			setup: func(gs *GoSNMP) {
+				gs.TrapSecurityParametersTable = usmMap
+			},
+		},
+		{
+			name: "single user",
+			setup: func(gs *GoSNMP) {
+				gs.SecurityParameters = secParamsList[0].Copy()
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gs := newTestGoSNMP()
+			gs.Version = Version3
+			tt.setup(gs)
+
+			buf := genericV3Trap()
+			require.Equal(t, byte(AuthNoPriv), buf[msgFlagsOffset])
+
+			// the trap as sent is accepted
+			_, err := gs.UnmarshalTrap(buf, true)
+			require.NoError(t, err)
+
+			// the same trap with the auth bit cleared is rejected
+			buf[msgFlagsOffset] = byte(NoAuthNoPriv)
+			res, err := gs.UnmarshalTrap(buf, true)
+			require.ErrorContains(t, err, wantErr)
+			require.Nil(t, res)
+		})
+	}
+}
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
