@@ -371,5 +371,5 @@ func TestUnmarshalShortAuthParametersNoPanic(t *testing.T) {
 	}
 
 	_, err := sp.unmarshal(AuthNoPriv, packet, 0)
-	require.Error(t, err, "short msgAuthenticationParameters should be rejected")
+	require.EqualError(t, err, "error parsing SNMPv3 User Security Model: msgAuthenticationParameters length 4 does not match MD5 digest length 12")
 }
