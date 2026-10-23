@@ -386,6 +386,19 @@ func (sp *UsmSecurityParameters) validate(flags SnmpV3MsgFlags) error {
 	return nil
 }
 
+// checkAuthenticated returns an error if sp has an authentication protocol
+// but flags do not mark the message as authenticated, so that an incoming
+// message cannot skip HMAC verification by clearing its own msgFlags.
+// Authenticated messages without privacy are still allowed for users that
+// have a privacy protocol: USM does not treat the configured protocols as a
+// minimum security level.
+func (sp *UsmSecurityParameters) checkAuthenticated(flags SnmpV3MsgFlags) error {
+	if sp.AuthenticationProtocol > NoAuth && flags&AuthNoPriv == 0 {
+		return fmt.Errorf("message is not authenticated but user %q requires authentication", sp.UserName)
+	}
+	return nil
+}
+
 func (sp *UsmSecurityParameters) init(log Logger) error {
 	var err error
 
@@ -1074,6 +1087,13 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		// be processed further
 		if sp.AuthenticationProtocol <= NoAuth {
 			return 0, errors.New("error parsing SNMPv3 User Security Model: authentication parameters are not configured to parse incoming authenticated message")
+		}
+		// The MAC is blanked in place below, assuming a two-byte header, so
+		// the field must be exactly the size the configured protocol produces
+		// and use a short-form length.
+		macLen := len(macVarbinds[sp.AuthenticationProtocol])
+		if count != macLen || len(sp.AuthenticationParameters) != macLen-2 {
+			return 0, fmt.Errorf("error parsing SNMPv3 User Security Model: msgAuthenticationParameters length %d does not match %s", count, sp.AuthenticationProtocol)
 		}
 		copy(packet[cursor+2:cursor+len(macVarbinds[sp.AuthenticationProtocol])], macVarbinds[sp.AuthenticationProtocol][2:])
 	}

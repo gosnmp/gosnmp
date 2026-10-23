@@ -297,6 +297,114 @@ func TestV3HarnessImmediateSuccessAccounting(t *testing.T) {
 	require.Equal(t, 1, finished)
 }
 
+// TestV3HarnessRejectsUnauthenticatedDiscoveryShapedResponse checks that an
+// authNoPriv client does not accept a noAuthNoPriv response just because it
+// has the empty user, engine ID and varbind list of an engine discovery
+// message, and that such a response does not reset the session's engine state.
+func TestV3HarnessRejectsUnauthenticatedDiscoveryShapedResponse(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+		forged := &SnmpPacket{
+			Version:            Version3,
+			MsgFlags:           NoAuthNoPriv,
+			SecurityModel:      UserSecurityModel,
+			SecurityParameters: &UsmSecurityParameters{Logger: agent.logger},
+			PDUType:            GetResponse,
+			MsgID:              req.Packet.MsgID,
+			RequestID:          req.Packet.RequestID,
+			Error:              GenErr,
+			Logger:             agent.logger,
+		}
+		out, err := forged.MarshalMsg()
+		if err != nil {
+			agent.sendErr(fmt.Errorf("marshaling forged reply: %w", err))
+			return nil
+		}
+		return [][]byte{out}
+	}}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Equal(t, v3HarnessEngineID, sp.AuthoritativeEngineID)
+	require.Equal(t, v3HarnessBoots, sp.AuthoritativeEngineBoots)
+}
+
+// forgeV3Reply builds an unauthenticated reply with request-id 0, which the
+// client accepts for any request, so an attacker need not see the request.
+func forgeV3Reply(t *testing.T, logger Logger, engineID string, pduType PDUType, vars []SnmpPDU) []byte {
+	t.Helper()
+	forged := &SnmpPacket{
+		Version:            Version3,
+		MsgFlags:           NoAuthNoPriv,
+		SecurityModel:      UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{AuthoritativeEngineID: engineID, Logger: logger},
+		PDUType:            pduType,
+		MsgID:              1,
+		Variables:          vars,
+		Logger:             logger,
+	}
+	out, err := forged.MarshalMsg()
+	require.NoError(t, err)
+	return out
+}
+
+// TestV3HarnessRejectsDiscoveryReportWithoutEngineID checks that a forged
+// discovery REPORT with an empty engine ID fails discovery, rather than
+// leaving the engine ID empty so that later responses are trusted on their
+// own msgFlags.
+func TestV3HarnessRejectsDiscoveryReportWithoutEngineID(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	report := forgeV3Reply(t, agent.logger, "", Report, []SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}})
+	forged := forgeV3Reply(t, agent.logger, "", GetResponse, []SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
+	agent.steps = []v3TestAgentStep{
+		func(*v3TestAgentRequest) [][]byte { return [][]byte{report} },
+		func(*v3TestAgentRequest) [][]byte { return [][]byte{forged} },
+	}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.ErrorContains(t, err, "invalid authoritative engine ID")
+	require.Empty(t, result.Variables)
+	require.Empty(t, sp.AuthoritativeEngineID)
+	requireRequestCount(t, agent, 1)
+}
+
+// TestV3HarnessDiscoveryIgnoresUnauthenticatedResponse checks that while the
+// engine ID is unknown, an unauthenticated reply other than a REPORT is
+// discarded, so a forged GetResponse cannot set the engine ID and the
+// genuine discovery REPORT behind it is still used.
+func TestV3HarnessDiscoveryIgnoresUnauthenticatedResponse(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	forged := forgeV3Reply(t, agent.logger, "\x80\x00\x00\x00\x04forged", GetResponse,
+		[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
+	report := v3AgentUnknownEngineIDsReport(agent)
+	agent.steps = []v3TestAgentStep{
+		func(req *v3TestAgentRequest) [][]byte { return append([][]byte{forged}, report(req)...) },
+		v3AgentSysDescr(agent),
+	}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	v3HarnessConnect(t, gs)
+	v3UnknownEngineIDsReportFixture.seedIDs(gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	require.Equal(t, v3HarnessEngineID, sp.AuthoritativeEngineID)
+}
+
 // TestV3HarnessTimeoutAllAttemptsDropped pins retry accounting when
 // every attempt is dropped: Retries+1 requests on the wire, each with fresh
 // msgID and request-id, ending in a timeout error.
