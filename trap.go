@@ -494,9 +494,17 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 			// Copy the trap and pass the security parameters to try to unmarshal with
 			cpTrap := make([]byte, len(trap))
 			copy(cpTrap, trap)
-			if result, err = x.unmarshalTrapBase(cpTrap, secParams.Copy(), true); err == nil {
-				return result, nil
+			if result, err = x.unmarshalTrapBase(cpTrap, secParams.Copy(), true); err != nil {
+				continue
 			}
+			// unmarshalTrapBase trusts the packet's msgFlags, so check they
+			// meet the level this user is configured for.
+			if usm, ok := secParams.(*UsmSecurityParameters); ok {
+				if err = usm.checkSecurityLevel(result.MsgFlags); err != nil {
+					continue
+				}
+			}
+			return result, nil
 		}
 		return nil, fmt.Errorf("no credentials successfully unmarshaled trap: %w", err)
 	}

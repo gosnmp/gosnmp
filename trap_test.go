@@ -264,6 +264,30 @@ SANITY:
 	}
 }
 
+// TestUnmarshalTrapWithMultipleUsersRejectsDowngrade checks that a trap whose
+// msgFlags claim a lower security level than the matching user is configured
+// for is rejected, rather than skipping authentication.
+func TestUnmarshalTrapWithMultipleUsersRejectsDowngrade(t *testing.T) {
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	for _, sp := range secParamsList {
+		usmMap.Add(sp.UserName, sp)
+	}
+	gs := newTestGoSNMP()
+	gs.SetTrapSecurityParametersTable(usmMap)
+	gs.Version = Version3
+
+	// genericV3Trap is authNoPriv for "myuser"; clear the auth flag so the
+	// packet claims noAuthNoPriv while keeping the same user and payload.
+	buf := genericV3Trap()
+	const msgFlagsOffset = 21
+	require.Equal(t, byte(AuthNoPriv), buf[msgFlagsOffset])
+	buf[msgFlagsOffset] = byte(NoAuthNoPriv)
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.Error(t, err)
+	require.Nil(t, res)
+}
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
