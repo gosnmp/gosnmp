@@ -97,6 +97,18 @@ func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 	return msg, nil
 }
 
+// isDiscoveryProbe reports whether the header of an incoming packet has the
+// special settings of an Engine Discovery request (RFC3414 section 4):
+// noAuthNoPriv, an empty username and an empty authoritative engine ID. The
+// empty variable binding list can only be checked once the payload is parsed.
+func isDiscoveryProbe(result *SnmpPacket) bool {
+	msgSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
+	return ok &&
+		result.MsgFlags&AuthPriv == NoAuthNoPriv &&
+		msgSecParams.UserName == "" &&
+		msgSecParams.AuthoritativeEngineID == ""
+}
+
 func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useResponseSecurityParameters bool) error {
 	if x.Version != Version3 {
 		return fmt.Errorf("testAuthentication called with non Version3 connection")
@@ -104,17 +116,6 @@ func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useRespon
 	msgFlags := x.MsgFlags
 	if useResponseSecurityParameters {
 		msgFlags = result.MsgFlags
-	}
-
-	// Special case for Engine Discovery (RFC3414 section 4) where we should
-	// skip authentication for the discovery packet with the special settings
-	// described in the RFC. The discovery package requires
-	msgSecParams := result.SecurityParameters.(*UsmSecurityParameters)
-	if msgFlags&NoAuthNoPriv == 0 && // NoAuthNoPriv method
-		msgSecParams.UserName == "" && // empty username
-		msgSecParams.AuthoritativeEngineID == "" && // empty authoritative engine ID
-		len(result.Variables) == 0 { // empty variable binding list
-		return nil
 	}
 
 	if msgFlags&AuthNoPriv > 0 {

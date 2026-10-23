@@ -533,8 +533,12 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 		return nil, err
 	}
 
+	// Engine Discovery requests (RFC3414 section 4) are accepted without
+	// authentication so that the listener can report its engine ID.
+	discoveryProbe := false
 	if result.Version == Version3 {
-		if result.SecurityModel == UserSecurityModel {
+		discoveryProbe = result.SecurityModel == UserSecurityModel && isDiscoveryProbe(result)
+		if result.SecurityModel == UserSecurityModel && !discoveryProbe {
 			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
 				x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
@@ -552,6 +556,9 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 	if err != nil {
 		x.Logger.Printf("UnmarshalTrap: %s\n", err)
 		return nil, err
+	}
+	if discoveryProbe && len(result.Variables) > 0 {
+		return nil, errors.New("UnmarshalTrap: unauthenticated discovery request has variable bindings")
 	}
 	return result, nil
 }
