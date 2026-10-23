@@ -264,6 +264,45 @@ SANITY:
 	}
 }
 
+// TestUnmarshalTrapShortAuthParams checks that an authenticated v3 message
+// whose msgAuthenticationParameters is shorter than the configured MAC is
+// rejected instead of panicking while the MAC is blanked for verification.
+func TestUnmarshalTrapShortAuthParams(t *testing.T) {
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.MsgFlags = AuthNoPriv
+	gs.SecurityModel = UserSecurityModel
+	gs.SecurityParameters = &UsmSecurityParameters{
+		UserName:                 "myuser",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "mypassword",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	buf := []byte{
+		0x30, 0x2f,
+		0x02, 0x01, 0x03, // version 3
+		0x30, 0x0d, // msgGlobalData
+		0x02, 0x01, 0x01, // msgID
+		0x02, 0x02, 0x05, 0xdc, // msgMaxSize
+		0x04, 0x01, 0x01, // msgFlags authNoPriv
+		0x02, 0x01, 0x03, // msgSecurityModel USM
+		0x04, 0x1b, 0x30, 0x19, // msgSecurityParameters
+		0x04, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, // engine ID
+		0x02, 0x01, 0x00, // boots
+		0x02, 0x01, 0x00, // time
+		0x04, 0x06, 'm', 'y', 'u', 's', 'e', 'r', // user name
+		0x04, 0x00, // empty msgAuthenticationParameters
+		0x04, 0x00, // empty msgPrivacyParameters
+	}
+
+	var res *SnmpPacket
+	var err error
+	require.NotPanics(t, func() { res, err = gs.UnmarshalTrap(buf, false) })
+	require.Error(t, err)
+	require.Nil(t, res)
+}
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
