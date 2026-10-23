@@ -557,8 +557,8 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 		x.Logger.Printf("UnmarshalTrap: %s\n", err)
 		return nil, err
 	}
-	if discoveryProbe && len(result.Variables) > 0 {
-		return nil, errors.New("UnmarshalTrap: unauthenticated discovery request has variable bindings")
+	if discoveryProbe && (result.PDUType != GetRequest || len(result.Variables) > 0) {
+		return nil, errors.New("UnmarshalTrap: unauthenticated message is not an engine discovery request")
 	}
 	return result, nil
 }

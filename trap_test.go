@@ -1203,3 +1203,41 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 	require.Equal(t, result.SecurityParameters.(*UsmSecurityParameters).AuthoritativeEngineID, authorativeEngineID, "invalid authoritativeEngineID")
 	require.Equal(t, result.PDUType, Report, "invalid received PDUType")
 }
+
+// TestUnmarshalTrapRejectsDiscoveryShapedNotification checks that only a
+// genuine Engine Discovery request (a reportable GetRequest) skips
+// authentication: an unauthenticated notification with an empty user name
+// and engine ID must not be accepted by an authNoPriv receiver.
+func TestUnmarshalTrapRejectsDiscoveryShapedNotification(t *testing.T) {
+	tests := []struct {
+		name     string
+		msgFlags SnmpV3MsgFlags
+		pduType  PDUType
+	}{
+		{"trap", NoAuthNoPriv, SNMPv2Trap},
+		{"reportable inform", Reportable | NoAuthNoPriv, InformRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewLogger(log.New(io.Discard, "", 0))
+			gs := newTestGoSNMPv3(AuthNoPriv, secParamsList[0].Copy()) // myuser, MD5
+
+			forged := &SnmpPacket{
+				Version:            Version3,
+				MsgFlags:           tt.msgFlags,
+				SecurityModel:      UserSecurityModel,
+				SecurityParameters: &UsmSecurityParameters{Logger: logger},
+				PDUType:            tt.pduType,
+				MsgID:              1,
+				RequestID:          1,
+				Logger:             logger,
+			}
+			buf, err := forged.MarshalMsg()
+			require.NoError(t, err)
+
+			res, err := gs.UnmarshalTrap(buf, false)
+			require.Error(t, err)
+			require.Nil(t, res)
+		})
+	}
+}

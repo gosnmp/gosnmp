@@ -99,11 +99,13 @@ func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 
 // isDiscoveryProbe reports whether the header of an incoming packet has the
 // special settings of an Engine Discovery request (RFC3414 section 4):
-// noAuthNoPriv, an empty username and an empty authoritative engine ID. The
-// empty variable binding list can only be checked once the payload is parsed.
+// reportable, noAuthNoPriv, an empty username and an empty authoritative
+// engine ID. The PDU type and the empty variable binding list can only be
+// checked once the payload is parsed.
 func isDiscoveryProbe(result *SnmpPacket) bool {
 	msgSecParams, ok := result.SecurityParameters.(*UsmSecurityParameters)
 	return ok &&
+		result.MsgFlags&Reportable != 0 &&
 		result.MsgFlags&AuthPriv == NoAuthNoPriv &&
 		msgSecParams.UserName == "" &&
 		msgSecParams.AuthoritativeEngineID == ""
