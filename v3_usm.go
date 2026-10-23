@@ -386,15 +386,15 @@ func (sp *UsmSecurityParameters) validate(flags SnmpV3MsgFlags) error {
 	return nil
 }
 
-// checkSecurityLevel returns an error if flags request a lower security level
-// than sp is configured for, so that an incoming message cannot skip
-// authentication or privacy by clearing its own msgFlags.
-func (sp *UsmSecurityParameters) checkSecurityLevel(flags SnmpV3MsgFlags) error {
+// checkAuthenticated returns an error if sp has an authentication protocol
+// but flags do not mark the message as authenticated, so that an incoming
+// message cannot skip HMAC verification by clearing its own msgFlags.
+// Authenticated messages without privacy are still allowed for users that
+// have a privacy protocol: USM does not treat the configured protocols as a
+// minimum security level.
+func (sp *UsmSecurityParameters) checkAuthenticated(flags SnmpV3MsgFlags) error {
 	if sp.AuthenticationProtocol > NoAuth && flags&AuthNoPriv == 0 {
 		return fmt.Errorf("message is not authenticated but user %q requires authentication", sp.UserName)
-	}
-	if sp.PrivacyProtocol > NoPriv && flags&AuthPriv != AuthPriv {
-		return fmt.Errorf("message is not encrypted but user %q requires privacy", sp.UserName)
 	}
 	return nil
 }

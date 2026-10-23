@@ -494,17 +494,9 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 			// Copy the trap and pass the security parameters to try to unmarshal with
 			cpTrap := make([]byte, len(trap))
 			copy(cpTrap, trap)
-			if result, err = x.unmarshalTrapBase(cpTrap, secParams.Copy(), true); err != nil {
-				continue
+			if result, err = x.unmarshalTrapBase(cpTrap, secParams.Copy(), true); err == nil {
+				return result, nil
 			}
-			// unmarshalTrapBase trusts the packet's msgFlags, so check they
-			// meet the level this user is configured for.
-			if usm, ok := secParams.(*UsmSecurityParameters); ok {
-				if err = usm.checkSecurityLevel(result.MsgFlags); err != nil {
-					continue
-				}
-			}
-			return result, nil
 		}
 		return nil, fmt.Errorf("no credentials successfully unmarshaled trap: %w", err)
 	}
@@ -539,6 +531,17 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 	if err != nil {
 		x.Logger.Printf("UnmarshalTrap: %s\n", err)
 		return nil, err
+	}
+
+	// testAuthentication trusts the packet's own msgFlags when
+	// useResponseSecurityParameters is set, so check them against the
+	// credentials before authenticating or decrypting anything.
+	if usm, ok := result.SecurityParameters.(*UsmSecurityParameters); ok && useResponseSecurityParameters &&
+		result.Version == Version3 && result.SecurityModel == UserSecurityModel {
+		if err = usm.checkAuthenticated(result.MsgFlags); err != nil {
+			x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+			return nil, err
+		}
 	}
 
 	if result.Version == Version3 {

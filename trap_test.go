@@ -288,6 +288,44 @@ func TestUnmarshalTrapWithMultipleUsersRejectsDowngrade(t *testing.T) {
 	require.Nil(t, res)
 }
 
+// TestUnmarshalTrapRejectsDowngrade is the single-user equivalent of
+// TestUnmarshalTrapWithMultipleUsersRejectsDowngrade: with
+// useResponseSecurityParameters the packet's own msgFlags must still not be
+// able to skip authentication.
+func TestUnmarshalTrapRejectsDowngrade(t *testing.T) {
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.SecurityParameters = secParamsList[0].Copy() // myuser, MD5
+
+	buf := genericV3Trap()
+	const msgFlagsOffset = 21
+	require.Equal(t, byte(AuthNoPriv), buf[msgFlagsOffset])
+	buf[msgFlagsOffset] = byte(NoAuthNoPriv)
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.Error(t, err)
+	require.Nil(t, res)
+}
+
+// TestUnmarshalTrapAuthNoPrivForPrivUser checks that an authenticated but
+// unencrypted trap is still accepted for a user that also has a privacy
+// protocol configured; USM does not treat the configured protocols as a
+// minimum level.
+func TestUnmarshalTrapAuthNoPrivForPrivUser(t *testing.T) {
+	sp := secParamsList[0].Copy().(*UsmSecurityParameters) // myuser, MD5
+	sp.PrivacyProtocol = AES
+	sp.PrivacyPassphrase = "myprivacy"
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	require.NoError(t, usmMap.Add(sp.UserName, sp))
+	gs := newTestGoSNMP()
+	gs.SetTrapSecurityParametersTable(usmMap)
+	gs.Version = Version3
+
+	res, err := gs.UnmarshalTrap(genericV3Trap(), true)
+	require.NoError(t, err)
+	require.Equal(t, uint32(957979745), res.RequestID)
+}
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
