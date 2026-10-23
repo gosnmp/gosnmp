@@ -463,6 +463,63 @@ func TestListenV3TrapWithTableOnly(t *testing.T) {
 	}
 }
 
+// TestListenV3TrapWithTableOnlyInvalidEngineID checks that a listener with no
+// local engine ID drops a trap whose engine ID is too short, instead of
+// sending a usmStatsUnknownEngineIDs Report with an empty engine ID.
+func TestListenV3TrapWithTableOnlyInvalidEngineID(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	usmMap := NewSnmpV3SecurityParametersTable(logger)
+	require.NoError(t, usmMap.Add("noauthuser", &UsmSecurityParameters{
+		UserName:               "noauthuser",
+		AuthenticationProtocol: NoAuth,
+		PrivacyProtocol:        NoPriv,
+		Logger:                 logger,
+	}))
+
+	received := make(chan *SnmpPacket, 1)
+	tl := NewTrapListener()
+	defer tl.Close()
+	tl.OnNewTrap = func(p *SnmpPacket, _ *net.UDPAddr) { received <- p }
+	tl.Params = newTestGoSNMP()
+	tl.Params.Version = Version3
+	tl.Params.SecurityModel = UserSecurityModel
+	tl.Params.SetTrapSecurityParametersTable(usmMap)
+
+	trap := &SnmpPacket{
+		Version:       Version3,
+		MsgFlags:      NoAuthNoPriv,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:              "noauthuser",
+			AuthoritativeEngineID: "abc", // shorter than the 5 octet minimum
+			Logger:                logger,
+		},
+		PDUType:   SNMPv2Trap,
+		MsgID:     1,
+		RequestID: 1,
+		Variables: []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}},
+		Logger:    logger,
+	}
+	buf, err := trap.MarshalMsg()
+	require.NoError(t, err)
+
+	host, port := listenOnEphemeral(t, tl)
+	conn, err := net.Dial("udp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Write(buf)
+	require.NoError(t, err)
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(500*time.Millisecond)))
+	n, err := conn.Read(make([]byte, 1500))
+	require.Error(t, err, "listener sent a %d byte reply", n)
+	select {
+	case <-received:
+		t.Fatal("trap with an invalid engine ID was delivered")
+	default:
+	}
+}
+
 // test sending a basic SNMP inform and receiving the response
 func TestSendInformBasic(t *testing.T) {
 	done := make(chan error, 1)

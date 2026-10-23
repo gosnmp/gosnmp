@@ -302,6 +302,11 @@ func (t *TrapListener) listenUDP(addr string) error {
 						// According to RFC3414 3.2.3b: stop processing and report
 						// the listener authoritative engine ID
 						atomic.AddUint32(&t.usmStatsUnknownEngineIDsCount, 1)
+						if snmpEngineID == "" {
+							// No local engine ID to report, so just drop the message.
+							t.Params.Logger.Printf("TrapListener: invalid authoritative engine ID length %d\n", len(msgAuthoritativeEngineID))
+							continue
+						}
 						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
 						if err != nil {
 							t.Params.Logger.Printf("TrapListener: %s\n", err)
