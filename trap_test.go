@@ -430,6 +430,39 @@ func TestSendTrapBasic(t *testing.T) {
 	waitForTestTrap(t, done)
 }
 
+// TestListenV3TrapWithTableOnly checks that a listener configured only with a
+// trap security parameters table (no Params.SecurityParameters) delivers v3
+// traps instead of crashing.
+func TestListenV3TrapWithTableOnly(t *testing.T) {
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	for _, sp := range secParamsList {
+		usmMap.Add(sp.UserName, sp)
+	}
+
+	received := make(chan *SnmpPacket, 1)
+	tl := NewTrapListener()
+	defer tl.Close()
+	tl.OnNewTrap = func(p *SnmpPacket, _ *net.UDPAddr) { received <- p }
+	tl.Params = newTestGoSNMP()
+	tl.Params.Version = Version3
+	tl.Params.SecurityModel = UserSecurityModel
+	tl.Params.SetTrapSecurityParametersTable(usmMap)
+
+	host, port := listenOnEphemeral(t, tl)
+	conn, err := net.Dial("udp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Write(genericV3Trap())
+	require.NoError(t, err)
+
+	select {
+	case p := <-received:
+		require.Equal(t, uint32(957979745), p.RequestID)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
+	}
+}
+
 // test sending a basic SNMP inform and receiving the response
 func TestSendInformBasic(t *testing.T) {
 	done := make(chan error, 1)

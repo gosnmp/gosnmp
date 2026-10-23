@@ -283,15 +283,17 @@ func (t *TrapListener) listenUDP(addr string) error {
 				continue
 			}
 			if trap.Version == Version3 && trap.SecurityModel == UserSecurityModel && t.Params.SecurityModel == UserSecurityModel {
-				securityParams, ok := t.Params.SecurityParameters.(*UsmSecurityParameters)
-				if !ok {
-					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
-				}
 				packetSecurityParams, ok := trap.SecurityParameters.(*UsmSecurityParameters)
 				if !ok {
 					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
+					continue
 				}
-				snmpEngineID := securityParams.AuthoritativeEngineID
+				// Params.SecurityParameters may be nil when only a trap security
+				// parameters table is configured, leaving no local engine ID.
+				var snmpEngineID string
+				if securityParams, ok := t.Params.SecurityParameters.(*UsmSecurityParameters); ok && securityParams != nil {
+					snmpEngineID = securityParams.AuthoritativeEngineID
+				}
 				msgAuthoritativeEngineID := packetSecurityParams.AuthoritativeEngineID
 				if msgAuthoritativeEngineID != snmpEngineID {
 					if len(msgAuthoritativeEngineID) < 5 || len(msgAuthoritativeEngineID) > 32 {
