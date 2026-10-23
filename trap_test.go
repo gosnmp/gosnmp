@@ -303,6 +303,44 @@ func TestUnmarshalTrapShortAuthParams(t *testing.T) {
 	require.Nil(t, res)
 }
 
+// TestUnmarshalTrapLongFormAuthParams checks that a long-form encoded
+// msgAuthenticationParameters whose total size happens to match the MAC field
+// is rejected as malformed, rather than having the wrong bytes blanked.
+func TestUnmarshalTrapLongFormAuthParams(t *testing.T) {
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.MsgFlags = AuthNoPriv
+	gs.SecurityModel = UserSecurityModel
+	gs.SecurityParameters = &UsmSecurityParameters{
+		UserName:                 "myuser",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "mypassword",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	buf := []byte{
+		0x30, 0x3b,
+		0x02, 0x01, 0x03, // version 3
+		0x30, 0x0d, // msgGlobalData
+		0x02, 0x01, 0x01, // msgID
+		0x02, 0x02, 0x05, 0xdc, // msgMaxSize
+		0x04, 0x01, 0x01, // msgFlags authNoPriv
+		0x02, 0x01, 0x03, // msgSecurityModel USM
+		0x04, 0x27, 0x30, 0x25, // msgSecurityParameters
+		0x04, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, // engine ID
+		0x02, 0x01, 0x00, // boots
+		0x02, 0x01, 0x00, // time
+		0x04, 0x06, 'm', 'y', 'u', 's', 'e', 'r', // user name
+		0x04, 0x81, 0x0b, // msgAuthenticationParameters, long-form length 11
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0x04, 0x00, // empty msgPrivacyParameters
+	}
+
+	res, err := gs.UnmarshalTrap(buf, false)
+	require.ErrorContains(t, err, "msgAuthenticationParameters")
+	require.Nil(t, res)
+}
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
