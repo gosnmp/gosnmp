@@ -264,6 +264,248 @@ SANITY:
 	}
 }
 
+// TestUnmarshalTrapShortAuthParams checks that an authenticated v3 message
+// whose msgAuthenticationParameters is shorter than the configured MAC is
+// rejected instead of panicking while the MAC is blanked for verification.
+func TestUnmarshalTrapShortAuthParams(t *testing.T) {
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.MsgFlags = AuthNoPriv
+	gs.SecurityModel = UserSecurityModel
+	gs.SecurityParameters = &UsmSecurityParameters{
+		UserName:                 "myuser",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "mypassword",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	buf := []byte{
+		0x30, 0x2f,
+		0x02, 0x01, 0x03, // version 3
+		0x30, 0x0d, // msgGlobalData
+		0x02, 0x01, 0x01, // msgID
+		0x02, 0x02, 0x05, 0xdc, // msgMaxSize
+		0x04, 0x01, 0x01, // msgFlags authNoPriv
+		0x02, 0x01, 0x03, // msgSecurityModel USM
+		0x04, 0x1b, 0x30, 0x19, // msgSecurityParameters
+		0x04, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, // engine ID
+		0x02, 0x01, 0x00, // boots
+		0x02, 0x01, 0x00, // time
+		0x04, 0x06, 'm', 'y', 'u', 's', 'e', 'r', // user name
+		0x04, 0x00, // empty msgAuthenticationParameters
+		0x04, 0x00, // empty msgPrivacyParameters
+	}
+
+	var res *SnmpPacket
+	var err error
+	require.NotPanics(t, func() { res, err = gs.UnmarshalTrap(buf, false) })
+	require.ErrorContains(t, err, "msgAuthenticationParameters")
+	require.Nil(t, res)
+}
+
+// TestUnmarshalTrapWithMultipleUsersRejectsDowngrade checks that a trap whose
+// msgFlags claim a lower security level than the matching user is configured
+// for is rejected, rather than skipping authentication.
+func TestUnmarshalTrapWithMultipleUsersRejectsDowngrade(t *testing.T) {
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	for _, sp := range secParamsList {
+		usmMap.Add(sp.UserName, sp)
+	}
+	gs := newTestGoSNMP()
+	gs.SetTrapSecurityParametersTable(usmMap)
+	gs.Version = Version3
+
+	// genericV3Trap is authNoPriv for "myuser"; clear the auth flag so the
+	// packet claims noAuthNoPriv while keeping the same user and payload.
+	buf := genericV3Trap()
+	const msgFlagsOffset = 21
+	require.Equal(t, byte(AuthNoPriv), buf[msgFlagsOffset])
+	buf[msgFlagsOffset] = byte(NoAuthNoPriv)
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.ErrorContains(t, err, "requires authentication")
+	require.Nil(t, res)
+}
+
+// TestUnmarshalTrapLongFormAuthParams checks that a long-form encoded
+// msgAuthenticationParameters is rejected as malformed, rather than having
+// the wrong bytes blanked, whether its total size or its value matches the
+// MAC field.
+func TestUnmarshalTrapLongFormAuthParams(t *testing.T) {
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.MsgFlags = AuthNoPriv
+	gs.SecurityModel = UserSecurityModel
+	gs.SecurityParameters = &UsmSecurityParameters{
+		UserName:                 "myuser",
+		AuthenticationProtocol:   MD5,
+		AuthenticationPassphrase: "mypassword",
+		Logger:                   NewLogger(log.New(io.Discard, "", 0)),
+	}
+
+	for _, n := range []byte{11, 12} { // total size 14, value size 12, as MD5's
+		buf := []byte{
+			0x30, 48 + n,
+			0x02, 0x01, 0x03, // version 3
+			0x30, 0x0d, // msgGlobalData
+			0x02, 0x01, 0x01, // msgID
+			0x02, 0x02, 0x05, 0xdc, // msgMaxSize
+			0x04, 0x01, 0x01, // msgFlags authNoPriv
+			0x02, 0x01, 0x03, // msgSecurityModel USM
+			0x04, 28 + n, 0x30, 26 + n, // msgSecurityParameters
+			0x04, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, // engine ID
+			0x02, 0x01, 0x00, // boots
+			0x02, 0x01, 0x00, // time
+			0x04, 0x06, 'm', 'y', 'u', 's', 'e', 'r', // user name
+			0x04, 0x81, n, // msgAuthenticationParameters, long-form length
+		}
+		buf = append(buf, make([]byte, n)...)
+		buf = append(buf, 0x04, 0x00) // empty msgPrivacyParameters
+
+		res, err := gs.UnmarshalTrap(buf, false)
+		require.ErrorContains(t, err, "msgAuthenticationParameters length", "value size %d", n)
+		require.Nil(t, res)
+	}
+}
+
+// TestUnmarshalTrapRejectsDowngrade is the single-user equivalent of
+// TestUnmarshalTrapWithMultipleUsersRejectsDowngrade: with
+// useResponseSecurityParameters the packet's own msgFlags must still not be
+// able to skip authentication.
+func TestUnmarshalTrapRejectsDowngrade(t *testing.T) {
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.SecurityParameters = secParamsList[0].Copy() // myuser, MD5
+
+	buf := genericV3Trap()
+	const msgFlagsOffset = 21
+	require.Equal(t, byte(AuthNoPriv), buf[msgFlagsOffset])
+	buf[msgFlagsOffset] = byte(NoAuthNoPriv)
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.ErrorContains(t, err, "requires authentication")
+	require.Nil(t, res)
+}
+
+// TestUnmarshalTrapDiscoveryRequestUseResponse checks that the security
+// level check does not reject an engine discovery request when the packet's
+// own msgFlags are trusted.
+func TestUnmarshalTrapDiscoveryRequestUseResponse(t *testing.T) {
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.SecurityParameters = secParamsList[0].Copy() // myuser, MD5
+
+	probe := (&UsmSecurityParameters{Logger: NewLogger(log.New(io.Discard, "", 0))}).discoveryRequired()
+	probe.MsgID = 1
+	probe.RequestID = 1
+	buf, err := probe.MarshalMsg()
+	require.NoError(t, err)
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.NoError(t, err)
+	require.True(t, isEngineDiscoveryRequest(res))
+}
+
+// TestUnmarshalTrapUseResponseChecksUserName checks that with a single user
+// and useResponseSecurityParameters, a trap signed with the user's key but
+// naming another user is rejected.
+func TestUnmarshalTrapUseResponseChecksUserName(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	signedAs := func(userName string) []byte {
+		signer := &UsmSecurityParameters{
+			UserName:                 userName,
+			AuthenticationProtocol:   MD5,
+			AuthenticationPassphrase: "mypassword",
+			AuthoritativeEngineID:    "\x80\x00\x1f\x88\x04sender",
+			Logger:                   logger,
+		}
+		require.NoError(t, signer.InitSecurityKeys())
+		trap := &SnmpPacket{
+			Version:            Version3,
+			MsgFlags:           AuthNoPriv,
+			SecurityModel:      UserSecurityModel,
+			SecurityParameters: signer,
+			PDUType:            SNMPv2Trap,
+			MsgID:              1,
+			RequestID:          1,
+			Variables:          []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}},
+			Logger:             logger,
+		}
+		buf, err := trap.MarshalMsg()
+		require.NoError(t, err)
+		return buf
+	}
+
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.SecurityParameters = secParamsList[0].Copy() // myuser, MD5
+
+	res, err := gs.UnmarshalTrap(signedAs("myuser"), true)
+	require.NoError(t, err)
+	require.Equal(t, uint32(1), res.RequestID)
+
+	res, err = gs.UnmarshalTrap(signedAs("admin"), true)
+	require.ErrorContains(t, err, `unknown user name "admin"`)
+	require.Nil(t, res)
+}
+
+// TestUnmarshalTrapAuthNoPrivForPrivUser checks that an authenticated but
+// unencrypted trap is still accepted for a user that also has a privacy
+// protocol configured; USM does not treat the configured protocols as a
+// minimum level.
+func TestUnmarshalTrapAuthNoPrivForPrivUser(t *testing.T) {
+	sp := secParamsList[0].Copy().(*UsmSecurityParameters) // myuser, MD5
+	sp.PrivacyProtocol = AES
+	sp.PrivacyPassphrase = "myprivacy"
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	require.NoError(t, usmMap.Add(sp.UserName, sp))
+	gs := newTestGoSNMP()
+	gs.SetTrapSecurityParametersTable(usmMap)
+	gs.Version = Version3
+
+	res, err := gs.UnmarshalTrap(genericV3Trap(), true)
+	require.NoError(t, err)
+	require.Equal(t, uint32(957979745), res.RequestID)
+}
+
+// TestUnmarshalTrapNoAuthUserInTable checks that the security level check
+// still accepts a noAuthNoPriv trap for a table user with no authentication.
+func TestUnmarshalTrapNoAuthUserInTable(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	usmMap := NewSnmpV3SecurityParametersTable(logger)
+	require.NoError(t, usmMap.Add("noauthuser", &UsmSecurityParameters{
+		UserName:               "noauthuser",
+		AuthenticationProtocol: NoAuth,
+		PrivacyProtocol:        NoPriv,
+		Logger:                 logger,
+	}))
+	gs := newTestGoSNMP()
+	gs.SetTrapSecurityParametersTable(usmMap)
+	gs.Version = Version3
+
+	trap := &SnmpPacket{
+		Version:       Version3,
+		MsgFlags:      NoAuthNoPriv,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:              "noauthuser",
+			AuthoritativeEngineID: "\x80\x00\x1f\x88\x04sender",
+			Logger:                logger,
+		},
+		PDUType:   SNMPv2Trap,
+		MsgID:     1,
+		RequestID: 1,
+		Variables: []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}},
+		Logger:    logger,
+	}
+	buf, err := trap.MarshalMsg()
+	require.NoError(t, err)
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.NoError(t, err)
+	require.Equal(t, uint32(1), res.RequestID)
+}
+
 func genericV3Trap() []byte {
 	return []byte{
 		0x30, 0x81, 0xd7, 0x02, 0x01, 0x03, 0x30, 0x11, 0x02, 0x04, 0x62, 0xaf,
@@ -428,6 +670,142 @@ func TestSendTrapBasic(t *testing.T) {
 
 	// wait for response from handler
 	waitForTestTrap(t, done)
+}
+
+// TestListenV3TrapWithTableOnly checks that a listener configured only with a
+// trap security parameters table (no Params.SecurityParameters) delivers v3
+// traps instead of crashing.
+func TestListenV3TrapWithTableOnly(t *testing.T) {
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	for _, sp := range secParamsList {
+		usmMap.Add(sp.UserName, sp)
+	}
+
+	received := make(chan *SnmpPacket, 1)
+	tl := NewTrapListener()
+	defer tl.Close()
+	tl.OnNewTrap = func(p *SnmpPacket, _ *net.UDPAddr) { received <- p }
+	tl.Params = newTestGoSNMP()
+	tl.Params.Version = Version3
+	tl.Params.SecurityModel = UserSecurityModel
+	tl.Params.SetTrapSecurityParametersTable(usmMap)
+
+	host, port := listenOnEphemeral(t, tl)
+	conn, err := net.Dial("udp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Write(genericV3Trap())
+	require.NoError(t, err)
+
+	select {
+	case p := <-received:
+		require.Equal(t, uint32(957979745), p.RequestID)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for trap to be received")
+	}
+}
+
+// TestListenV3TrapWithTableOnlyInvalidEngineID checks that a listener with no
+// local engine ID drops a trap whose engine ID is too short, instead of
+// sending a usmStatsUnknownEngineIDs Report with an empty engine ID.
+func TestListenV3TrapWithTableOnlyInvalidEngineID(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	usmMap := NewSnmpV3SecurityParametersTable(logger)
+	require.NoError(t, usmMap.Add("noauthuser", &UsmSecurityParameters{
+		UserName:               "noauthuser",
+		AuthenticationProtocol: NoAuth,
+		PrivacyProtocol:        NoPriv,
+		Logger:                 logger,
+	}))
+
+	received := make(chan *SnmpPacket, 1)
+	tl := NewTrapListener()
+	defer tl.Close()
+	tl.OnNewTrap = func(p *SnmpPacket, _ *net.UDPAddr) { received <- p }
+	tl.Params = newTestGoSNMP()
+	tl.Params.Version = Version3
+	tl.Params.SecurityModel = UserSecurityModel
+	tl.Params.SetTrapSecurityParametersTable(usmMap)
+
+	trap := &SnmpPacket{
+		Version:       Version3,
+		MsgFlags:      NoAuthNoPriv,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:              "noauthuser",
+			AuthoritativeEngineID: "abc", // shorter than the 5 octet minimum
+			Logger:                logger,
+		},
+		PDUType:   SNMPv2Trap,
+		MsgID:     1,
+		RequestID: 1,
+		Variables: []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}},
+		Logger:    logger,
+	}
+	buf, err := trap.MarshalMsg()
+	require.NoError(t, err)
+
+	host, port := listenOnEphemeral(t, tl)
+	conn, err := net.Dial("udp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Write(buf)
+	require.NoError(t, err)
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(500*time.Millisecond)))
+	n, err := conn.Read(make([]byte, 1500))
+	require.Error(t, err, "listener sent a %d byte reply", n)
+	select {
+	case <-received:
+		t.Fatal("trap with an invalid engine ID was delivered")
+	default:
+	}
+}
+
+// TestListenV3DiscoveryRequestNotDelivered checks that an unauthenticated
+// engine discovery request never reaches OnNewTrap, over UDP when there is
+// no local engine ID to report, or over TCP where no Report is sent.
+func TestListenV3DiscoveryRequestNotDelivered(t *testing.T) {
+	probe := (&UsmSecurityParameters{Logger: NewLogger(log.New(io.Discard, "", 0))}).discoveryRequired()
+	probe.MsgID = 1
+	probe.RequestID = 1
+	buf, err := probe.MarshalMsg()
+	require.NoError(t, err)
+
+	for _, transport := range []string{"udp", "tcp"} {
+		t.Run(transport, func(t *testing.T) {
+			received := make(chan *SnmpPacket, 1)
+			tl := NewTrapListener()
+			defer tl.Close()
+			tl.OnNewTrap = func(p *SnmpPacket, _ *net.UDPAddr) { received <- p }
+			tl.Params = newTestGoSNMPv3(AuthNoPriv, secParamsList[0].Copy()) // myuser, MD5, no engine ID
+
+			var target string
+			if transport == "udp" {
+				host, port := listenOnEphemeral(t, tl)
+				target = net.JoinHostPort(host, strconv.Itoa(int(port)))
+			} else {
+				l, err := net.Listen("tcp", net.JoinHostPort(trapTestAddress, "0"))
+				require.NoError(t, err)
+				target = l.Addr().String()
+				l.Close()
+				go func() { _ = tl.Listen("tcp://" + target) }()
+				<-tl.Listening()
+			}
+
+			conn, err := net.Dial(transport, target)
+			require.NoError(t, err)
+			defer conn.Close()
+			_, err = conn.Write(buf)
+			require.NoError(t, err)
+
+			select {
+			case p := <-received:
+				t.Fatalf("engine discovery request delivered to OnNewTrap: %v", p.PDUType)
+			case <-time.After(500 * time.Millisecond):
+			}
+		})
+	}
 }
 
 // test sending a basic SNMP inform and receiving the response
@@ -1202,4 +1580,48 @@ func TestSendV3EngineIdDiscovery(t *testing.T) {
 
 	require.Equal(t, result.SecurityParameters.(*UsmSecurityParameters).AuthoritativeEngineID, authorativeEngineID, "invalid authoritativeEngineID")
 	require.Equal(t, result.PDUType, Report, "invalid received PDUType")
+}
+
+// TestUnmarshalTrapRejectsDiscoveryShapedNotification checks that only a
+// genuine Engine Discovery request (a reportable GetRequest) skips
+// authentication: an unauthenticated notification with an empty user name
+// and engine ID must not be accepted by an authNoPriv receiver.
+func TestUnmarshalTrapRejectsDiscoveryShapedNotification(t *testing.T) {
+	tests := []struct {
+		name     string
+		msgFlags SnmpV3MsgFlags
+		pduType  PDUType
+		vars     []SnmpPDU
+		wantErr  string
+	}{
+		{"trap", NoAuthNoPriv, SNMPv2Trap, nil, "not authentic"},
+		{"reportable inform", Reportable | NoAuthNoPriv, InformRequest, nil, "not an engine discovery request"},
+		{"get not reportable", NoAuthNoPriv, GetRequest, nil, "not authentic"},
+		{"reportable get with varbinds", Reportable | NoAuthNoPriv, GetRequest,
+			[]SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}}, "not an engine discovery request"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewLogger(log.New(io.Discard, "", 0))
+			gs := newTestGoSNMPv3(AuthNoPriv, secParamsList[0].Copy()) // myuser, MD5
+
+			forged := &SnmpPacket{
+				Version:            Version3,
+				MsgFlags:           tt.msgFlags,
+				SecurityModel:      UserSecurityModel,
+				SecurityParameters: &UsmSecurityParameters{Logger: logger},
+				PDUType:            tt.pduType,
+				MsgID:              1,
+				RequestID:          1,
+				Variables:          tt.vars,
+				Logger:             logger,
+			}
+			buf, err := forged.MarshalMsg()
+			require.NoError(t, err)
+
+			res, err := gs.UnmarshalTrap(buf, false)
+			require.ErrorContains(t, err, tt.wantErr)
+			require.Nil(t, res)
+		})
+	}
 }

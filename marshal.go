@@ -326,11 +326,16 @@ sendRetry:
 				break
 			}
 
+			unauthenticated := false
 			if x.Version == Version3 {
 				useResponseSecurityParameters := false
 				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok {
 					if usp.AuthoritativeEngineID == "" {
 						useResponseSecurityParameters = true
+						// Until the engine ID is known, testAuthentication trusts
+						// the response's own msgFlags, so only an engine discovery
+						// Report may arrive below the configured security level.
+						unauthenticated = usp.checkAuthenticated(result.MsgFlags) != nil
 					}
 				}
 				err = x.testAuthentication(resp, result, useResponseSecurityParameters)
@@ -349,6 +354,10 @@ sendRetry:
 			if err != nil {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: %s", err)
 				break
+			}
+			if unauthenticated && result.PDUType != Report {
+				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
+				continue
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: Empty result")
