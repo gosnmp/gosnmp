@@ -480,7 +480,8 @@ func (t *TrapListener) Listen(addr string) error {
 	}
 }
 
-// Default trap handler
+// Default trap handler, a debug fallback when OnNewTrap is unset. It logs the
+// whole packet, including any community string, so don't rely on it in production.
 func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 	t.Params.Logger.Printf("got trapdata from %+v: %+v\n", u, s)
 }
