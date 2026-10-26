@@ -8,10 +8,5 @@ sed -i -e 's/.*trapsink.*//' /etc/snmp/snmpd.conf
 sed -i -e 's/.*master\s*agentx//' /etc/snmp/snmpd.conf
 snmpd
 
-go test -v -tags helper
-go test -v -tags marshal
-go test -v -tags misc
-go test -v -tags api
-go test -v -tags end2end
-go test -v -tags trap
-go test -v -tags all -race
+make test
+make test-race
