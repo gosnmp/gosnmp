@@ -4,18 +4,18 @@ gosnmp is a Go SNMP library (v1, v2c, v3/USM): client, trap listener and trap se
 
 ## Testing
 
-Most tests sit behind build tags, so a plain `go test ./...` runs only a few USM tests. See also "Running the Tests" in the README.
+Most tests sit behind build tags, so use the Makefile rather than a plain `go test ./...`. See also "Running the Tests" in the README.
 
-- Offline: `go test -tags api,helper,marshal,misc,trap,walk .`
-- As CI runs it on amd64: `go test -tags all -race .`. Most `end2end` tests skip unless `GOSNMP_TARGET` and `GOSNMP_PORT` point at an SNMP agent.
-- `netsnmp/` is a separate module: `make -C netsnmp test` replays recorded results; `make -C netsnmp test_netsnmp` needs `libsnmp-dev`.
+- `make test`: each tag group in turn, plus the `netsnmp/` module. Most `end2end` tests skip unless `GOSNMP_TARGET` and `GOSNMP_PORT` point at an SNMP agent.
+- `make test-race`: `-tags all -race`, as CI runs it on amd64; this is the only target that runs the `walk` tests.
+- `make net-snmp-test`: tests against live net-snmp; needs `libsnmp-dev`.
 - Tag a new test file `//go:build all || <area>`.
-- On macOS, `TestUnconnectedSocket_success` (and, with `-tags all`, `TestGenericFailureConnectionRefused`) fail because of platform socket behaviour; CI runs on Linux.
+- On macOS, `TestUnconnectedSocket_success` and `TestGenericFailureConnectionRefused` fail because of platform socket behaviour; CI runs on Linux.
 
 ## Rules
 
 - Don't rename, remove or change the signature of exported identifiers, struct fields or the `Handler` interface. Code must build with the `go` version in `go.mod` and on 386.
-- Don't hand-edit generated files. `go generate` regenerates the stringer `*_string.go` files (CI fails on a diff). After changing `Handler`, regenerate `mocks/gosnmp_mock.go` with `mockgen --source interface.go --destination mocks/gosnmp_mock.go --package mocks`.
+- Don't hand-edit generated files. `make generate` installs the tools and regenerates the stringer `*_string.go` files (CI fails on a diff). After changing `Handler`, regenerate `mocks/gosnmp_mock.go` with `mockgen --source interface.go --destination mocks/gosnmp_mock.go --package mocks`.
 - `marshal.go`, `helper.go`, `v3*.go` and `trap.go` parse untrusted network input: bounds-check every length and never panic on a malformed packet.
 - Never log or return passphrases, keys or community strings. `UsmSecurityParameters.SafeString()` omits passphrases and keys; `Description()` includes them, and `SnmpPacket.SafeString()` includes the community.
 - Sign off commits (`git commit -s`); the DCO check fails without it.
