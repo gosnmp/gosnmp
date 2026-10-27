@@ -283,15 +283,17 @@ func (t *TrapListener) listenUDP(addr string) error {
 				continue
 			}
 			if trap.Version == Version3 && trap.SecurityModel == UserSecurityModel && t.Params.SecurityModel == UserSecurityModel {
-				securityParams, ok := t.Params.SecurityParameters.(*UsmSecurityParameters)
-				if !ok {
-					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
-				}
 				packetSecurityParams, ok := trap.SecurityParameters.(*UsmSecurityParameters)
 				if !ok {
 					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
+					continue
 				}
-				snmpEngineID := securityParams.AuthoritativeEngineID
+				// Params.SecurityParameters may be nil when only a trap security
+				// parameters table is configured, leaving no local engine ID.
+				var snmpEngineID string
+				if securityParams, ok := t.Params.SecurityParameters.(*UsmSecurityParameters); ok && securityParams != nil {
+					snmpEngineID = securityParams.AuthoritativeEngineID
+				}
 				msgAuthoritativeEngineID := packetSecurityParams.AuthoritativeEngineID
 				if msgAuthoritativeEngineID != snmpEngineID {
 					if len(msgAuthoritativeEngineID) < 5 || len(msgAuthoritativeEngineID) > 32 {
@@ -300,6 +302,11 @@ func (t *TrapListener) listenUDP(addr string) error {
 						// According to RFC3414 3.2.3b: stop processing and report
 						// the listener authoritative engine ID
 						atomic.AddUint32(&t.usmStatsUnknownEngineIDsCount, 1)
+						if snmpEngineID == "" {
+							// No local engine ID to report, so just drop the message.
+							t.Params.Logger.Printf("TrapListener: invalid authoritative engine ID length %d\n", len(msgAuthoritativeEngineID))
+							continue
+						}
 						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
 						if err != nil {
 							t.Params.Logger.Printf("TrapListener: %s\n", err)
@@ -308,6 +315,11 @@ func (t *TrapListener) listenUDP(addr string) error {
 					}
 					// RFC3414 3.2.3a: Continue processing
 				}
+			}
+			if isEngineDiscoveryRequest(trap) {
+				// Only answerable with a local engine ID, which is handled above.
+				t.Params.Logger.Printf("TrapListener: dropping engine discovery request with no local engine ID\n")
+				continue
 			}
 			// Here we assume that t.OnNewTrap will not alter the contents
 			// of the PDU (per documentation, because Go does not have
@@ -379,6 +391,11 @@ func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 	traps, err := t.Params.UnmarshalTrap(msg, false)
 	if err != nil {
 		t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
+		return
+	}
+	if isEngineDiscoveryRequest(traps) {
+		t.Params.Logger.Printf("TrapListener: dropping engine discovery request received over TCP\n")
+		conn.Close()
 		return
 	}
 	// TODO: lying for backward compatibility reason - create UDP Address ... not nice
@@ -463,7 +480,8 @@ func (t *TrapListener) Listen(addr string) error {
 	}
 }
 
-// Default trap handler
+// Default trap handler, a debug fallback when OnNewTrap is unset. It logs the
+// whole packet, including any community string, so don't rely on it in production.
 func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
 	t.Params.Logger.Printf("got trapdata from %+v: %+v\n", u, s)
 }
@@ -478,13 +496,14 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 	}
 	// If there are multiple users configured and the SNMP trap is v3, see which user has valid credentials
 	// by iterating through the list matching the identifier and seeing which credentials are authentic / can be used to decrypt
-	if x.TrapSecurityParametersTable != nil && version == Version3 {
+	trapSecParamsTable := x.GetTrapSecurityParametersTable()
+	if trapSecParamsTable != nil && version == Version3 {
 		identifier, err := x.getTrapIdentifier(trap)
 		if err != nil {
 			x.Logger.Printf("UnmarshalTrap V3 get trap identifier: %s\n", err)
 			return nil, err
 		}
-		secParamsList, err := x.TrapSecurityParametersTable.Get(identifier)
+		secParamsList, err := trapSecParamsTable.Get(identifier)
 		if err != nil {
 			x.Logger.Printf("UnmarshalTrap V3 get security parameters from table: %s\n", err)
 			return nil, err
@@ -516,12 +535,19 @@ func (x *GoSNMP) getTrapIdentifier(trap []byte) (string, error) {
 func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, useResponseSecurityParameters bool) (*SnmpPacket, error) {
 	result := new(SnmpPacket)
 
+	// unmarshalHeader overwrites the copied user name with the packet's, so
+	// keep the configured one to check against.
+	var configuredUser string
+	checkUser := false
 	if x.SecurityParameters != nil && sp == nil {
 		err := x.SecurityParameters.InitSecurityKeys()
 		if err != nil {
 			return nil, err
 		}
 		result.SecurityParameters = x.SecurityParameters.Copy()
+		if usm, ok := result.SecurityParameters.(*UsmSecurityParameters); ok {
+			configuredUser, checkUser = usm.UserName, true
+		}
 	} else {
 		result.SecurityParameters = sp
 	}
@@ -532,8 +558,34 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 		return nil, err
 	}
 
+	// With useResponseSecurityParameters, isAuthentic compares the packet's
+	// user name with itself, so check it against the configured user here.
+	if usm, ok := result.SecurityParameters.(*UsmSecurityParameters); ok && checkUser &&
+		useResponseSecurityParameters && result.Version == Version3 && result.SecurityModel == UserSecurityModel &&
+		!isDiscoveryProbe(result) && usm.UserName != configuredUser {
+		err = fmt.Errorf("unknown user name %q", usm.UserName)
+		x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+		return nil, err
+	}
+
+	// testAuthentication trusts the packet's own msgFlags when
+	// useResponseSecurityParameters is set, so check them against the
+	// credentials before authenticating or decrypting anything. Engine
+	// discovery requests are checked once the payload is parsed.
+	if usm, ok := result.SecurityParameters.(*UsmSecurityParameters); ok && useResponseSecurityParameters &&
+		result.Version == Version3 && result.SecurityModel == UserSecurityModel && !isDiscoveryProbe(result) {
+		if err = usm.checkAuthenticated(result.MsgFlags); err != nil {
+			x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+			return nil, err
+		}
+	}
+
+	// Engine Discovery requests (RFC3414 section 4) are accepted without
+	// authentication so that the listener can report its engine ID.
+	discoveryProbe := false
 	if result.Version == Version3 {
-		if result.SecurityModel == UserSecurityModel {
+		discoveryProbe = result.SecurityModel == UserSecurityModel && isDiscoveryProbe(result)
+		if result.SecurityModel == UserSecurityModel && !discoveryProbe {
 			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
 				x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
@@ -551,6 +603,9 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 	if err != nil {
 		x.Logger.Printf("UnmarshalTrap: %s\n", err)
 		return nil, err
+	}
+	if discoveryProbe && (result.PDUType != GetRequest || len(result.Variables) > 0) {
+		return nil, errors.New("UnmarshalTrap: unauthenticated message is not an engine discovery request")
 	}
 	return result, nil
 }

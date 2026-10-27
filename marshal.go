@@ -120,6 +120,7 @@ const (
 var (
 	ErrDecryption            = errors.New("decryption error")
 	ErrInvalidMsgs           = errors.New("invalid messages")
+	ErrMaxRetriesExceeded    = errors.New("max retries exceeded")
 	ErrNotInTimeWindow       = errors.New("not in time window")
 	ErrUnknownEngineID       = errors.New("unknown engine id")
 	ErrUnknownPDUHandlers    = errors.New("unknown pdu handlers")
@@ -203,10 +204,10 @@ sendRetry:
 			}
 			if retries > x.Retries {
 				if err == nil {
-					err = fmt.Errorf("max retries (%d) exceeded", x.Retries)
+					err = fmt.Errorf("%w: %d retries", ErrMaxRetriesExceeded, x.Retries)
 				}
 				if strings.Contains(err.Error(), "timeout") {
-					err = fmt.Errorf("request timeout (after %d retries)", retries-1)
+					err = fmt.Errorf("request timeout (after %d retries): %w", retries-1, ErrMaxRetriesExceeded)
 				}
 				break
 			}
@@ -325,11 +326,16 @@ sendRetry:
 				break
 			}
 
+			unauthenticated := false
 			if x.Version == Version3 {
 				useResponseSecurityParameters := false
 				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok {
 					if usp.AuthoritativeEngineID == "" {
 						useResponseSecurityParameters = true
+						// Until the engine ID is known, testAuthentication trusts
+						// the response's own msgFlags, so only an engine discovery
+						// Report may arrive below the configured security level.
+						unauthenticated = usp.checkAuthenticated(result.MsgFlags) != nil
 					}
 				}
 				err = x.testAuthentication(resp, result, useResponseSecurityParameters)
@@ -348,6 +354,10 @@ sendRetry:
 			if err != nil {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: %s", err)
 				break
+			}
+			if unauthenticated && result.PDUType != Report {
+				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
+				continue
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: Empty result")
@@ -1320,6 +1330,10 @@ func (x *GoSNMP) unmarshalVBL(packet []byte, response *SnmpPacket) error {
 
 // receive response from network and read into a byte array
 func (x *GoSNMP) receive() ([]byte, error) {
+	if _, ok := x.Conn.(net.PacketConn); !ok && strings.HasPrefix(x.Transport, tcp) {
+		return x.receiveStream()
+	}
+
 	var n int
 	var err error
 	// If we are using UDP and unconnected socket, read the packet and
@@ -1343,6 +1357,56 @@ func (x *GoSNMP) receive() ([]byte, error) {
 	resp := make([]byte, n)
 	copy(resp, x.rxBuf[:n])
 	return resp, nil
+}
+
+// receiveStream reads exactly one SNMP message from a stream transport (TCP).
+//
+// Unlike UDP, TCP does not preserve message boundaries: a single SNMP message
+// may arrive split over several segments, and several messages may arrive in
+// one segment. As described in RFC 3430, the message framing is therefore
+// taken from the BER length of the outer SEQUENCE: the header is read first,
+// then exactly the announced number of bytes, so no bytes of a following
+// message are consumed.
+func (x *GoSNMP) receiveStream() ([]byte, error) {
+	buf := x.rxBuf[:]
+
+	// Tag and first length octet. A clean EOF here is returned as io.EOF
+	// so that the caller can reconnect.
+	if _, err := io.ReadFull(x.Conn, buf[:2]); err != nil {
+		if err == io.EOF {
+			return nil, err
+		}
+		return nil, fmt.Errorf("error reading from socket: %w", err)
+	}
+	if PDUType(buf[0]) != Sequence {
+		return nil, fmt.Errorf("invalid packet header")
+	}
+
+	headerLen := 2
+	if buf[1] > 0x80 {
+		numOctets := int(buf[1] & 0x7f)
+		if numOctets > 4 {
+			return nil, ErrInvalidPacketLength
+		}
+		headerLen += numOctets
+		if _, err := io.ReadFull(x.Conn, buf[2:headerLen]); err != nil {
+			return nil, fmt.Errorf("error reading from socket: %w", err)
+		}
+	}
+
+	length, _, err := parseLength(buf[:headerLen])
+	if err != nil {
+		return nil, err
+	}
+	if length > rxBufSize {
+		return nil, fmt.Errorf("response buffer too small")
+	}
+
+	if _, err := io.ReadFull(x.Conn, buf[headerLen:length]); err != nil {
+		return nil, fmt.Errorf("error reading from socket: %w", err)
+	}
+
+	return buf[:length], nil
 }
 
 func shrinkAndWriteUint(buf io.Writer, in int) error {

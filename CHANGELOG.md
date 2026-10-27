@@ -5,6 +5,18 @@
 * [ENHANCEMENT]
 * [BUGFIX]
 
+## v1.47.0
+
+* [CHANGE] v3 traps: a user in a trap security parameters table that requires authentication no longer accepts unauthenticated traps GHSA-w96x-5v55-24xx
+* [CHANGE] v3 traps: only a reportable GetRequest with no varbinds is treated as an engine discovery request, and discovery requests are never passed to OnNewTrap GHSA-w96x-5v55-24xx
+* [CHANGE] UnmarshalTrap(buf, true) with a single SecurityParameters rejects traps whose user name differs from the configured one GHSA-w96x-5v55-24xx
+* [CHANGE] v3 client: engine discovery fails if the REPORT's engine ID is empty or not 5-32 bytes GHSA-w96x-5v55-24xx
+* [BUGFIX] Security: fix SNMPv3 authentication bypasses in the trap listener and client, and remote panics on malformed msgAuthenticationParameters or a table-only UDP trap listener GHSA-w96x-5v55-24xx
+
+## v1.46.0
+
+* [FEATURE] Add ErrMaxRetriesExceeded sentinel error for errors.Is() support #523
+
 ## v1.38.0
 
 * [CHANGE] Refactor netsnmp playback function to use an io.Reader #459

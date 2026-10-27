@@ -386,6 +386,19 @@ func (sp *UsmSecurityParameters) validate(flags SnmpV3MsgFlags) error {
 	return nil
 }
 
+// checkAuthenticated returns an error if sp has an authentication protocol
+// but flags do not mark the message as authenticated, so that an incoming
+// message cannot skip HMAC verification by clearing its own msgFlags.
+// Authenticated messages without privacy are still allowed for users that
+// have a privacy protocol: USM does not treat the configured protocols as a
+// minimum security level.
+func (sp *UsmSecurityParameters) checkAuthenticated(flags SnmpV3MsgFlags) error {
+	if sp.AuthenticationProtocol > NoAuth && flags&AuthNoPriv == 0 {
+		return fmt.Errorf("message is not authenticated but user %q requires authentication", sp.UserName)
+	}
+	return nil
+}
+
 func (sp *UsmSecurityParameters) init(log Logger) error {
 	var err error
 
@@ -887,6 +900,9 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 
 	switch sp.PrivacyProtocol {
 	case AES, AES192, AES256, AES192C, AES256C:
+		if len(sp.PrivacyParameters) != 8 {
+			return nil, errors.New("error decrypting ScopedPDU: invalid AES privacy parameters length")
+		}
 		var iv [16]byte
 		binary.BigEndian.PutUint32(iv[:], sp.AuthoritativeEngineBoots)
 		binary.BigEndian.PutUint32(iv[4:], sp.AuthoritativeEngineTime)
@@ -903,6 +919,9 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 		copy(packet[cursor:], plaintext)
 		packet = packet[:cursor+len(plaintext)]
 	case DES:
+		if len(sp.PrivacyParameters) != 8 {
+			return nil, errors.New("error decrypting ScopedPDU: invalid DES privacy parameters length")
+		}
 		if len(packet[cursorTmp:])%des.BlockSize != 0 {
 			return nil, errors.New("error decrypting ScopedPDU: not multiple of des block size")
 		}
@@ -1069,12 +1088,12 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		if sp.AuthenticationProtocol <= NoAuth {
 			return 0, errors.New("error parsing SNMPv3 User Security Model: authentication parameters are not configured to parse incoming authenticated message")
 		}
-		// An authenticated message must carry an msgAuthenticationParameters
-		// field whose length matches the digest length of the configured
-		// protocol. Without this check the blanking copy below indexes past the
-		// field (and past the packet) when a peer sends a shorter field.
-		if count != len(macVarbinds[sp.AuthenticationProtocol]) {
-			return 0, fmt.Errorf("error parsing SNMPv3 User Security Model: msgAuthenticationParameters length %d does not match %s digest length %d", count-2, sp.AuthenticationProtocol, len(macVarbinds[sp.AuthenticationProtocol])-2)
+		// The MAC is blanked in place below, assuming a two-byte header, so
+		// the field must be exactly the size the configured protocol produces
+		// and use a short-form length.
+		macLen := len(macVarbinds[sp.AuthenticationProtocol])
+		if count != macLen || len(sp.AuthenticationParameters) != macLen-2 {
+			return 0, fmt.Errorf("error parsing SNMPv3 User Security Model: msgAuthenticationParameters length %d does not match %s", count, sp.AuthenticationProtocol)
 		}
 		copy(packet[cursor+2:cursor+len(macVarbinds[sp.AuthenticationProtocol])], macVarbinds[sp.AuthenticationProtocol][2:])
 	}
