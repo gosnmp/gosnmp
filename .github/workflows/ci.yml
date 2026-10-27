@@ -69,8 +69,9 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: 1.27.x
+      - run: sudo apt-get update
       - run: sudo apt-get -y install libsnmp-dev
-      - run: make -C netsnmp test_netsnmp
+      - run: make net-snmp-test
 
   test:
     name: Test
@@ -107,11 +108,6 @@ jobs:
       - run: sudo ./snmp_users.sh
       - run: sudo sed -i -e 's/^agentaddress.*$/agentaddress 127.0.0.1/' /etc/snmp/snmpd.conf
       - run: sudo service snmpd restart
-      - run: go test -v -tags helper
-      - run: go test -v -tags marshal
-      - run: go test -v -tags misc
-      - run: go test -v -tags api
-      - run: go test -v -tags end2end
-      - run: make -C netsnmp test
+      - run: make test
       - if: matrix.go_arch == 'amd64'
-        run: go test -v -tags all -race
+        run: make test-race

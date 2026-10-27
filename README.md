@@ -231,8 +231,7 @@ export GOSNMP_TARGET_IPV4=1.2.3.4
 export GOSNMP_PORT_IPV4=161
 export GOSNMP_TARGET_IPV6='0:0:0:0:0:ffff:102:304'
 export GOSNMP_PORT_IPV6=161
-go test -v -tags all        # for example
-go test -v -tags helper     # for example
+make test test-race
 ```
 
 Tests are grouped as follows:
