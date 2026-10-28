@@ -558,6 +558,14 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 		return nil, err
 	}
 
+	// USM is the only security model implemented, and the checks below only
+	// authenticate USM messages, so drop anything else (RFC3412 7.2 step 4).
+	if result.Version == Version3 && result.SecurityModel != UserSecurityModel {
+		err = fmt.Errorf("unsupported security model %d", result.SecurityModel)
+		x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+		return nil, err
+	}
+
 	// With useResponseSecurityParameters, isAuthentic compares the packet's
 	// user name with itself, so check it against the configured user here.
 	if usm, ok := result.SecurityParameters.(*UsmSecurityParameters); ok && checkUser &&

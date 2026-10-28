@@ -387,6 +387,37 @@ func TestUnmarshalTrapRejectsDowngrade(t *testing.T) {
 	require.Nil(t, res)
 }
 
+// TestUnmarshalTrapRejectsUnknownSecurityModel checks that a v3 trap cannot
+// skip authentication by claiming a security model other than USM.
+func TestUnmarshalTrapRejectsUnknownSecurityModel(t *testing.T) {
+	const msgFlagsOffset = 21
+	const msgSecurityModelOffset = 24
+	forged := func() []byte {
+		buf := genericV3Trap()
+		require.Equal(t, byte(AuthNoPriv), buf[msgFlagsOffset])
+		require.Equal(t, byte(UserSecurityModel), buf[msgSecurityModelOffset])
+		buf[msgFlagsOffset] = byte(NoAuthNoPriv)
+		buf[msgSecurityModelOffset] = 1
+		return buf
+	}
+
+	for _, useResponse := range []bool{false, true} {
+		gs := newTestGoSNMPv3(AuthNoPriv, secParamsList[0].Copy()) // myuser, MD5
+		res, err := gs.UnmarshalTrap(forged(), useResponse)
+		require.ErrorContains(t, err, "unsupported security model", "useResponseSecurityParameters %v", useResponse)
+		require.Nil(t, res)
+	}
+
+	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
+	require.NoError(t, usmMap.Add(secParamsList[0].UserName, secParamsList[0]))
+	gs := newTestGoSNMP()
+	gs.SetTrapSecurityParametersTable(usmMap)
+	gs.Version = Version3
+	res, err := gs.UnmarshalTrap(forged(), true)
+	require.ErrorContains(t, err, "unsupported security model")
+	require.Nil(t, res)
+}
+
 // TestUnmarshalTrapDiscoveryRequestUseResponse checks that the security
 // level check does not reject an engine discovery request when the packet's
 // own msgFlags are trusted.
