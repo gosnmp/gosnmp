@@ -7,6 +7,7 @@
 package gosnmp
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -504,6 +505,61 @@ func TestUnmarshalTrapNoAuthUserInTable(t *testing.T) {
 	res, err := gs.UnmarshalTrap(buf, true)
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), res.RequestID)
+}
+
+// TestUnmarshalTrapLocalizedKeyOnlyNewEngineID checks that a user configured
+// with a localized key and no passphrase does not accept a trap from another
+// engine ID signed with an empty key. The key cannot be relocalized without
+// the passphrase, so the trap must be rejected.
+func TestUnmarshalTrapLocalizedKeyOnlyNewEngineID(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	configuredEngineID := "\x80\x00\x1f\x88\x04receiver"
+	secretKey, err := genlocalkey(MD5, "mypassword", configuredEngineID)
+	require.NoError(t, err)
+
+	gs := newTestGoSNMP()
+	gs.Version = Version3
+	gs.SecurityParameters = &UsmSecurityParameters{
+		UserName:               "myuser",
+		AuthenticationProtocol: MD5,
+		AuthoritativeEngineID:  configuredEngineID,
+		SecretKey:              secretKey,
+		Logger:                 logger,
+	}
+
+	// Sign with an arbitrary key, then replace the MAC with one computed
+	// using an empty key.
+	trap := &SnmpPacket{
+		Version:       Version3,
+		MsgFlags:      AuthNoPriv,
+		SecurityModel: UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{
+			UserName:               "myuser",
+			AuthenticationProtocol: MD5,
+			AuthoritativeEngineID:  "\x80\x00\x1f\x88\x04attacker",
+			SecretKey:              []byte("not the real key"),
+			Logger:                 logger,
+		},
+		PDUType:   SNMPv2Trap,
+		MsgID:     1,
+		RequestID: 1,
+		Variables: []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}},
+		Logger:    logger,
+	}
+	buf, err := trap.MarshalMsg()
+	require.NoError(t, err)
+	field := []byte("\x04\x06myuser\x04\x0c")
+	idx := bytes.Index(buf, field)
+	require.Positive(t, idx)
+	idx += len(field)
+	copy(buf[idx:], macVarbinds[MD5][2:])
+	forged, err := digestRFC3414(MD5, buf, []byte{})
+	require.NoError(t, err)
+	copy(buf[idx:], forged[:len(macVarbinds[MD5])-2])
+
+	res, err := gs.UnmarshalTrap(buf, true)
+	require.ErrorContains(t, err, "password is empty")
+	require.Nil(t, res)
 }
 
 func genericV3Trap() []byte {
