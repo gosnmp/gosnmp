@@ -808,6 +808,60 @@ func TestListenV3DiscoveryRequestNotDelivered(t *testing.T) {
 	}
 }
 
+// TestHandleTCPRequestFraming checks that the TCP trap listener reads one
+// trap by its BER length, however the stream splits or joins it.
+func TestHandleTCPRequestFraming(t *testing.T) {
+	marshalTrap := func(payload string) []byte {
+		pkt := newTestGoSNMP().mkSnmpPacket(SNMPv2Trap, []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: payload}}, 0, 0)
+		b, err := pkt.marshalMsg()
+		require.NoError(t, err)
+		return b
+	}
+	largePayload := strings.Repeat("x", 2000)
+	small, large := marshalTrap(trapTestPayload), marshalTrap(largePayload)
+
+	for _, tc := range []struct {
+		name   string
+		writes [][]byte
+		want   string // payload of the delivered trap, "" if none
+	}{
+		{"one write", [][]byte{small}, trapTestPayload},
+		{"split inside header", [][]byte{small[:1], small[1:20], small[20:]}, trapTestPayload},
+		{"long form split at MTU", [][]byte{large[:3], large[3:1448], large[1448:]}, largePayload},
+		{"followed by another trap", [][]byte{append(append([]byte{}, small...), large...)}, trapTestPayload},
+		{"length beyond buffer", [][]byte{{0x30, 0x82, 0x10, 0x00}}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			received := make(chan *SnmpPacket, 1)
+			tl := NewTrapListener()
+			tl.Params = newTestGoSNMP()
+			tl.OnNewTrap = func(p *SnmpPacket, _ *net.UDPAddr) { received <- p }
+
+			client, server := net.Pipe()
+			defer client.Close()
+			go func() {
+				for _, w := range tc.writes {
+					if _, err := client.Write(w); err != nil {
+						return
+					}
+				}
+			}()
+			tl.handleTCPRequest(server)
+
+			select {
+			case p := <-received:
+				require.NotEmpty(t, tc.want, "unexpected trap delivered")
+				require.Len(t, p.Variables, 1)
+				require.Equal(t, tc.want, string(p.Variables[0].Value.([]byte)))
+			default:
+				if tc.want != "" {
+					t.Fatal("trap was not delivered")
+				}
+			}
+		})
+	}
+}
+
 // test sending a basic SNMP inform and receiving the response
 func TestSendInformBasic(t *testing.T) {
 	done := make(chan error, 1)
