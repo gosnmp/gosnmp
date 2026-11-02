@@ -1734,6 +1734,100 @@ func TestSendOneRequest_dups(t *testing.T) {
 	}
 }
 
+// v2cReply is one GetResponse sent by sendOneRequestV2c's server.
+type v2cReply struct {
+	requestID uint32
+	value     int
+}
+
+// sendOneRequestV2c sends one v2c request, with the request-id counter set to
+// startRequestID, to a server that answers with replies(request-id received).
+func sendOneRequestV2c(t *testing.T, startRequestID uint32, replies func(requestID uint32) []v2cReply) *SnmpPacket {
+	t.Helper()
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("udp4 error listening: %s", err)
+	}
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version:   Version2c,
+		Community: "public",
+		Target:    srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:      uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout:   time.Millisecond * 500,
+		Retries:   0,
+	}
+	if err := x.Connect(); err != nil {
+		t.Fatalf("error connecting: %s", err)
+	}
+	defer x.Conn.Close()
+	x.SetRequestID(startRequestID) // after Connect, which seeds the counter
+
+	go func() {
+		buf := make([]byte, 256)
+		n, addr, err := srvr.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		var reqPkt SnmpPacket
+		cursor, err := x.unmarshalHeader(buf[:n], &reqPkt)
+		if err != nil {
+			t.Errorf("error: %s", err)
+			return
+		}
+		if err = x.unmarshalPayload(buf[:n], cursor, &reqPkt); err != nil {
+			t.Errorf("error: %s", err)
+			return
+		}
+		for _, r := range replies(reqPkt.RequestID) {
+			rspPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{{Name: ".1.2", Type: Integer, Value: r.value}}, 0, 0)
+			rspPkt.RequestID = r.requestID
+			outBuf, err := rspPkt.marshalMsg()
+			if err != nil {
+				t.Errorf("ERR: %s", err)
+				return
+			}
+			if _, err := srvr.WriteTo(outBuf, addr); err != nil {
+				t.Errorf("ERR: %s", err)
+				return
+			}
+		}
+	}()
+
+	// This is not actually a GetResponse, but we need something our test server can unmarshal.
+	reqPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{{Name: ".1.2", Type: Null}}, 0, 0)
+	result, err := x.sendOneRequest(reqPkt, true)
+	if err != nil {
+		t.Fatalf("error: %s", err)
+	}
+	if len(result.Variables) != 1 {
+		t.Fatalf("expected 1 variable, got %d", len(result.Variables))
+	}
+	return result
+}
+
+// TestSendOneRequest_ZeroRequestIDResponseDiscarded checks that a v2c
+// GetResponse with request-id 0 is not taken as the reply to a request with a
+// different request-id.
+func TestSendOneRequest_ZeroRequestIDResponseDiscarded(t *testing.T) {
+	result := sendOneRequestV2c(t, 0, func(requestID uint32) []v2cReply {
+		return []v2cReply{{0, 999}, {requestID, 123}}
+	})
+	assert.NotZero(t, result.RequestID)
+	assert.Equal(t, 123, result.Variables[0].Value)
+}
+
+// TestSendOneRequest_ExactZeroRequestIDResponseAccepted checks that a v2c
+// GetResponse echoing request-id 0, sent after the counter wraps, is accepted.
+func TestSendOneRequest_ExactZeroRequestIDResponseAccepted(t *testing.T) {
+	result := sendOneRequestV2c(t, 0x7FFFFFFF, func(requestID uint32) []v2cReply {
+		return []v2cReply{{requestID, 123}}
+	})
+	assert.Zero(t, result.RequestID)
+	assert.Equal(t, 123, result.Variables[0].Value)
+}
+
 func TestSendOneRequest_TCP_EOF_Reconnect(t *testing.T) {
 	listen, err := net.Listen("tcp", "127.0.0.1:0") // dynamic port
 	if err != nil {

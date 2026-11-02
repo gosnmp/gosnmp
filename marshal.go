@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -185,8 +186,10 @@ func (packet *SnmpPacket) SafeString() string {
 // GoSNMP
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
-	allReqIDs := make([]uint32, 0, x.Retries+1)
-	// allMsgIDs := make([]uint32, 0, x.Retries+1) // unused
+	// The identifiers sent on each attempt. A reply must match one attempt's
+	// pair, so a late reply to an earlier attempt is still accepted.
+	type attemptIDs struct{ msgID, requestID uint32 }
+	attempts := make([]attemptIDs, 0, x.Retries+1)
 
 	timeout := x.Timeout
 	withContextDeadline := false
@@ -238,15 +241,12 @@ sendRetry:
 
 		// Request ID is an atomic counter that wraps to 0 at max int32.
 		reqID := (atomic.AddUint32(&x.requestID, 1) & 0x7FFFFFFF)
-		allReqIDs = append(allReqIDs, reqID)
 
 		packetOut.RequestID = reqID
 
+		var msgID uint32 // only SNMPv3 has a msgID
 		if x.Version == Version3 {
-			msgID := (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
-
-			// allMsgIDs = append(allMsgIDs, msgID) // unused
-
+			msgID = (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
 			packetOut.MsgID = msgID
 
 			err = x.initPacket(packetOut)
@@ -254,6 +254,7 @@ sendRetry:
 				break
 			}
 		}
+		attempts = append(attempts, attemptIDs{msgID: msgID, requestID: reqID})
 		if x.Version == Version3 {
 			packetOut.SecurityParameters.Log()
 		}
@@ -324,6 +325,16 @@ sendRetry:
 			if err != nil {
 				x.Logger.Printf("ERROR on unmarshall header: %s", err)
 				break
+			}
+
+			// RFC 3412 7.2 step 10: a Response or REPORT is bound to its request
+			// by msgID. request-id is not enough, as a REPORT may carry 0, so a
+			// late reply to an earlier exchange would otherwise be acted on.
+			if x.Version == Version3 && !slices.ContainsFunc(attempts, func(attempt attemptIDs) bool {
+				return attempt.msgID == result.MsgID
+			}) {
+				x.Logger.Printf("ERROR out of order msgID %d", result.MsgID)
+				continue
 			}
 
 			unauthenticated := false
@@ -406,14 +417,16 @@ sendRetry:
 				}
 			}
 
-			validID := false
-			for _, id := range allReqIDs {
-				if id == result.RequestID {
+			// A v3 REPORT is matched by msgID alone, checked above. Otherwise the
+			// request-id must be exactly one we sent (0 included, as the counter
+			// wraps) and, for v3, sent on the same attempt as the msgID
+			// (RFC 3413 3.1).
+			validID := x.Version == Version3 && result.PDUType == Report
+			for _, attempt := range attempts {
+				if attempt.requestID == result.RequestID && (x.Version != Version3 || attempt.msgID == result.MsgID) {
 					validID = true
+					break
 				}
-			}
-			if result.RequestID == 0 {
-				validID = true
 			}
 			if !validID {
 				x.Logger.Print("ERROR out of order")
