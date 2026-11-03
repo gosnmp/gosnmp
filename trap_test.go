@@ -612,7 +612,6 @@ func snmpV3AuthPrivTrap() []byte {
 
 func makeTestTrapHandler(done chan<- error, version SnmpVersion) func(*SnmpPacket, *net.UDPAddr) {
 	return func(packet *SnmpPacket, addr *net.UDPAddr) {
-		//log.Printf("got trapdata from %s\n", addr.IP)
 		done <- checkTestTrap(packet, version)
 	}
 }
@@ -640,7 +639,6 @@ func checkTestTrap(packet *SnmpPacket, version SnmpVersion) error {
 		switch v.Type {
 		case OctetString:
 			b := v.Value.([]byte)
-			// log.Printf("OID: %s, string: %x\n", v.Name, b)
 
 			// Only one OctetString in the payload, so it must be the expected one
 			if v.Name != trapTestOid {
@@ -650,7 +648,6 @@ func checkTestTrap(packet *SnmpPacket, version SnmpVersion) error {
 				return fmt.Errorf("incorrect trap payload received, expected %s got %x", trapTestPayload, b)
 			}
 		default:
-			// log.Printf("trap: %+v\n", v)
 		}
 	}
 	return nil

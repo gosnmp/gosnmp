@@ -81,7 +81,7 @@ func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 		if e := recover(); e != nil {
 			buf := make([]byte, 8192)
 			runtime.Stack(buf, true)
-			fmt.Printf("[v3::authenticate]recover: %v. Stack=%v\n", e, string(buf))
+			fmt.Printf("[v3::authenticate]recover: %v. Stack=%v", e, string(buf))
 		}
 	}()
 	if packet.Version != Version3 {

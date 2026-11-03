@@ -44,7 +44,7 @@ var (
 // Check makes checking errors easy, so they actually get a minimal check
 func (x *GoSNMP) Check(err error) {
 	if err != nil {
-		x.Logger.Printf("Check: %v\n", err)
+		x.Logger.Printf("Check: %v", err)
 		os.Exit(1)
 	}
 }
@@ -52,7 +52,7 @@ func (x *GoSNMP) Check(err error) {
 // Check makes checking errors easy, so they actually get a minimal check
 func (packet *SnmpPacket) Check(err error) {
 	if err != nil {
-		packet.Logger.Printf("Check: %v\n", err)
+		packet.Logger.Printf("Check: %v", err)
 		os.Exit(1)
 	}
 }
@@ -60,7 +60,7 @@ func (packet *SnmpPacket) Check(err error) {
 // Check makes checking errors easy, so they actually get a minimal check
 func Check(err error) {
 	if err != nil {
-		log.Fatalf("Check: %v\n", err)
+		log.Fatalf("Check: %v", err)
 	}
 }
 
