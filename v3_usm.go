@@ -501,7 +501,7 @@ func cachedPasswordToKey(hash hash.Hash, cacheKey, password string) ([]byte, err
 func hMAC(hash crypto.Hash, cacheKey, password, engineID string) ([]byte, error) {
 	hashed, err := cachedPasswordToKey(hash.New(), cacheKey, password)
 	if err != nil {
-		return []byte{}, nil
+		return []byte{}, err
 	}
 
 	local := hash.New()

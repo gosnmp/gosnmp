@@ -374,6 +374,29 @@ func TestDecryptPacketInvalidPrivacyParameters(t *testing.T) {
 	}
 }
 
+// TestHMACEmptyPassword verifies that hMAC returns an error rather than an
+// empty key when the password is empty, so key localization fails closed
+// instead of producing a zero-length HMAC key.
+func TestHMACEmptyPassword(t *testing.T) {
+	engineID := authorativeEngineID(t)
+
+	for _, proto := range []SnmpV3AuthProtocol{MD5, SHA, SHA224, SHA256, SHA384, SHA512} {
+		t.Run(proto.String(), func(t *testing.T) {
+			t.Run("empty password", func(t *testing.T) {
+				key, err := hMAC(proto.HashType(), cacheKey(proto, ""), "", engineID)
+				require.ErrorContains(t, err, "password is empty")
+				require.Empty(t, key)
+			})
+
+			t.Run("non-empty password", func(t *testing.T) {
+				key, err := hMAC(proto.HashType(), cacheKey(proto, "authkey1"), "authkey1", engineID)
+				require.NoError(t, err)
+				require.Len(t, key, proto.HashType().Size())
+			})
+		})
+	}
+}
+
 func BenchmarkSingleHash(b *testing.B) {
 	SetPwdCache()
 
