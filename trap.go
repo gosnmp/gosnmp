@@ -235,7 +235,7 @@ func (t *TrapListener) SendUDP(packet *SnmpPacket, addr *net.UDPAddr) error {
 
 	// This isn't fatal, but should be logged.
 	if count != len(ob) {
-		t.Params.Logger.Printf("Failed to send all bytes of SnmpPacket!\n")
+		t.Params.Logger.Printf("Failed to send all bytes of SnmpPacket")
 	}
 	return nil
 }
@@ -272,14 +272,14 @@ func (t *TrapListener) listenUDP(addr string) error {
 					// err most likely comes from reading from a closed connection
 					continue
 				}
-				t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
+				t.Params.Logger.Printf("TrapListener: error in read %s", err)
 				continue
 			}
 
 			msg := buf[:rlen]
 			trap, err := t.Params.UnmarshalTrap(msg, false)
 			if err != nil {
-				t.Params.Logger.Printf("TrapListener: error in UnmarshalTrap %s\n", err)
+				t.Params.Logger.Printf("TrapListener: error in UnmarshalTrap %s", err)
 				continue
 			}
 			if trap.Version == Version3 && trap.SecurityModel == UserSecurityModel && t.Params.SecurityModel == UserSecurityModel {
@@ -304,12 +304,12 @@ func (t *TrapListener) listenUDP(addr string) error {
 						atomic.AddUint32(&t.usmStatsUnknownEngineIDsCount, 1)
 						if snmpEngineID == "" {
 							// No local engine ID to report, so just drop the message.
-							t.Params.Logger.Printf("TrapListener: invalid authoritative engine ID length %d\n", len(msgAuthoritativeEngineID))
+							t.Params.Logger.Printf("TrapListener: invalid authoritative engine ID length %d", len(msgAuthoritativeEngineID))
 							continue
 						}
 						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
 						if err != nil {
-							t.Params.Logger.Printf("TrapListener: %s\n", err)
+							t.Params.Logger.Printf("TrapListener: %s", err)
 						}
 						continue
 					}
@@ -318,7 +318,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 			}
 			if isEngineDiscoveryRequest(trap) {
 				// Only answerable with a local engine ID, which is handled above.
-				t.Params.Logger.Printf("TrapListener: dropping engine discovery request with no local engine ID\n")
+				t.Params.Logger.Printf("TrapListener: dropping engine discovery request with no local engine ID")
 				continue
 			}
 			// Here we assume that t.OnNewTrap will not alter the contents
@@ -350,7 +350,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 				// determine), so it's left to future implementations.
 				err := t.SendUDP(trap, remote)
 				if err != nil {
-					t.Params.Logger.Printf("TrapListener: %s\n", err)
+					t.Params.Logger.Printf("TrapListener: %s", err)
 				}
 			}
 		}
@@ -383,17 +383,17 @@ func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 	// Read one message by its BER length, as TCP may split or join messages.
 	msg, err := readStreamMessage(conn, buf)
 	if err != nil {
-		t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
+		t.Params.Logger.Printf("TrapListener: error in read %s", err)
 		return
 	}
 
 	traps, err := t.Params.UnmarshalTrap(msg, false)
 	if err != nil {
-		t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
+		t.Params.Logger.Printf("TrapListener: error in read %s", err)
 		return
 	}
 	if isEngineDiscoveryRequest(traps) {
-		t.Params.Logger.Printf("TrapListener: dropping engine discovery request received over TCP\n")
+		t.Params.Logger.Printf("TrapListener: dropping engine discovery request received over TCP")
 		conn.Close()
 		return
 	}
@@ -482,7 +482,7 @@ func (t *TrapListener) Listen(addr string) error {
 // Default trap handler, a debug fallback when OnNewTrap is unset. It logs the
 // whole packet, including any community string, so don't rely on it in production.
 func (t *TrapListener) debugTrapHandler(s *SnmpPacket, u *net.UDPAddr) {
-	t.Params.Logger.Printf("got trapdata from %+v: %+v\n", u, s)
+	t.Params.Logger.Printf("got trapdata from %+v: %+v", u, s)
 }
 
 // UnmarshalTrap unpacks the SNMP Trap.
@@ -490,7 +490,7 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 	// Get only the version from the header of the trap
 	version, _, err := x.unmarshalVersionFromHeader(trap, new(SnmpPacket))
 	if err != nil {
-		x.Logger.Printf("UnmarshalTrap version unmarshal: %s\n", err)
+		x.Logger.Printf("UnmarshalTrap version unmarshal: %s", err)
 		return nil, err
 	}
 	// If there are multiple users configured and the SNMP trap is v3, see which user has valid credentials
@@ -499,12 +499,12 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 	if trapSecParamsTable != nil && version == Version3 {
 		identifier, err := x.getTrapIdentifier(trap)
 		if err != nil {
-			x.Logger.Printf("UnmarshalTrap V3 get trap identifier: %s\n", err)
+			x.Logger.Printf("UnmarshalTrap V3 get trap identifier: %s", err)
 			return nil, err
 		}
 		secParamsList, err := trapSecParamsTable.Get(identifier)
 		if err != nil {
-			x.Logger.Printf("UnmarshalTrap V3 get security parameters from table: %s\n", err)
+			x.Logger.Printf("UnmarshalTrap V3 get security parameters from table: %s", err)
 			return nil, err
 		}
 		for _, secParams := range secParamsList {
@@ -553,7 +553,7 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 
 	cursor, err := x.unmarshalHeader(trap, result)
 	if err != nil {
-		x.Logger.Printf("UnmarshalTrap: %s\n", err)
+		x.Logger.Printf("UnmarshalTrap: %s", err)
 		return nil, err
 	}
 
@@ -563,7 +563,7 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 		useResponseSecurityParameters && result.Version == Version3 && result.SecurityModel == UserSecurityModel &&
 		!isDiscoveryProbe(result) && usm.UserName != configuredUser {
 		err = fmt.Errorf("unknown user name %q", usm.UserName)
-		x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+		x.Logger.Printf("UnmarshalTrap v3 auth: %s", err)
 		return nil, err
 	}
 
@@ -574,7 +574,7 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 	if usm, ok := result.SecurityParameters.(*UsmSecurityParameters); ok && useResponseSecurityParameters &&
 		result.Version == Version3 && result.SecurityModel == UserSecurityModel && !isDiscoveryProbe(result) {
 		if err = usm.checkAuthenticated(result.MsgFlags); err != nil {
-			x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+			x.Logger.Printf("UnmarshalTrap v3 auth: %s", err)
 			return nil, err
 		}
 	}
@@ -587,20 +587,20 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 		if result.SecurityModel == UserSecurityModel && !discoveryProbe {
 			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
-				x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+				x.Logger.Printf("UnmarshalTrap v3 auth: %s", err)
 				return nil, err
 			}
 		}
 
 		trap, cursor, err = x.decryptPacket(trap, cursor, result)
 		if err != nil {
-			x.Logger.Printf("UnmarshalTrap v3 decrypt: %s\n", err)
+			x.Logger.Printf("UnmarshalTrap v3 decrypt: %s", err)
 			return nil, err
 		}
 	}
 	err = x.unmarshalPayload(trap, cursor, result)
 	if err != nil {
-		x.Logger.Printf("UnmarshalTrap: %s\n", err)
+		x.Logger.Printf("UnmarshalTrap: %s", err)
 		return nil, err
 	}
 	if discoveryProbe && (result.PDUType != GetRequest || len(result.Variables) > 0) {

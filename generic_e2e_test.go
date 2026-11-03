@@ -70,7 +70,7 @@ func connectToTarget(t *testing.T, gs *GoSNMP) {
 	err := gs.Connect()
 	if err != nil {
 		if len(target) > 0 {
-			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?\n(err: %v)",
+			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?(err: %v)",
 				target, port, err)
 		}
 	}
@@ -85,7 +85,7 @@ func connectToTargetIPv4(t *testing.T, gs *GoSNMP) {
 	err := gs.ConnectIPv4()
 	if err != nil {
 		if len(target) > 0 {
-			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?\n(err: %v)",
+			t.Fatalf("Connection failed. Is snmpd reachable on %s:%d?(err: %v)",
 				target, port, err)
 		}
 	}
@@ -171,7 +171,7 @@ func setupConnectionIPv6(t *testing.T) *GoSNMP {
 	err := gs.ConnectIPv6()
 	if err != nil {
 		if len(envTarget) > 0 {
-			t.Fatalf("Connection failed. Is snmpd reachable on %s:%s?\n(err: %v)",
+			t.Fatalf("Connection failed. Is snmpd reachable on %s:%s?(err: %v)",
 				envTarget, envPort, err)
 		}
 	}
