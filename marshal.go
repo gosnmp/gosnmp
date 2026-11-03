@@ -1368,11 +1368,14 @@ func (x *GoSNMP) receive() ([]byte, error) {
 // then exactly the announced number of bytes, so no bytes of a following
 // message are consumed.
 func (x *GoSNMP) receiveStream() ([]byte, error) {
-	buf := x.rxBuf[:]
+	return readStreamMessage(x.Conn, x.rxBuf[:])
+}
 
+// readStreamMessage reads exactly one SNMP message from r into buf.
+func readStreamMessage(r io.Reader, buf []byte) ([]byte, error) {
 	// Tag and first length octet. A clean EOF here is returned as io.EOF
 	// so that the caller can reconnect.
-	if _, err := io.ReadFull(x.Conn, buf[:2]); err != nil {
+	if _, err := io.ReadFull(r, buf[:2]); err != nil {
 		if err == io.EOF {
 			return nil, err
 		}
@@ -1389,7 +1392,7 @@ func (x *GoSNMP) receiveStream() ([]byte, error) {
 			return nil, ErrInvalidPacketLength
 		}
 		headerLen += numOctets
-		if _, err := io.ReadFull(x.Conn, buf[2:headerLen]); err != nil {
+		if _, err := io.ReadFull(r, buf[2:headerLen]); err != nil {
 			return nil, fmt.Errorf("error reading from socket: %w", err)
 		}
 	}
@@ -1398,11 +1401,11 @@ func (x *GoSNMP) receiveStream() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if length > rxBufSize {
+	if length > len(buf) {
 		return nil, fmt.Errorf("response buffer too small")
 	}
 
-	if _, err := io.ReadFull(x.Conn, buf[headerLen:length]); err != nil {
+	if _, err := io.ReadFull(r, buf[headerLen:length]); err != nil {
 		return nil, fmt.Errorf("error reading from socket: %w", err)
 	}
 

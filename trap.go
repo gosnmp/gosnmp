@@ -380,14 +380,13 @@ func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineI
 func (t *TrapListener) handleTCPRequest(conn net.Conn) {
 	// Make a buffer to hold incoming data.
 	buf := make([]byte, 4096)
-	// Read the incoming connection into the buffer.
-	reqLen, err := conn.Read(buf)
+	// Read one message by its BER length, as TCP may split or join messages.
+	msg, err := readStreamMessage(conn, buf)
 	if err != nil {
 		t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
 		return
 	}
 
-	msg := buf[:reqLen]
 	traps, err := t.Params.UnmarshalTrap(msg, false)
 	if err != nil {
 		t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
