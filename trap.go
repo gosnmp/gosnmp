@@ -562,7 +562,7 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 	// authenticate USM messages, so drop anything else (RFC3412 7.2 step 4).
 	if result.Version == Version3 && result.SecurityModel != UserSecurityModel {
 		err = fmt.Errorf("unsupported security model %d", result.SecurityModel)
-		x.Logger.Printf("UnmarshalTrap v3 auth: %s\n", err)
+		x.Logger.Printf("UnmarshalTrap v3 auth: %s", err)
 		return nil, err
 	}
 
