@@ -487,6 +487,14 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 	}
 
+	// The scopedPDU is encrypted exactly when msgFlags ask for privacy (RFC
+	// 3414 section 3.2 step 8), so a plaintext PDU can't stand in for an
+	// encrypted one.
+	privacy := response.MsgFlags&(AuthPriv&^AuthNoPriv) != 0
+	if encrypted := PDUType(packet[cursor]) == PDUType(OctetString); encrypted != privacy {
+		return nil, 0, fmt.Errorf("error parsing SNMPV3: scopedPDU encryption does not match msgFlags %s", response.MsgFlags)
+	}
+
 	switch PDUType(packet[cursor]) {
 	case PDUType(OctetString):
 		// pdu is encrypted
