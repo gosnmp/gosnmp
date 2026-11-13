@@ -359,6 +359,12 @@ sendRetry:
 				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
 				continue
 			}
+			// RFC 3412 section 7.2 step 12: a response must come from the
+			// engine the request was sent to.
+			if result.PDUType != Report && x.engineIDChanged(result) {
+				x.Logger.Printf("ERROR %s from a different authoritative engine discarded", result.PDUType)
+				continue
+			}
 			if result.Error == NoError && len(result.Variables) < 1 {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: Empty result")
 				break
@@ -476,6 +482,11 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 	if result.Version == Version3 {
 		x.Logger.Printf("SEND STORE SECURITY PARAMS from result: %s", result.SecurityParameters.SafeString())
 		err = x.storeSecurityParameters(result)
+		if err != nil {
+			// Don't resend after a Report whose parameters weren't stored,
+			// for example one from a different engine than the session's.
+			return result, err
+		}
 
 		if result.PDUType == Report && len(result.Variables) == 1 {
 			switch result.Variables[0].Name {
