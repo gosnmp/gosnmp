@@ -6,6 +6,7 @@ package gosnmp
 
 import (
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"testing"
@@ -393,6 +394,55 @@ func TestHMACEmptyPassword(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, key, proto.HashType().Size())
 			})
+		})
+	}
+}
+
+// TestGenlocalPrivKeySkipsUnneededExtension checks that the Reeder key
+// extension only runs when the localized key is shorter than the cipher key.
+// The extension runs the engine-specific localized key through the cached
+// passwordToKey, so running it anyway cost a full password hash and a new
+// password cache entry for every engine ID, including the unauthenticated
+// engine ID of an incoming message.
+func TestGenlocalPrivKeySkipsUnneededExtension(t *testing.T) {
+	SetPwdCache()
+
+	cacheLen := func() int {
+		passwordKeyHashMutex.RLock()
+		defer passwordKeyHashMutex.RUnlock()
+		return len(passwordKeyHashCache)
+	}
+
+	for _, tc := range []struct {
+		auth   SnmpV3AuthProtocol
+		priv   SnmpV3PrivProtocol
+		keylen int
+	}{
+		{MD5, AES, 16},
+		{SHA, AES, 16},
+		{SHA224, AES, 16},
+		{SHA256, AES, 16},
+		{SHA384, AES, 16},
+		{SHA512, AES, 16},
+		{SHA224, AES192C, 24},
+		{SHA256, AES256C, 32},
+	} {
+		t.Run(tc.auth.String()+"/"+tc.priv.String(), func(t *testing.T) {
+			// The passphrase is cached on first use.
+			_, err := genlocalPrivKey(tc.priv, tc.auth, "privkey1", "engine")
+			require.NoError(t, err)
+			before := cacheLen()
+
+			for i := range 5 {
+				engineID := fmt.Sprintf("engine%d", i)
+				key, err := genlocalPrivKey(tc.priv, tc.auth, "privkey1", engineID)
+				require.NoError(t, err)
+
+				localKey, err := genlocalkey(tc.auth, "privkey1", engineID)
+				require.NoError(t, err)
+				require.Equal(t, localKey[:tc.keylen], key)
+			}
+			require.Equal(t, before, cacheLen())
 		})
 	}
 }

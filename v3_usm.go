@@ -539,13 +539,20 @@ func cacheKey(authProtocol SnmpV3AuthProtocol, passphrase string) string {
 // Many vendors, including Cisco, use the 3DES key extension algorithm to extend the privacy keys that are too short when using AES,AES192 and AES256.
 // Previously implemented in net-snmp and pysnmp libraries.
 // Tested for AES128 and AES256
-func extendKeyReeder(authProtocol SnmpV3AuthProtocol, password, engineID string) ([]byte, error) {
+func extendKeyReeder(authProtocol SnmpV3AuthProtocol, password, engineID string, keylen int) ([]byte, error) {
 	var key []byte
 	var err error
 
 	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, password), password, engineID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Only extend a key that is too short for the cipher. The extension runs
+	// the localized key, which depends on engineID, through passwordToKey, so
+	// it costs a full password hash and a password cache entry per engine ID.
+	if len(key) >= keylen {
+		return key, nil
 	}
 
 	newkey, err := hMAC(authProtocol.HashType(), cacheKey(authProtocol, string(key)), string(key), engineID)
@@ -589,7 +596,7 @@ func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthPro
 
 	switch privProtocol {
 	case AES, AES192C, AES256C:
-		localPrivKey, err = extendKeyReeder(authProtocol, password, engineID)
+		localPrivKey, err = extendKeyReeder(authProtocol, password, engineID, keylen)
 
 	case AES192, AES256:
 		localPrivKey, err = extendKeyBlumenthal(authProtocol, password, engineID)
