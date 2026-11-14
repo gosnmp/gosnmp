@@ -232,6 +232,33 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 	return x.SecurityParameters.setSecurityParameters(result.SecurityParameters)
 }
 
+// v3ResponseMismatch names the first value of an ordinary SNMPv3 response
+// that differs from the outstanding request it answers (RFC 3412 section 7.2
+// step 12), or returns "" if they all match. Reports are not checked here:
+// step 11 lets them differ. A request sent without a contextEngineID is for
+// the default context, the authoritative engine's (RFC 3411 section 3.3.2), so
+// a response naming that engine matches it.
+func v3ResponseMismatch(request, response *SnmpPacket) string {
+	if response.SecurityModel != request.SecurityModel {
+		return "msgSecurityModel"
+	}
+	if request.SecurityParameters == nil || response.SecurityParameters == nil {
+		return "msgSecurityParameters"
+	}
+	if response.ContextEngineID != request.ContextEngineID &&
+		(request.ContextEngineID != "" ||
+			response.ContextEngineID != request.SecurityParameters.getDefaultContextEngineID()) {
+		return "contextEngineID"
+	}
+	if response.ContextName != request.ContextName {
+		return "contextName"
+	}
+	if response.SecurityParameters.getIdentifier() != request.SecurityParameters.getIdentifier() {
+		return "security name"
+	}
+	return ""
+}
+
 // update packet security parameters to match connection security parameters
 func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	if x.Version != Version3 || packetOut.Version != Version3 {
