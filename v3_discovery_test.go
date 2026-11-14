@@ -75,10 +75,16 @@ func v3DiscoveryUnknownUserNamesNoEngineIDReport(a *v3TestAgent) v3TestAgentStep
 }
 
 // v3DiscoverySysDescr returns the response used after successful discovery.
+// Like a real agent, it answers with the user name the request was sent with.
 func v3DiscoverySysDescr(a *v3TestAgent) v3TestAgentStep {
 	return func(req *v3TestAgentRequest) [][]byte {
+		var userName string
+		if usp, ok := req.Packet.SecurityParameters.(*UsmSecurityParameters); ok {
+			userName = usp.UserName
+		}
 		return a.reply(req, v3TestAgentReply{
-			pduType: GetResponse,
+			userName: &userName,
+			pduType:  GetResponse,
 			vars: []SnmpPDU{{
 				Name:  testDiscoverySysDescrOID,
 				Value: testDiscoverySysDescrValue,

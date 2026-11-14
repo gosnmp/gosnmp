@@ -345,6 +345,8 @@ type v3TestAgentReply struct {
 	requestID             *uint32
 	authoritativeEngineID *string
 	contextEngineID       *string
+	contextName           *string
+	userName              *string
 	boots                 *uint32
 	engineTime            *uint32
 }
@@ -369,6 +371,14 @@ func (a *v3TestAgent) reply(req *v3TestAgentRequest, r v3TestAgentReply) [][]byt
 	if r.contextEngineID != nil {
 		contextEngineID = *r.contextEngineID
 	}
+	contextName := ""
+	if r.contextName != nil {
+		contextName = *r.contextName
+	}
+	userName := a.creds.username
+	if r.userName != nil {
+		userName = *r.userName
+	}
 	boots := a.boots
 	if r.boots != nil {
 		boots = *r.boots
@@ -381,7 +391,7 @@ func (a *v3TestAgent) reply(req *v3TestAgentRequest, r v3TestAgentReply) [][]byt
 		AuthoritativeEngineID:    authoritativeEngineID,
 		AuthoritativeEngineBoots: boots,
 		AuthoritativeEngineTime:  engineTime,
-		UserName:                 a.creds.username,
+		UserName:                 userName,
 		AuthenticationProtocol:   a.creds.authProto,
 		PrivacyProtocol:          a.creds.privProto,
 		SecretKey:                a.secretKey,
@@ -402,6 +412,7 @@ func (a *v3TestAgent) reply(req *v3TestAgentRequest, r v3TestAgentReply) [][]byt
 		MsgID:              msgID,
 		RequestID:          requestID,
 		ContextEngineID:    contextEngineID,
+		ContextName:        contextName,
 		Logger:             a.logger,
 		Variables:          r.vars,
 	}
