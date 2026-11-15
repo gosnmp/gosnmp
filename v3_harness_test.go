@@ -337,10 +337,10 @@ func TestV3HarnessRejectsUnauthenticatedDiscoveryShapedResponse(t *testing.T) {
 	require.Equal(t, v3HarnessBoots, sp.AuthoritativeEngineBoots)
 }
 
-// forgeV3Reply builds an unauthenticated reply with request-id 0, which the
-// client accepts for any request. The client still requires msgID to match,
-// so a forger that cannot see the request has to guess it.
-func forgeV3Reply(t *testing.T, logger Logger, engineID string, msgID uint32, pduType PDUType, vars []SnmpPDU) []byte {
+// forgeV3Reply builds an unauthenticated reply to req, echoing its msgID and
+// request-id as a forger that can see the request would, so the reply passes
+// correlation and reaches the security checks.
+func forgeV3Reply(t *testing.T, logger Logger, engineID string, req *v3TestAgentRequest, pduType PDUType, vars []SnmpPDU) []byte {
 	t.Helper()
 	forged := &SnmpPacket{
 		Version:            Version3,
@@ -348,7 +348,8 @@ func forgeV3Reply(t *testing.T, logger Logger, engineID string, msgID uint32, pd
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: &UsmSecurityParameters{AuthoritativeEngineID: engineID, Logger: logger},
 		PDUType:            pduType,
-		MsgID:              msgID,
+		MsgID:              req.Packet.MsgID,
+		RequestID:          req.Packet.RequestID,
 		Variables:          vars,
 		Logger:             logger,
 	}
@@ -363,14 +364,14 @@ func forgeV3Reply(t *testing.T, logger Logger, engineID string, msgID uint32, pd
 // own msgFlags.
 func TestV3HarnessRejectsDiscoveryReportWithoutEngineID(t *testing.T) {
 	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	// The forger sees the probe and echoes its msgID.
+	// The forger sees the probe and echoes its identifiers.
 	agent.steps = []v3TestAgentStep{
 		func(req *v3TestAgentRequest) [][]byte {
-			return [][]byte{forgeV3Reply(t, agent.logger, "", req.Packet.MsgID, Report,
+			return [][]byte{forgeV3Reply(t, agent.logger, "", req, Report,
 				[]SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}})}
 		},
 		func(req *v3TestAgentRequest) [][]byte {
-			return [][]byte{forgeV3Reply(t, agent.logger, "", req.Packet.MsgID, GetResponse,
+			return [][]byte{forgeV3Reply(t, agent.logger, "", req, GetResponse,
 				[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})}
 		},
 	}
@@ -392,11 +393,14 @@ func TestV3HarnessRejectsDiscoveryReportWithoutEngineID(t *testing.T) {
 // genuine discovery REPORT behind it is still used.
 func TestV3HarnessDiscoveryIgnoresUnauthenticatedResponse(t *testing.T) {
 	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	forged := forgeV3Reply(t, agent.logger, "\x80\x00\x00\x00\x04forged", 1, GetResponse,
-		[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
 	report := v3AgentUnknownEngineIDsReport(agent)
+	// The forger sees the probe and echoes its identifiers.
 	agent.steps = []v3TestAgentStep{
-		func(req *v3TestAgentRequest) [][]byte { return append([][]byte{forged}, report(req)...) },
+		func(req *v3TestAgentRequest) [][]byte {
+			forged := forgeV3Reply(t, agent.logger, "\x80\x00\x00\x00\x04forged", req, GetResponse,
+				[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
+			return append([][]byte{forged}, report(req)...)
+		},
 		v3AgentSysDescr(agent),
 	}
 	port := agent.startUDP(t)
@@ -409,6 +413,10 @@ func TestV3HarnessDiscoveryIgnoresUnauthenticatedResponse(t *testing.T) {
 	require.NoError(t, err)
 	requireSysDescrResult(t, result)
 	require.Equal(t, v3HarnessEngineID, sp.AuthoritativeEngineID)
+	// The real request uses the engine ID from the genuine REPORT, not the
+	// forged one. The agent's reply would reset it either way.
+	requireRequestCount(t, agent, 2)
+	require.Equal(t, v3HarnessEngineID, v3ReqSecParams(t, agent.request(1)).AuthoritativeEngineID)
 }
 
 // TestV3HarnessTimeoutAllAttemptsDropped pins retry accounting when
