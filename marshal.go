@@ -249,6 +249,10 @@ sendRetry:
 
 			packetOut.MsgID = msgID
 
+			// Each attempt carries the current estimate of the engine's
+			// time, not the snapshot from the last exchange.
+			x.stampEngineTime(packetOut)
+
 			err = x.initPacket(packetOut)
 			if err != nil {
 				break
@@ -327,6 +331,7 @@ sendRetry:
 			}
 
 			unauthenticated := false
+			established := false
 			if x.Version == Version3 {
 				useResponseSecurityParameters := false
 				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok {
@@ -338,6 +343,7 @@ sendRetry:
 						unauthenticated = usp.checkAuthenticated(result.MsgFlags) != nil
 					}
 				}
+				established = !useResponseSecurityParameters
 				err = x.testAuthentication(resp, result, useResponseSecurityParameters)
 				if err != nil {
 					x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)
@@ -364,6 +370,15 @@ sendRetry:
 			if result.PDUType != Report && x.engineIDChanged(result) {
 				x.Logger.Printf("ERROR %s from a different authoritative engine discarded", result.PDUType)
 				continue
+			}
+			// RFC 3414 section 3.2 step 7b: an authenticated message outside
+			// the time window, such as a replayed one, is discarded and the
+			// genuine response can still arrive.
+			if established && !x.engineIDChanged(result) {
+				if terr := x.checkTimeliness(result); terr != nil {
+					x.Logger.Printf("ERROR %s discarded: %s", result.PDUType, terr)
+					continue
+				}
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: Empty result")

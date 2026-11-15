@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"time"
 )
 
 // SnmpV3MsgFlags contains various message flags to describe Authentication, Privacy, and whether a report PDU must be sent.
@@ -158,11 +159,10 @@ func (x *GoSNMP) initPacket(packetOut *SnmpPacket) error {
 	return nil
 }
 
-// http://tools.ietf.org/html/rfc2574#section-2.2.3 This code does not
-// check if the last message received was more than 150 seconds ago The
-// snmpds that this code was tested on emit an 'out of time window'
-// error with the new time and this code will retransmit when that is
-// received.
+// Engine discovery (RFC 3414 section 4). Once the engine is known, its boots
+// and time follow RFC 3414 section 3.2 step 7b (checkTimeliness), and an
+// 'out of time window' Report still makes send() retransmit with the
+// engine's new time.
 func (x *GoSNMP) negotiateInitialSecurityParameters(packetOut *SnmpPacket) error {
 	if x.Version != Version3 || packetOut.Version != Version3 {
 		return fmt.Errorf("negotiateInitialSecurityParameters called with non Version3 connection or packet")
@@ -233,7 +233,57 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 		x.ContextEngineID = result.SecurityParameters.getDefaultContextEngineID()
 	}
 
-	return x.SecurityParameters.setSecurityParameters(result.SecurityParameters)
+	usp, ok := x.SecurityParameters.(*UsmSecurityParameters)
+	if ok && usp.AuthoritativeEngineID != "" && x.MsgFlags&AuthNoPriv != 0 {
+		// An authenticated session's boots and time only change through
+		// checkTimeliness, which the receive loop applied to this message
+		// already. Copying them here would let any accepted message,
+		// including one with an older time, roll them back.
+		return nil
+	}
+
+	if err := x.SecurityParameters.setSecurityParameters(result.SecurityParameters); err != nil {
+		return err
+	}
+	if ok {
+		// Engine discovery, or a session without authentication: the
+		// values just stored are the engine's, so the estimate of its
+		// time starts from them.
+		usp.markEngineTimeSynced(time.Now())
+	}
+	return nil
+}
+
+// stampEngineTime gives an outgoing packet the session's boots and current
+// estimate of the authoritative engine's time (RFC 3414 section 2.3).
+func (x *GoSNMP) stampEngineTime(packetOut *SnmpPacket) {
+	usp, ok := x.SecurityParameters.(*UsmSecurityParameters)
+	if !ok {
+		return
+	}
+	out, ok := packetOut.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || out == usp {
+		return
+	}
+	usp.stampEngineTime(out, time.Now())
+}
+
+// checkTimeliness applies RFC 3414 section 3.2 step 7b to an authenticated
+// message received on an established session. It returns an error wrapping
+// ErrNotInTimeWindow if the message is outside the time window.
+func (x *GoSNMP) checkTimeliness(result *SnmpPacket) error {
+	if x.MsgFlags&AuthNoPriv == 0 || result.MsgFlags&AuthNoPriv == 0 {
+		return nil
+	}
+	usp, ok := x.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || usp.AuthoritativeEngineID == "" {
+		return nil
+	}
+	rsp, ok := result.SecurityParameters.(*UsmSecurityParameters)
+	if !ok {
+		return nil
+	}
+	return usp.checkTimeliness(rsp, time.Now())
 }
 
 // engineIDChanged reports whether an incoming message carries an
