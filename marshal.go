@@ -249,6 +249,10 @@ sendRetry:
 
 			packetOut.MsgID = msgID
 
+			// Each attempt carries the current estimate of the engine's
+			// time, not the snapshot from the last exchange.
+			x.stampEngineTime(packetOut)
+
 			err = x.initPacket(packetOut)
 			if err != nil {
 				break
@@ -327,6 +331,7 @@ sendRetry:
 			}
 
 			unauthenticated := false
+			established := false
 			if x.Version == Version3 {
 				useResponseSecurityParameters := false
 				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok {
@@ -338,6 +343,7 @@ sendRetry:
 						unauthenticated = usp.checkAuthenticated(result.MsgFlags) != nil
 					}
 				}
+				established = !useResponseSecurityParameters
 				err = x.testAuthentication(resp, result, useResponseSecurityParameters)
 				if err != nil {
 					x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)
@@ -358,6 +364,21 @@ sendRetry:
 			if unauthenticated && result.PDUType != Report {
 				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
 				continue
+			}
+			// RFC 3412 section 7.2 step 12: a response must come from the
+			// engine the request was sent to.
+			if result.PDUType != Report && x.engineIDChanged(result) {
+				x.Logger.Printf("ERROR %s from a different authoritative engine discarded", result.PDUType)
+				continue
+			}
+			// RFC 3414 section 3.2 step 7b: an authenticated message outside
+			// the time window, such as a replayed one, is discarded and the
+			// genuine response can still arrive.
+			if established && !x.engineIDChanged(result) {
+				if terr := x.checkTimeliness(result); terr != nil {
+					x.Logger.Printf("ERROR %s discarded: %s", result.PDUType, terr)
+					continue
+				}
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: Empty result")
@@ -475,7 +496,11 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 
 	if result.Version == Version3 {
 		x.Logger.Printf("SEND STORE SECURITY PARAMS from result: %s", result.SecurityParameters.SafeString())
-		err = x.storeSecurityParameters(result)
+		if err = x.storeSecurityParameters(result); err != nil {
+			// Don't resend after a Report whose parameters weren't stored,
+			// for example one from a different engine than the session's.
+			return result, err
+		}
 
 		if result.PDUType == Report && len(result.Variables) == 1 {
 			switch result.Variables[0].Name {
