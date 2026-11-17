@@ -239,25 +239,24 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 // contextEngineID is for the default context, the authoritative engine's
 // (RFC 3411 section 3.3.2), so a response naming that engine matches it.
 func checkResponseMatchesRequest(request, response *SnmpPacket) error {
-	mismatch := func(field string) error {
-		return fmt.Errorf("its %s does not match the request", field)
-	}
+	const mismatch = "its %s does not match the request"
+
 	if response.SecurityModel != request.SecurityModel {
-		return mismatch("msgSecurityModel")
+		return fmt.Errorf(mismatch, "msgSecurityModel")
 	}
 	if request.SecurityParameters == nil || response.SecurityParameters == nil {
-		return mismatch("msgSecurityParameters")
+		return fmt.Errorf(mismatch, "msgSecurityParameters")
 	}
 	if response.ContextEngineID != request.ContextEngineID &&
 		(request.ContextEngineID != "" ||
 			response.ContextEngineID != request.SecurityParameters.getDefaultContextEngineID()) {
-		return mismatch("contextEngineID")
+		return fmt.Errorf(mismatch, "contextEngineID")
 	}
 	if response.ContextName != request.ContextName {
-		return mismatch("contextName")
+		return fmt.Errorf(mismatch, "contextName")
 	}
 	if response.SecurityParameters.getIdentifier() != request.SecurityParameters.getIdentifier() {
-		return mismatch("security name")
+		return fmt.Errorf(mismatch, "security name")
 	}
 	return nil
 }
