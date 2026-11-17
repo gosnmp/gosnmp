@@ -362,8 +362,8 @@ sendRetry:
 			// RFC 3412 section 7.2 step 12: an ordinary response must be for
 			// the context and principal of the request it answers.
 			if x.Version == Version3 && result.PDUType != Report {
-				if field := v3ResponseMismatch(packetOut, result); field != "" {
-					x.Logger.Printf("ERROR %s discarded: its %s does not match the request", result.PDUType, field)
+				if mismatch := checkResponseMatchesRequest(packetOut, result); mismatch != nil {
+					x.Logger.Printf("ERROR %s discarded: %s", result.PDUType, mismatch)
 					continue
 				}
 			}

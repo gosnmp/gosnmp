@@ -568,92 +568,90 @@ func requireV3ResponseDiscarded(t *testing.T, agent *v3TestAgent, gs *GoSNMP) {
 	requireRequestCount(t, agent, 1)
 }
 
-// TestV3CachedRequestRejectsOtherContextEngineID checks that an authenticated
-// GetResponse for a different contextEngineID is discarded.
-func TestV3CachedRequestRejectsOtherContextEngineID(t *testing.T) {
-	other := "\x80\x00\x1f\x88\x04othercontext"
-	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	agent.steps = []v3TestAgentStep{v3AgentSysDescrWith(agent, v3TestAgentReply{contextEngineID: &other})}
-	port := agent.startUDP(t)
+// TestV3CachedRequestRejectsMismatchedResponse checks that a GetResponse whose
+// contextEngineID, contextName or user name differs from the request is
+// discarded. The user name case runs without authentication: authenticated
+// sessions already reject another user in isAuthentic, but without
+// authentication nothing else does.
+func TestV3CachedRequestRejectsMismatchedResponse(t *testing.T) {
+	otherContextEngineID := "\x80\x00\x1f\x88\x04othercontext"
+	otherContextName := "other-context"
+	otherUserName := "someoneElse"
 
-	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
-	v3CachedRequestSeedSession(sp)
-	v3HarnessConnect(t, gs)
+	for _, tc := range []struct {
+		name  string
+		level SnmpV3MsgFlags
+		creds v3TestAgentCreds
+		reply v3TestAgentReply
+	}{
+		{
+			name:  "contextEngineID",
+			level: AuthNoPriv,
+			creds: v3HarnessCredsAuthNoPriv(),
+			reply: v3TestAgentReply{contextEngineID: &otherContextEngineID},
+		},
+		{
+			name:  "contextName",
+			level: AuthNoPriv,
+			creds: v3HarnessCredsAuthNoPriv(),
+			reply: v3TestAgentReply{contextName: &otherContextName},
+		},
+		{
+			name:  "user name without auth",
+			level: NoAuthNoPriv,
+			creds: v3TestAgentCreds{username: v3HarnessUser},
+			reply: v3TestAgentReply{userName: &otherUserName},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, tc.creds)
+			agent.steps = []v3TestAgentStep{v3AgentSysDescrWith(agent, tc.reply)}
+			port := agent.startUDP(t)
 
-	requireV3ResponseDiscarded(t, agent, gs)
+			gs, sp := newV3HarnessClient(port, tc.level, agent.creds)
+			v3CachedRequestSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			requireV3ResponseDiscarded(t, agent, gs)
+		})
+	}
 }
 
-// TestV3CachedRequestRejectsOtherContextName checks that an authenticated
-// GetResponse for a different contextName is discarded.
-func TestV3CachedRequestRejectsOtherContextName(t *testing.T) {
-	other := "other-context"
-	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	agent.steps = []v3TestAgentStep{v3AgentSysDescrWith(agent, v3TestAgentReply{contextName: &other})}
-	port := agent.startUDP(t)
+// TestV3CachedRequestAcceptsMatchingResponse checks that a response for the
+// request's own context is accepted, both for a non-default contextEngineID
+// and contextName and for a request that leaves contextEngineID empty, where
+// a response naming the authoritative engine is for the default context
+// (RFC 3411 section 3.3.2).
+func TestV3CachedRequestAcceptsMatchingResponse(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		contextEngineID string
+		contextName     string
+	}{
+		{name: "non-default context", contextEngineID: "\x80\x00\x1f\x88\x04proxiedctx", contextName: "vlan-42"},
+		{name: "default contextEngineID"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+			var reply v3TestAgentReply
+			if tc.contextEngineID != "" {
+				reply.contextEngineID = &tc.contextEngineID
+				reply.contextName = &tc.contextName
+			}
+			agent.steps = []v3TestAgentStep{v3AgentSysDescrWith(agent, reply)}
+			port := agent.startUDP(t)
 
-	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
-	v3CachedRequestSeedSession(sp)
-	v3HarnessConnect(t, gs)
+			gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+			v3CachedRequestSeedSession(sp)
+			gs.ContextEngineID = tc.contextEngineID
+			gs.ContextName = tc.contextName
+			v3HarnessConnect(t, gs)
 
-	requireV3ResponseDiscarded(t, agent, gs)
-}
-
-// TestV3CachedRequestRejectsOtherUserNameWithoutAuth checks that a
-// noAuthNoPriv GetResponse for a different user is discarded. Authenticated
-// sessions already reject this in isAuthentic; without authentication nothing
-// else does.
-func TestV3CachedRequestRejectsOtherUserNameWithoutAuth(t *testing.T) {
-	other := "someoneElse"
-	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3TestAgentCreds{username: v3HarnessUser})
-	agent.steps = []v3TestAgentStep{v3AgentSysDescrWith(agent, v3TestAgentReply{userName: &other})}
-	port := agent.startUDP(t)
-
-	gs, sp := newV3HarnessClient(port, NoAuthNoPriv, agent.creds)
-	v3CachedRequestSeedSession(sp)
-	v3HarnessConnect(t, gs)
-
-	requireV3ResponseDiscarded(t, agent, gs)
-}
-
-// TestV3CachedRequestAcceptsMatchingContext checks that a response with the
-// request's own non-default contextEngineID and contextName is accepted.
-func TestV3CachedRequestAcceptsMatchingContext(t *testing.T) {
-	contextEngineID := "\x80\x00\x1f\x88\x04proxiedctx"
-	contextName := "vlan-42"
-	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	agent.steps = []v3TestAgentStep{v3AgentSysDescrWith(agent, v3TestAgentReply{
-		contextEngineID: &contextEngineID,
-		contextName:     &contextName,
-	})}
-	port := agent.startUDP(t)
-
-	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
-	v3CachedRequestSeedSession(sp)
-	gs.ContextEngineID = contextEngineID
-	gs.ContextName = contextName
-	v3HarnessConnect(t, gs)
-
-	result, err := gs.Get([]string{v3HarnessSysDescrOID})
-	require.NoError(t, err)
-	requireSysDescrResult(t, result)
-	require.Equal(t, contextEngineID, agent.request(0).Packet.ContextEngineID)
-	require.Equal(t, contextName, agent.request(0).Packet.ContextName)
-}
-
-// TestV3CachedRequestAcceptsDefaultContextEngineID checks that when the
-// request leaves contextEngineID empty, a response naming the authoritative
-// engine, the default context (RFC 3411 section 3.3.2), is accepted.
-func TestV3CachedRequestAcceptsDefaultContextEngineID(t *testing.T) {
-	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	agent.steps = []v3TestAgentStep{v3AgentSysDescr(agent)}
-	port := agent.startUDP(t)
-
-	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
-	v3CachedRequestSeedSession(sp)
-	v3HarnessConnect(t, gs)
-
-	result, err := gs.Get([]string{v3HarnessSysDescrOID})
-	require.NoError(t, err)
-	requireSysDescrResult(t, result)
-	require.Empty(t, agent.request(0).Packet.ContextEngineID)
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			require.Equal(t, tc.contextEngineID, agent.request(0).Packet.ContextEngineID)
+			require.Equal(t, tc.contextName, agent.request(0).Packet.ContextName)
+		})
+	}
 }

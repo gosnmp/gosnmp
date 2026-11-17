@@ -232,31 +232,34 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 	return x.SecurityParameters.setSecurityParameters(result.SecurityParameters)
 }
 
-// v3ResponseMismatch names the first value of an ordinary SNMPv3 response
-// that differs from the outstanding request it answers (RFC 3412 section 7.2
-// step 12), or returns "" if they all match. Reports are not checked here:
-// step 11 lets them differ. A request sent without a contextEngineID is for
-// the default context, the authoritative engine's (RFC 3411 section 3.3.2), so
-// a response naming that engine matches it.
-func v3ResponseMismatch(request, response *SnmpPacket) string {
+// checkResponseMatchesRequest returns an error naming the first value of an
+// ordinary SNMPv3 response that differs from the outstanding request it
+// answers (RFC 3412 section 7.2 step 12), or nil if they all match. Reports
+// are not checked here: step 11 lets them differ. A request sent without a
+// contextEngineID is for the default context, the authoritative engine's
+// (RFC 3411 section 3.3.2), so a response naming that engine matches it.
+func checkResponseMatchesRequest(request, response *SnmpPacket) error {
+	mismatch := func(field string) error {
+		return fmt.Errorf("its %s does not match the request", field)
+	}
 	if response.SecurityModel != request.SecurityModel {
-		return "msgSecurityModel"
+		return mismatch("msgSecurityModel")
 	}
 	if request.SecurityParameters == nil || response.SecurityParameters == nil {
-		return "msgSecurityParameters"
+		return mismatch("msgSecurityParameters")
 	}
 	if response.ContextEngineID != request.ContextEngineID &&
 		(request.ContextEngineID != "" ||
 			response.ContextEngineID != request.SecurityParameters.getDefaultContextEngineID()) {
-		return "contextEngineID"
+		return mismatch("contextEngineID")
 	}
 	if response.ContextName != request.ContextName {
-		return "contextName"
+		return mismatch("contextName")
 	}
 	if response.SecurityParameters.getIdentifier() != request.SecurityParameters.getIdentifier() {
-		return "security name"
+		return mismatch("security name")
 	}
-	return ""
+	return nil
 }
 
 // update packet security parameters to match connection security parameters
