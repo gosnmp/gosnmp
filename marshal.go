@@ -481,8 +481,7 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 
 	if result.Version == Version3 {
 		x.Logger.Printf("SEND STORE SECURITY PARAMS from result: %s", result.SecurityParameters.SafeString())
-		err = x.storeSecurityParameters(result)
-		if err != nil {
+		if err = x.storeSecurityParameters(result); err != nil {
 			// Don't resend after a Report whose parameters weren't stored,
 			// for example one from a different engine than the session's.
 			return result, err
