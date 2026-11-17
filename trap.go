@@ -342,6 +342,11 @@ func (t *TrapListener) listenUDP(addr string) error {
 				trap.Error = NoError
 				trap.ErrorIndex = 0
 
+				if err := newReplySalt(trap, t.Params.Logger); err != nil {
+					t.Params.Logger.Printf("TrapListener: %s", err)
+					continue
+				}
+
 				// TODO: Check that the message marshalled is not too large
 				// for the originator to accept and if so, send a tooBig
 				// error PDU per RFC3416 section 4.2.7.  This maximum size,
@@ -374,7 +379,24 @@ func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineI
 			Type:  Integer,
 		},
 	}
+	if err := newReplySalt(reportPacket, t.Params.Logger); err != nil {
+		return err
+	}
 	return t.SendUDP(reportPacket, addr)
+}
+
+// newReplySalt gives an encrypted reply built from a received packet its own
+// msgPrivacyParameters. Keeping the received ones would reuse their IV under
+// the same key, engine boots and time (RFC3414 8.1.1.1, RFC3826 3.1.2.1).
+func newReplySalt(packet *SnmpPacket, logger Logger) error {
+	usm, ok := packet.SecurityParameters.(*UsmSecurityParameters)
+	if !ok || packet.MsgFlags&AuthPriv <= AuthNoPriv {
+		return nil
+	}
+	if err := usm.init(logger); err != nil {
+		return err
+	}
+	return usm.InitPacket(packet)
 }
 
 func (t *TrapListener) handleTCPRequest(conn net.Conn) {

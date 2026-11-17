@@ -998,6 +998,83 @@ func TestSendInformBasic(t *testing.T) {
 	}
 }
 
+// TestListenV3ReplyNewSalt checks that the listener's encrypted replies, the
+// response to an inform and the Report for an invalid engine ID, use their own
+// msgPrivacyParameters. Reusing the received packet's would reuse its IV under
+// the same key and engine boots/time.
+func TestListenV3ReplyNewSalt(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	const engineID = "\x80\x00\x1f\x88\x80informtest"
+	for _, priv := range []SnmpV3PrivProtocol{DES, AES} {
+		for _, tc := range []struct {
+			name     string
+			engineID string
+			pduType  PDUType
+		}{
+			{"inform", engineID, InformRequest},
+			{"report", "abc", SNMPv2Trap}, // too short, so the listener sends a Report
+		} {
+			t.Run(priv.String()+" "+tc.name, func(t *testing.T) {
+				usm := func(engineID string) *UsmSecurityParameters {
+					return &UsmSecurityParameters{
+						UserName:                 "myuser",
+						AuthenticationProtocol:   SHA,
+						AuthenticationPassphrase: "mypassword",
+						PrivacyProtocol:          priv,
+						PrivacyPassphrase:        "myprivacy",
+						AuthoritativeEngineID:    engineID,
+						AuthoritativeEngineBoots: 1,
+						AuthoritativeEngineTime:  100,
+						Logger:                   logger,
+					}
+				}
+
+				tl := NewTrapListener()
+				defer tl.Close()
+				tl.OnNewTrap = func(*SnmpPacket, *net.UDPAddr) {}
+				tl.Params = newTestGoSNMPv3(AuthPriv, usm(engineID))
+				host, port := listenOnEphemeral(t, tl)
+
+				gs := newTestGoSNMPv3(AuthPriv|Reportable, usm(tc.engineID))
+				require.NoError(t, gs.SecurityParameters.init(logger))
+				require.NoError(t, gs.SecurityParameters.InitSecurityKeys())
+				pkt := gs.mkSnmpPacket(tc.pduType, []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}}, 0, 0)
+				pkt.MsgID, pkt.RequestID = 1, 1
+				require.NoError(t, gs.initPacket(pkt))
+				buf, err := pkt.marshalMsg()
+				require.NoError(t, err)
+
+				conn, err := net.Dial("udp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+				require.NoError(t, err)
+				defer conn.Close()
+				_, err = conn.Write(buf)
+				require.NoError(t, err)
+				require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+				rbuf := make([]byte, 1500)
+				n, err := conn.Read(rbuf)
+				require.NoError(t, err)
+
+				resp := &SnmpPacket{SecurityParameters: gs.SecurityParameters.Copy()}
+				cursor, err := gs.unmarshalHeader(rbuf[:n], resp)
+				require.NoError(t, err)
+				require.Equal(t, AuthPriv, resp.MsgFlags&AuthPriv)
+				require.NotEqual(t, pkt.SecurityParameters.(*UsmSecurityParameters).PrivacyParameters,
+					resp.SecurityParameters.(*UsmSecurityParameters).PrivacyParameters,
+					"reply reuses the received packet's privacy parameters")
+
+				if tc.pduType == InformRequest {
+					require.NoError(t, gs.testAuthentication(rbuf[:n], resp, false))
+					plain, cursor, err := gs.decryptPacket(rbuf[:n], cursor, resp)
+					require.NoError(t, err)
+					require.NoError(t, gs.unmarshalPayload(plain, cursor, resp))
+					require.Equal(t, GetResponse, resp.PDUType)
+					require.Equal(t, uint32(1), resp.RequestID)
+				}
+			})
+		}
+	}
+}
+
 // test the listener is not blocked if Listening is not used
 func TestSendTrapWithoutWaitingOnListen(t *testing.T) {
 	done := make(chan error, 1)
