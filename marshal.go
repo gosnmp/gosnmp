@@ -321,6 +321,13 @@ sendRetry:
 
 			var cursor int
 			cursor, err = x.unmarshalHeader(resp, result)
+			if errors.Is(err, errUnsupportedSecurityModel) {
+				// RFC 3412 section 7.2 step 4: discard the message and keep
+				// waiting for the reply.
+				x.Logger.Printf("ERROR response discarded: %s", err)
+				err = nil
+				continue
+			}
 			if err != nil {
 				x.Logger.Printf("ERROR on unmarshall header: %s", err)
 				break
@@ -358,6 +365,14 @@ sendRetry:
 			if unauthenticated && result.PDUType != Report {
 				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
 				continue
+			}
+			// RFC 3412 section 7.2 step 12: an ordinary response must be for
+			// the context and principal of the request it answers.
+			if x.Version == Version3 && result.PDUType != Report {
+				if mismatch := checkResponseMatchesRequest(packetOut, result); mismatch != nil {
+					x.Logger.Printf("ERROR %s discarded: %s", result.PDUType, mismatch)
+					continue
+				}
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
 				x.Logger.Printf("ERROR on UnmarshalPayload on v3: Empty result")
@@ -462,6 +477,11 @@ func (x *GoSNMP) send(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err
 		x.Logger.Print("SEND INIT NEGOTIATE SECURITY PARAMS")
 		if err = x.negotiateInitialSecurityParameters(packetOut); err != nil {
 			return &SnmpPacket{}, err
+		}
+		// RFC 3412 section 7.1: a request for the default context names the
+		// authoritative engine, so the reply can be compared with it exactly.
+		if wait && packetOut.ContextEngineID == "" && packetOut.SecurityParameters != nil {
+			packetOut.ContextEngineID = packetOut.SecurityParameters.getDefaultContextEngineID()
 		}
 		x.Logger.Print("SEND END NEGOTIATE SECURITY PARAMS")
 	}

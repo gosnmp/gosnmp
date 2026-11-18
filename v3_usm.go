@@ -1063,15 +1063,13 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 		sp.Logger.Printf("Parsed authoritativeEngineTime %d", AuthoritativeEngineTime)
 	}
 
-	rawMsgUserName, count, err := parseRawField(sp.Logger, packet[cursor:], "msgUserName")
+	msgUserName, count, err := parseOctetStringField(sp.Logger, packet[cursor:], "msgUserName")
 	if err != nil {
 		return 0, fmt.Errorf("error parsing SNMPV3 User Security Model msgUserName: %w", err)
 	}
 	cursor += count
-	if msgUserName, ok := rawMsgUserName.(string); ok {
-		sp.UserName = msgUserName
-		sp.Logger.Printf("Parsed userName %s", msgUserName)
-	}
+	sp.UserName = msgUserName
+	sp.Logger.Printf("Parsed userName %s", msgUserName)
 
 	rawMsgAuthParameters, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthenticationParameters")
 	if err != nil {
