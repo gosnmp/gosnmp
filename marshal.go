@@ -314,7 +314,6 @@ sendRetry:
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
 
-			result.MsgFlags = packetOut.MsgFlags
 			if packetOut.SecurityParameters != nil {
 				result.SecurityParameters = packetOut.SecurityParameters.Copy()
 			}
@@ -350,16 +349,21 @@ sendRetry:
 						unauthenticated = usp.checkAuthenticated(result.MsgFlags) != nil
 					}
 				}
-				if established && receivedLevel&AuthNoPriv == 0 {
+				switch {
+				case !established:
+					err = x.testAuthentication(resp, result, useResponseSecurityParameters)
+				case receivedLevel&AuthNoPriv != 0:
+					// Verify every message whose msgFlags claim authentication,
+					// whatever level the session itself is configured for.
+					err = x.verifyReceivedAuthentication(resp, result)
+				default:
 					// Nothing to verify. Only a Report may arrive below the
 					// request's security level (step 11), and it is not trusted.
 					unauthenticated = requestLevel&AuthNoPriv != 0
-				} else {
-					err = x.testAuthentication(resp, result, useResponseSecurityParameters)
-					if err != nil {
-						x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)
-						break
-					}
+				}
+				if err != nil {
+					x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)
+					break
 				}
 				resp, cursor, err = x.decryptPacket(resp, cursor, result)
 				if err != nil {
@@ -382,6 +386,18 @@ sendRetry:
 			if x.Version == Version3 && result.PDUType != Report && receivedLevel != requestLevel {
 				x.Logger.Printf("ERROR %s at security level %s for a %s request discarded",
 					result.PDUType, receivedLevel, requestLevel)
+				continue
+			}
+			if result.PDUType == Report && len(result.Variables) == 0 {
+				// It names no condition, and returning it would store its
+				// security parameters.
+				x.Logger.Print("ERROR Report without varbinds discarded")
+				continue
+			}
+			if unauthenticated && established {
+				// An unauthenticated Report can't end or steer an authenticated
+				// request: keep waiting for the reply.
+				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
 				continue
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
@@ -411,18 +427,10 @@ sendRetry:
 				case usmStatsUnsupportedSecLevels:
 					return result, ErrUnknownSecurityLevel
 				case usmStatsNotInTimeWindows:
-					if unauthenticated && established {
-						// Its engine boots and time are not authenticated, so
-						// don't resend with them.
-						return result, ErrNotInTimeWindow
-					}
 					break waitingResponse
 				case usmStatsUnknownUserNames:
 					return result, ErrUnknownUsername
 				case usmStatsUnknownEngineIDs:
-					if unauthenticated && established {
-						return result, ErrUnknownEngineID
-					}
 					break waitingResponse
 				case usmStatsWrongDigests:
 					return result, ErrWrongDigest
@@ -437,12 +445,6 @@ sendRetry:
 				default:
 					return result, ErrUnknownReportPDU
 				}
-			}
-			if unauthenticated && established {
-				// A Report that can't be classified above would be returned
-				// and its security parameters stored.
-				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
-				continue
 			}
 
 			validID := false

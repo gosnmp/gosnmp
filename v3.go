@@ -232,6 +232,28 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 	return x.SecurityParameters.setSecurityParameters(result.SecurityParameters)
 }
 
+// verifyReceivedAuthentication checks the digest of a message whose msgFlags
+// claim authentication against the session's own user, whatever level the
+// session is configured for. A user without an authentication key can't
+// verify a digest, so such a message is rejected rather than trusted.
+func (x *GoSNMP) verifyReceivedAuthentication(packet []byte, result *SnmpPacket) error {
+	usp, ok := x.SecurityParameters.(*UsmSecurityParameters)
+	if !ok {
+		return errors.New("incoming packet claims authentication, but the session has no USM parameters")
+	}
+	if usp.AuthenticationProtocol <= NoAuth {
+		return errors.New("incoming packet claims authentication, but the user has no authentication key")
+	}
+	authentic, err := usp.isAuthentic(packet, result)
+	if err != nil {
+		return err
+	}
+	if !authentic {
+		return errors.New("incoming packet is not authentic, discarding")
+	}
+	return nil
+}
+
 // update packet security parameters to match connection security parameters
 func (x *GoSNMP) updatePktSecurityParameters(packetOut *SnmpPacket) error {
 	if x.Version != Version3 || packetOut.Version != Version3 {
@@ -427,6 +449,11 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		x.Logger.Printf("Parsed message max size %d", MsgMaxSize)
 	}
 
+	// RFC 3412 section 6: msgFlags is a one-octet OCTET STRING. Anything
+	// else would leave the security level to whatever the packet held before.
+	if cursor >= len(packet) || Asn1BER(packet[cursor]) != OctetString {
+		return 0, errors.New("error parsing SNMPV3 msgFlags: not an OCTET STRING")
+	}
 	rawMsgFlags, count, err := parseRawField(x.Logger, packet[cursor:], "msgFlags")
 	if err != nil {
 		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: %w", err)
@@ -436,10 +463,12 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
-	if MsgFlags, ok := rawMsgFlags.(string); ok && len(MsgFlags) > 0 {
-		response.MsgFlags = SnmpV3MsgFlags(MsgFlags[0])
-		x.Logger.Printf("parsed msg flags %s", MsgFlags)
+	msgFlags, ok := rawMsgFlags.(string)
+	if !ok || len(msgFlags) != 1 {
+		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: want one octet, got %d", len(msgFlags))
 	}
+	response.MsgFlags = SnmpV3MsgFlags(msgFlags[0])
+	x.Logger.Printf("parsed msg flags %s", response.MsgFlags)
 
 	rawSecModel, count, err := parseRawField(x.Logger, packet[cursor:], "msgSecurityModel")
 	if err != nil {
