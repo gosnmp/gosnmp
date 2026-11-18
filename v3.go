@@ -29,6 +29,10 @@ const (
 
 //go:generate stringer -type=SnmpV3MsgFlags
 
+// errUnsupportedSecurityModel marks a v3 message whose msgSecurityModel is
+// not USM, the only model implemented.
+var errUnsupportedSecurityModel = errors.New("unsupported security model")
+
 // SnmpV3SecurityModel describes the security model used by a SnmpV3 connection
 type SnmpV3SecurityModel uint8
 
@@ -235,9 +239,9 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 // checkResponseMatchesRequest returns an error naming the first value of an
 // ordinary SNMPv3 response that differs from the outstanding request it
 // answers (RFC 3412 section 7.2 step 12), or nil if they all match. Reports
-// are not checked here: step 11 lets them differ. A request sent without a
-// contextEngineID is for the default context, the authoritative engine's
-// (RFC 3411 section 3.3.2), so a response naming that engine matches it.
+// are not checked here: step 11 lets them differ. send fills in the
+// contextEngineID of a request for the default context before sending it, so
+// the reply is compared with the exact ID that was sent.
 func checkResponseMatchesRequest(request, response *SnmpPacket) error {
 	const mismatch = "its %s does not match the request"
 
@@ -247,9 +251,7 @@ func checkResponseMatchesRequest(request, response *SnmpPacket) error {
 	if request.SecurityParameters == nil || response.SecurityParameters == nil {
 		return fmt.Errorf(mismatch, "msgSecurityParameters")
 	}
-	if response.ContextEngineID != request.ContextEngineID &&
-		(request.ContextEngineID != "" ||
-			response.ContextEngineID != request.SecurityParameters.getDefaultContextEngineID()) {
+	if response.ContextEngineID != request.ContextEngineID {
 		return fmt.Errorf(mismatch, "contextEngineID")
 	}
 	if response.ContextName != request.ContextName {
@@ -470,6 +472,9 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		x.Logger.Printf("parsed msg flags %s", MsgFlags)
 	}
 
+	if cursor >= len(packet) || Asn1BER(packet[cursor]) != Integer {
+		return 0, errors.New("error parsing SNMPV3 msgSecModel: not an INTEGER")
+	}
 	rawSecModel, count, err := parseRawField(x.Logger, packet[cursor:], "msgSecurityModel")
 	if err != nil {
 		return 0, fmt.Errorf("error parsing SNMPV3 msgSecModel: %w", err)
@@ -479,10 +484,14 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
-	if SecModel, ok := rawSecModel.(int); ok {
-		response.SecurityModel = SnmpV3SecurityModel(SecModel) //nolint:gosec
-		x.Logger.Printf("Parsed security model %d", SecModel)
+	// Compare the full value before narrowing it, so that a model such as
+	// 259 can't pass for USM (RFC 3412 section 7.2 step 4).
+	secModel, ok := rawSecModel.(int)
+	if !ok || secModel != int(UserSecurityModel) {
+		return 0, fmt.Errorf("%w %v", errUnsupportedSecurityModel, rawSecModel)
 	}
+	response.SecurityModel = UserSecurityModel
+	x.Logger.Printf("Parsed security model %d", secModel)
 
 	if PDUType(packet[cursor]) != PDUType(OctetString) {
 		return 0, errors.New("invalid SNMPV3 Security Parameters")
@@ -544,7 +553,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
-		rawContextEngineID, count, err := parseRawField(x.Logger, packet[cursor:], "contextEngineID")
+		contextEngineID, count, err := parseOctetStringField(x.Logger, packet[cursor:], "contextEngineID")
 		if err != nil {
 			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextEngineID: %w", err)
 		}
@@ -552,12 +561,10 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		if cursor < 0 || cursor > len(packet) {
 			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
+		response.ContextEngineID = contextEngineID
+		x.Logger.Printf("Parsed contextEngineID %s", contextEngineID)
 
-		if contextEngineID, ok := rawContextEngineID.(string); ok {
-			response.ContextEngineID = contextEngineID
-			x.Logger.Printf("Parsed contextEngineID %s", contextEngineID)
-		}
-		rawContextName, count, err := parseRawField(x.Logger, packet[cursor:], "contextName")
+		contextName, count, err := parseOctetStringField(x.Logger, packet[cursor:], "contextName")
 		if err != nil {
 			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextName: %w", err)
 		}
@@ -565,11 +572,8 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		if cursor < 0 || cursor > len(packet) {
 			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
-
-		if contextName, ok := rawContextName.(string); ok {
-			response.ContextName = contextName
-			x.Logger.Printf("Parsed contextName %s", contextName)
-		}
+		response.ContextName = contextName
+		x.Logger.Printf("Parsed contextName %s", contextName)
 
 	default:
 		return nil, 0, errors.New("error parsing SNMPV3 scoped PDU")

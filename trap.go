@@ -524,8 +524,9 @@ func (x *GoSNMP) getTrapIdentifier(trap []byte) (string, error) {
 	// Initialize a packet with no auth/priv to unmarshal ID/key for security parameters to use
 	packet := new(SnmpPacket)
 	_, err := x.unmarshalHeader(trap, packet)
-	// Return err if no identifier was able to be parsed after unmarshaling
-	if err != nil && packet.SecurityParameters.getIdentifier() == "" {
+	// Return err if no identifier was able to be parsed after unmarshaling.
+	// A header error can come before the security parameters are set.
+	if err != nil && (packet.SecurityParameters == nil || packet.SecurityParameters.getIdentifier() == "") {
 		return "", err
 	}
 	return packet.SecurityParameters.getIdentifier(), nil

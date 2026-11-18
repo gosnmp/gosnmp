@@ -347,6 +347,7 @@ type v3TestAgentReply struct {
 	contextEngineID       *string
 	contextName           *string
 	userName              *string
+	securityModel         *SnmpV3SecurityModel
 	boots                 *uint32
 	engineTime            *uint32
 }
@@ -403,10 +404,14 @@ func (a *v3TestAgent) reply(req *v3TestAgentRequest, r v3TestAgentReply) [][]byt
 		binary.BigEndian.PutUint64(salt, atomic.AddUint64(&a.saltCtr, 1))
 		sp.PrivacyParameters = salt
 	}
+	securityModel := UserSecurityModel
+	if r.securityModel != nil {
+		securityModel = *r.securityModel
+	}
 	pkt := &SnmpPacket{
 		Version:            Version3,
 		MsgFlags:           a.securityLevel(),
-		SecurityModel:      UserSecurityModel,
+		SecurityModel:      securityModel,
 		SecurityParameters: sp,
 		PDUType:            r.pduType,
 		MsgID:              msgID,
