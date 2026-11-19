@@ -405,7 +405,11 @@ func TestHMACEmptyPassword(t *testing.T) {
 // password cache entry for every engine ID, including the unauthenticated
 // engine ID of an incoming message.
 func TestGenlocalPrivKeySkipsUnneededExtension(t *testing.T) {
-	SetPwdCache()
+	// The test counts cache entries, so it needs caching even with
+	// gosnmp_nopwdcache.
+	cacheEnabled := !passwordCacheDisable.Load()
+	PasswordCaching(true)
+	t.Cleanup(func() { PasswordCaching(cacheEnabled) })
 
 	cacheLen := func() int {
 		passwordKeyHashMutex.RLock()
@@ -428,17 +432,21 @@ func TestGenlocalPrivKeySkipsUnneededExtension(t *testing.T) {
 		{SHA256, AES256C, 32},
 	} {
 		t.Run(tc.auth.String()+"/"+tc.priv.String(), func(t *testing.T) {
-			// The passphrase is cached on first use.
-			_, err := genlocalPrivKey(tc.priv, tc.auth, "privkey1", "engine")
+			// A passphrase of its own, so that no entry left by an earlier
+			// subtest can hide an extension run in this one.
+			passphrase := "privkey1/" + t.Name()
+
+			// Cache the passphrase hash.
+			_, err := genlocalkey(tc.auth, passphrase, "engine")
 			require.NoError(t, err)
 			before := cacheLen()
 
 			for i := range 5 {
 				engineID := fmt.Sprintf("engine%d", i)
-				key, err := genlocalPrivKey(tc.priv, tc.auth, "privkey1", engineID)
+				key, err := genlocalPrivKey(tc.priv, tc.auth, passphrase, engineID)
 				require.NoError(t, err)
 
-				localKey, err := genlocalkey(tc.auth, "privkey1", engineID)
+				localKey, err := genlocalkey(tc.auth, passphrase, engineID)
 				require.NoError(t, err)
 				require.Equal(t, localKey[:tc.keylen], key)
 			}
