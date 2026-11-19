@@ -335,6 +335,14 @@ sendRetry:
 				err = nil
 				continue
 			}
+			if err != nil && requireAuthFlag {
+				// Nothing in the message is authenticated yet, so a decoding
+				// error, such as a USM failure for another engine's parameters,
+				// can't end an authenticated request either.
+				x.Logger.Printf("ERROR response discarded: %s", err)
+				err = nil
+				continue
+			}
 			if err != nil {
 				x.Logger.Printf("ERROR on unmarshall header: %s", err)
 				break
@@ -357,6 +365,13 @@ sendRetry:
 					// Verify every message whose msgFlags claim authentication,
 					// whatever level the session itself is configured for.
 					err = x.verifyReceivedAuthentication(resp, result)
+				}
+				if err != nil && requireAuthFlag {
+					// RFC 3414 section 3.2 step 6: a message that fails
+					// authentication is discarded; keep waiting for the reply.
+					x.Logger.Printf("ERROR response discarded: %s", err)
+					err = nil
+					continue
 				}
 				if err != nil {
 					x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)

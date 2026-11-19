@@ -655,6 +655,86 @@ func TestV3SeclevelDiscardsUnsignedReportWithLocalizedKey(t *testing.T) {
 	requireV3SeclevelStateKept(t, sp)
 }
 
+// TestV3SeclevelDiscardsSignedReportWithLocalizedKey checks the signed
+// counterpart of the test above: a Report that claims authentication but names
+// another engine can't be processed with a localized key, and it is discarded
+// instead of ending the GET.
+func TestV3SeclevelDiscardsSignedReportWithLocalizedKey(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	otherEngineID := v3HarnessEngineID + "-new"
+	agent.steps = []v3TestAgentStep{v3SeclevelReportThenSysDescr(agent, v3TestAgentReply{
+		vars:                  []SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}},
+		authoritativeEngineID: &otherEngineID,
+	})}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	v3SeclevelSeedSession(sp)
+	require.NoError(t, sp.InitSecurityKeys())
+	sp.AuthenticationPassphrase = ""
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	requireRequestCount(t, agent, 1)
+	requireV3SeclevelStateKept(t, sp)
+}
+
+// TestV3SeclevelDiscardsTamperedSignedReply checks that a signed reply whose
+// digest no longer matches is discarded, and that the genuine reply that
+// follows completes the same GET, at both authenticated levels.
+func TestV3SeclevelDiscardsTamperedSignedReply(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		level SnmpV3MsgFlags
+		creds v3TestAgentCreds
+		// tamper changes one byte the digest covers.
+		tamper func([]byte) []byte
+	}{
+		{
+			name:  "authNoPriv value",
+			level: AuthNoPriv,
+			creds: v3HarnessCredsAuthNoPriv(),
+			tamper: func(msg []byte) []byte {
+				return bytes.Replace(msg, []byte(v3HarnessSysDescrValue), []byte("harness sysDescR"), 1)
+			},
+		},
+		{
+			name:  "authPriv last byte",
+			level: AuthPriv,
+			creds: v3HarnessCredsAuthPriv(),
+			tamper: func(msg []byte) []byte {
+				msg[len(msg)-1] ^= 0xff
+				return msg
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, tc.creds)
+			sysDescr := v3AgentSysDescr(agent)
+			agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+				out := sysDescr(req)
+				if len(out) != 1 {
+					return out
+				}
+				tampered := tc.tamper(append([]byte(nil), out[0]...))
+				return [][]byte{tampered, out[0]}
+			}}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, tc.level, agent.creds)
+			v3SeclevelSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			requireRequestCount(t, agent, 1)
+		})
+	}
+}
+
 // TestV3SeclevelEmptyReportIsDiscarded checks that a Report without varbinds
 // is discarded rather than returned, so its engine boots and time are not
 // stored, at both authenticated levels and whether or not it is authenticated.

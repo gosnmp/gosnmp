@@ -29,8 +29,10 @@ const (
 
 //go:generate stringer -type=SnmpV3MsgFlags
 
-var errInvalidMsgFlags = errors.New("invalid SNMPV3 msgFlags")
-var errUnauthenticatedResponse = errors.New("SNMPv3 response for an authenticated request lacks authentication")
+var (
+	errInvalidMsgFlags         = errors.New("invalid SNMPV3 msgFlags")
+	errUnauthenticatedResponse = errors.New("SNMPv3 response for an authenticated request lacks authentication")
+)
 
 // SnmpV3SecurityModel describes the security model used by a SnmpV3 connection
 type SnmpV3SecurityModel uint8
