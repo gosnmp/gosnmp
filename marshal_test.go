@@ -2725,3 +2725,69 @@ func TestReceive_TCP_Framing(t *testing.T) {
 		}
 	}
 }
+
+// TestSendOneRequest_CommunityNotLogged checks that a v2c request and its
+// response don't write the community string to the debug logger.
+func TestSendOneRequest_CommunityNotLogged(t *testing.T) {
+	const community = "s3cr3t-community"
+
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("udp4 error listening: %s", err)
+	}
+	defer srvr.Close()
+
+	go func() {
+		srv := &GoSNMP{Version: Version2c, Community: community, Logger: NewLogger(log.New(io.Discard, "", 0))}
+		buf := make([]byte, 1500)
+		n, addr, err := srvr.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		var reqPkt SnmpPacket
+		cursor, err := srv.unmarshalHeader(buf[:n], &reqPkt)
+		if err != nil {
+			return
+		}
+		if err = srv.unmarshalPayload(buf[:n], cursor, &reqPkt); err != nil {
+			return
+		}
+		rspPkt := srv.mkSnmpPacket(GetResponse, []SnmpPDU{
+			{Name: ".1.3.6.1.2.1.1.5.0", Type: OctetString, Value: []byte("host")},
+		}, 0, 0)
+		rspPkt.RequestID = reqPkt.RequestID
+		outBuf, err := rspPkt.marshalMsg()
+		if err != nil {
+			return
+		}
+		_, _ = srvr.WriteTo(outBuf, addr)
+	}()
+
+	var logBuf bytes.Buffer
+	x := &GoSNMP{
+		Version:   Version2c,
+		Community: community,
+		Target:    "127.0.0.1",
+		Port:      uint16(srvr.LocalAddr().(*net.UDPAddr).Port), //nolint:gosec
+		Timeout:   time.Second,
+		Retries:   0,
+		Logger:    NewLogger(log.New(&logBuf, "", 0)),
+	}
+	if err := x.Connect(); err != nil {
+		t.Fatalf("error connecting: %s", err)
+	}
+	defer x.Conn.Close()
+
+	if _, err := x.Get([]string{".1.3.6.1.2.1.1.5.0"}); err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	logged := logBuf.String()
+	if strings.Contains(logged, community) {
+		t.Errorf("community string written to the debug log:\n%s", logged)
+	}
+	// Raw packet bytes are formatted as decimal byte lists.
+	if decimal := strings.Trim(fmt.Sprintf("%d", []byte(community)), "[]"); strings.Contains(logged, decimal) {
+		t.Errorf("community string bytes written to the debug log:\n%s", logged)
+	}
+}
