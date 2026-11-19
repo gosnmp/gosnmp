@@ -320,8 +320,8 @@ sendRetry:
 
 			var cursor int
 			cursor, err = x.unmarshalHeader(resp, result)
-			if errors.Is(err, errPrivacyWithoutAuthentication) {
-				// RFC 3412 section 7.2 steps 5 and 6: discard the message and
+			if errors.Is(err, errInvalidMsgFlags) {
+				// RFC 3412 section 7.2 steps 2 and 5: discard the message and
 				// keep waiting for the reply.
 				x.Logger.Printf("ERROR response discarded: %s", err)
 				err = nil

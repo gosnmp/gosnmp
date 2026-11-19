@@ -29,9 +29,7 @@ const (
 
 //go:generate stringer -type=SnmpV3MsgFlags
 
-// errPrivacyWithoutAuthentication marks a v3 message whose msgFlags ask for
-// privacy without authentication, which is not a valid security level.
-var errPrivacyWithoutAuthentication = errors.New("msgFlags ask for privacy without authentication")
+var errInvalidMsgFlags = errors.New("invalid SNMPV3 msgFlags")
 
 // SnmpV3SecurityModel describes the security model used by a SnmpV3 connection
 type SnmpV3SecurityModel uint8
@@ -449,27 +447,27 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	// RFC 3412 section 6: msgFlags is a one-octet OCTET STRING. Anything
 	// else would leave the security level to whatever the packet held before.
 	if cursor >= len(packet) || Asn1BER(packet[cursor]) != OctetString {
-		return 0, errors.New("error parsing SNMPV3 msgFlags: not an OCTET STRING")
+		return 0, fmt.Errorf("%w: not an OCTET STRING", errInvalidMsgFlags)
 	}
 	rawMsgFlags, count, err := parseRawField(x.Logger, packet[cursor:], "msgFlags")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: %w", err)
+		return 0, fmt.Errorf("%w: %w", errInvalidMsgFlags, err)
 	}
 	cursor += count
 	if cursor < 0 || cursor > len(packet) {
-		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
+		return 0, fmt.Errorf("%w: truncated packet", errInvalidMsgFlags)
 	}
 
 	msgFlags, ok := rawMsgFlags.(string)
 	if !ok || len(msgFlags) != 1 {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: want one octet, got %d", len(msgFlags))
+		return 0, fmt.Errorf("%w: want one octet, got %d", errInvalidMsgFlags, len(msgFlags))
 	}
 	response.MsgFlags = SnmpV3MsgFlags(msgFlags[0])
 	x.Logger.Printf("parsed msg flags %s", response.MsgFlags)
 	// RFC 3412 section 7.2 steps 5 and 6: privacy without authentication is
 	// not a valid security level, so drop the message before USM sees it.
 	if response.MsgFlags&AuthNoPriv == 0 && response.MsgFlags&(AuthPriv&^AuthNoPriv) != 0 {
-		return 0, errPrivacyWithoutAuthentication
+		return 0, fmt.Errorf("%w: privacy without authentication", errInvalidMsgFlags)
 	}
 
 	rawSecModel, count, err := parseRawField(x.Logger, packet[cursor:], "msgSecurityModel")

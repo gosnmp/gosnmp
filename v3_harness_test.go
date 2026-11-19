@@ -735,15 +735,17 @@ func TestV3HeaderRejectsMalformedMsgFlags(t *testing.T) {
 	for _, msgFlags := range [][]byte{
 		{byte(OctetString), 0},
 		{byte(OctetString), 2, byte(AuthNoPriv), 0},
+		{byte(OctetString), 0x80}, // indefinite BER length
 		{byte(Integer), 1, byte(AuthNoPriv)},
 	} {
 		result := &SnmpPacket{MsgFlags: AuthPriv, Logger: gs.Logger}
 		_, err := gs.unmarshalV3Header(header(msgFlags...), 0, result)
-		require.ErrorContains(t, err, "msgFlags", "msgFlags %x", msgFlags)
+		require.ErrorIs(t, err, errInvalidMsgFlags, "msgFlags %x", msgFlags)
 	}
 
 	_, err := gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthPriv&^AuthNoPriv)), 0, &SnmpPacket{Logger: gs.Logger})
-	require.ErrorIs(t, err, errPrivacyWithoutAuthentication)
+	require.ErrorIs(t, err, errInvalidMsgFlags)
+	require.ErrorContains(t, err, "privacy without authentication")
 
 	result := &SnmpPacket{Logger: gs.Logger}
 	_, err = gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthNoPriv)), 0, result)
