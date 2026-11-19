@@ -181,6 +181,57 @@ func (packet *SnmpPacket) SafeString() string {
 	)
 }
 
+// communityRedacted prints a raw packet for the debug log as a byte list with
+// the v1/v2c community value replaced by '*'. Every length and offset stays as
+// received, so the dump can still be decoded by hand. The copy is only made
+// when a logger actually formats it.
+type communityRedacted []byte
+
+func (p communityRedacted) String() string {
+	start, end, ok := communityBounds(p)
+	if !ok {
+		return fmt.Sprintf("%d bytes, header not parsed", len(p))
+	}
+	redacted := append([]byte(nil), p...)
+	for i := start; i < end; i++ {
+		redacted[i] = '*'
+	}
+	return fmt.Sprint(redacted)
+}
+
+// communityBounds returns where the community value sits in a raw v1/v2c
+// packet. A v3 packet has no community and gives an empty range. ok is false
+// when the header is too malformed to tell.
+func communityBounds(packet []byte) (start, end int, ok bool) {
+	if len(packet) < 2 || PDUType(packet[0]) != Sequence {
+		return 0, 0, false
+	}
+	_, cursor, err := parseLength(packet)
+	if err != nil || cursor >= len(packet) || Asn1BER(packet[cursor]) != Integer {
+		return 0, 0, false
+	}
+	versionLen, _, err := parseLength(packet[cursor:])
+	if err != nil || versionLen > len(packet)-cursor {
+		return 0, 0, false
+	}
+	cursor += versionLen
+	if cursor >= len(packet) {
+		return 0, 0, false
+	}
+	if PDUType(packet[cursor]) == Sequence {
+		// v3 msgGlobalData follows the version, there's no community.
+		return 0, 0, true
+	}
+	if Asn1BER(packet[cursor]) != OctetString {
+		return 0, 0, false
+	}
+	length, header, err := parseLength(packet[cursor:])
+	if err != nil || length > len(packet)-cursor {
+		return 0, 0, false
+	}
+	return cursor + header, cursor + length, true
+}
+
 // GoSNMP
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
@@ -309,7 +360,7 @@ sendRetry:
 			if x.OnRecv != nil {
 				x.OnRecv(x)
 			}
-			x.Logger.Printf("GET RESPONSE OK: %d bytes", len(resp))
+			x.Logger.Printf("GET RESPONSE OK: %v", communityRedacted(resp))
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
 
