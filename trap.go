@@ -6,7 +6,7 @@ package gosnmp
 
 import (
 	"bytes"
-	crand "crypto/rand"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -402,7 +402,7 @@ func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineI
 // enough DES replies.
 func (t *TrapListener) seedReplySalts() error {
 	var seed [12]byte
-	if _, err := crand.Read(seed[:]); err != nil {
+	if _, err := rand.Read(seed[:]); err != nil {
 		return fmt.Errorf("error creating a cryptographically secure salt: %w", err)
 	}
 	t.replyAESSalt.Store(binary.BigEndian.Uint64(seed[:8]))
