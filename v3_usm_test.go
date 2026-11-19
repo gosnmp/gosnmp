@@ -547,6 +547,59 @@ func TestUnmarshalTrapDerivesPrivKeyAfterAuth(t *testing.T) {
 	}
 }
 
+// TestSnmpEncodePacketDerivesKeys checks that a sender configured with
+// passphrases only, and no InitSecurityKeys call, gets its localized keys
+// before the packet is encrypted and signed. The HMAC used to be computed
+// with an empty authentication key.
+func TestSnmpEncodePacketDerivesKeys(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	pdus := []SnmpPDU{{Name: ".1.3.6.1.2.1.1.3.0", Type: TimeTicks, Value: uint32(1)}}
+
+	for _, tc := range []struct {
+		flags SnmpV3MsgFlags
+		auth  SnmpV3AuthProtocol
+		priv  SnmpV3PrivProtocol
+	}{
+		{AuthNoPriv, SHA, NoPriv},
+		{AuthPriv, MD5, AES192C},
+		{AuthPriv, SHA, AES192C},
+		{AuthPriv, MD5, AES256C},
+		{AuthPriv, SHA, AES256C},
+		{AuthPriv, SHA224, AES256C},
+	} {
+		t.Run(tc.auth.String()+"/"+tc.priv.String(), func(t *testing.T) {
+			newGoSNMP := func(engineID string) *GoSNMP {
+				return &GoSNMP{
+					Version:       Version3,
+					SecurityModel: UserSecurityModel,
+					MsgFlags:      tc.flags,
+					Logger:        logger,
+					SecurityParameters: &UsmSecurityParameters{
+						UserName:                 "trapuser",
+						AuthenticationProtocol:   tc.auth,
+						AuthenticationPassphrase: "authkey1",
+						PrivacyProtocol:          tc.priv,
+						PrivacyPassphrase:        "privkey1",
+						AuthoritativeEngineID:    engineID,
+					},
+				}
+			}
+
+			sender := newGoSNMP("\x80\x00\x1f\x88\x80sender")
+			pkt, err := sender.SnmpEncodePacket(SNMPv2Trap, pdus, 0, 0)
+			require.NoError(t, err)
+
+			listener := newGoSNMP("\x80\x00\x1f\x88\x80listener")
+			require.NoError(t, listener.validateParameters())
+			result, err := listener.UnmarshalTrap(pkt, false)
+			require.NoError(t, err)
+			require.Equal(t, tc.flags, result.MsgFlags&AuthPriv)
+			require.Len(t, result.Variables, 1)
+			require.Equal(t, pdus[0].Value, result.Variables[0].Value)
+		})
+	}
+}
+
 func BenchmarkSingleHash(b *testing.B) {
 	SetPwdCache()
 

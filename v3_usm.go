@@ -821,6 +821,12 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 	var msgDigest []byte
 	var err error
 
+	// As in encryptPacket, derive the key if the caller hasn't, so that the
+	// message isn't signed with an empty key.
+	if err = sp.initAuthKeyNoLock(); err != nil {
+		return err
+	}
+
 	if msgDigest, err = sp.calcPacketDigest(packet); err != nil {
 		return err
 	}
