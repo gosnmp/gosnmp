@@ -600,6 +600,12 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 			}
 		}
 
+		err = x.authenticateEncryptedTrap(trap, cursor, result, useResponseSecurityParameters, discoveryProbe)
+		if err != nil {
+			x.Logger.Printf("UnmarshalTrap v3 auth: %s", err)
+			return nil, err
+		}
+
 		trap, cursor, err = x.decryptPacket(trap, cursor, result)
 		if err != nil {
 			x.Logger.Printf("UnmarshalTrap v3 decrypt: %s", err)
@@ -615,4 +621,38 @@ func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, use
 		return nil, errors.New("UnmarshalTrap: unauthenticated message is not an engine discovery request")
 	}
 	return result, nil
+}
+
+// authenticateEncryptedTrap makes sure that the HMAC of an encrypted v3 trap
+// has been verified before it is decrypted, which also derives the privacy
+// key and can cost a full password hash per engine ID. testAuthentication
+// goes by the listener's MsgFlags unless useResponseSecurityParameters is
+// set, so a listener configured for noAuthNoPriv skips it for an authPriv
+// message.
+func (x *GoSNMP) authenticateEncryptedTrap(trap []byte, cursor int, result *SnmpPacket, useResponseSecurityParameters, discoveryProbe bool) error {
+	encrypted := result.MsgFlags&AuthPriv > AuthNoPriv ||
+		(cursor < len(trap) && PDUType(trap[cursor]) == PDUType(OctetString))
+	if !encrypted {
+		return nil
+	}
+
+	msgFlags := x.MsgFlags
+	if useResponseSecurityParameters {
+		msgFlags = result.MsgFlags
+	}
+	if !discoveryProbe && msgFlags&AuthNoPriv != 0 {
+		return nil // testAuthentication has verified it
+	}
+
+	if discoveryProbe || result.MsgFlags&AuthNoPriv == 0 || x.SecurityParameters == nil {
+		return errors.New("encrypted message is not authenticated")
+	}
+	authentic, err := x.SecurityParameters.isAuthentic(trap, result)
+	if err != nil {
+		return err
+	}
+	if !authentic {
+		return errors.New("incoming packet is not authentic, discarding")
+	}
+	return nil
 }

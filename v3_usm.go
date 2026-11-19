@@ -289,6 +289,13 @@ func (sp *UsmSecurityParameters) InitSecurityKeys() error {
 }
 
 func (sp *UsmSecurityParameters) initSecurityKeysNoLock() error {
+	if err := sp.initAuthKeyNoLock(); err != nil {
+		return err
+	}
+	return sp.initPrivKeyNoLock()
+}
+
+func (sp *UsmSecurityParameters) initAuthKeyNoLock() error {
 	var err error
 
 	if sp.AuthenticationProtocol > NoAuth && len(sp.SecretKey) == 0 {
@@ -299,6 +306,16 @@ func (sp *UsmSecurityParameters) initSecurityKeysNoLock() error {
 			return err
 		}
 	}
+	return nil
+}
+
+// initPrivKeyNoLock derives the privacy key if it isn't set. For an incoming
+// message, call it only once the message has been authenticated: the Reeder
+// key extension can cost a full password hash and a password cache entry for
+// each engine ID.
+func (sp *UsmSecurityParameters) initPrivKeyNoLock() error {
+	var err error
+
 	if sp.PrivacyProtocol > NoPriv && len(sp.PrivacyKey) == 0 {
 		switch sp.PrivacyProtocol {
 		// Changed: The Output of SHA1 is a 20 octets array, therefore for AES128 (16 octets) either key extension algorithm can be used.
@@ -539,13 +556,20 @@ func cacheKey(authProtocol SnmpV3AuthProtocol, passphrase string) string {
 // Many vendors, including Cisco, use the 3DES key extension algorithm to extend the privacy keys that are too short when using AES,AES192 and AES256.
 // Previously implemented in net-snmp and pysnmp libraries.
 // Tested for AES128 and AES256
-func extendKeyReeder(authProtocol SnmpV3AuthProtocol, password, engineID string) ([]byte, error) {
+func extendKeyReeder(authProtocol SnmpV3AuthProtocol, password, engineID string, keylen int) ([]byte, error) {
 	var key []byte
 	var err error
 
 	key, err = hMAC(authProtocol.HashType(), cacheKey(authProtocol, password), password, engineID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Only extend a key that is too short for the cipher. The extension runs
+	// the localized key, which depends on engineID, through passwordToKey, so
+	// it costs a full password hash and a password cache entry per engine ID.
+	if len(key) >= keylen {
+		return key, nil
 	}
 
 	newkey, err := hMAC(authProtocol.HashType(), cacheKey(authProtocol, string(key)), string(key), engineID)
@@ -589,7 +613,7 @@ func genlocalPrivKey(privProtocol SnmpV3PrivProtocol, authProtocol SnmpV3AuthPro
 
 	switch privProtocol {
 	case AES, AES192C, AES256C:
-		localPrivKey, err = extendKeyReeder(authProtocol, password, engineID)
+		localPrivKey, err = extendKeyReeder(authProtocol, password, engineID, keylen)
 
 	case AES192, AES256:
 		localPrivKey, err = extendKeyBlumenthal(authProtocol, password, engineID)
@@ -797,6 +821,12 @@ func (sp *UsmSecurityParameters) authenticate(packet []byte) error {
 	var msgDigest []byte
 	var err error
 
+	// As in encryptPacket, derive the key if the caller hasn't, so that the
+	// message isn't signed with an empty key.
+	if err = sp.initAuthKeyNoLock(); err != nil {
+		return err
+	}
+
 	if msgDigest, err = sp.calcPacketDigest(packet); err != nil {
 		return err
 	}
@@ -838,6 +868,12 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 
 func (sp *UsmSecurityParameters) encryptPacket(scopedPdu []byte) ([]byte, error) {
 	var b []byte
+
+	// A reply reuses the parameters of the request, whose privacy key is
+	// unset if unmarshal saw a new engine ID and nothing was decrypted.
+	if err := sp.initPrivKeyNoLock(); err != nil {
+		return nil, err
+	}
 
 	switch sp.PrivacyProtocol {
 	case AES, AES192, AES256, AES192C, AES256C:
@@ -896,6 +932,11 @@ func (sp *UsmSecurityParameters) decryptPacket(packet []byte, cursor int) ([]byt
 	cursorTmp += cursor
 	if cursorTmp > len(packet) {
 		return nil, errors.New("error decrypting ScopedPDU: truncated packet")
+	}
+
+	// unmarshal leaves the privacy key unset for a new engine ID.
+	if err = sp.initPrivKeyNoLock(); err != nil {
+		return nil, err
 	}
 
 	switch sp.PrivacyProtocol {
@@ -1036,7 +1077,9 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 			sp.PrivacyKey = nil
 
 			sp.Logger.Printf("Parsed authoritativeEngineID %0x", []byte(AuthoritativeEngineID))
-			err = sp.initSecurityKeysNoLock()
+			// The message isn't authenticated yet, so only derive the key
+			// that checks it. The privacy key is derived when decrypting.
+			err = sp.initAuthKeyNoLock()
 			if err != nil {
 				return 0, err
 			}

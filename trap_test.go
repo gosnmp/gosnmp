@@ -500,6 +500,31 @@ func TestUnmarshalTrapAuthNoPrivForPrivUser(t *testing.T) {
 	require.Equal(t, uint32(957979745), res.RequestID)
 }
 
+// TestUnmarshalTrapNoAuthListenerPlaintext checks that a listener configured
+// for noAuthNoPriv with authentication and privacy credentials still accepts
+// a plaintext engine discovery request and an authNoPriv trap. Only an
+// encrypted message needs a verified HMAC before it is decrypted.
+func TestUnmarshalTrapNoAuthListenerPlaintext(t *testing.T) {
+	sp := secParamsList[0].Copy().(*UsmSecurityParameters) // myuser, MD5
+	sp.PrivacyProtocol = AES
+	sp.PrivacyPassphrase = "myprivacy"
+	gs := newTestGoSNMPv3(NoAuthNoPriv, sp)
+
+	probe := (&UsmSecurityParameters{Logger: NewLogger(log.New(io.Discard, "", 0))}).discoveryRequired()
+	probe.MsgID = 1
+	probe.RequestID = 1
+	buf, err := probe.MarshalMsg()
+	require.NoError(t, err)
+
+	res, err := gs.UnmarshalTrap(buf, false)
+	require.NoError(t, err)
+	require.True(t, isEngineDiscoveryRequest(res))
+
+	res, err = gs.UnmarshalTrap(genericV3Trap(), false)
+	require.NoError(t, err)
+	require.Equal(t, uint32(957979745), res.RequestID)
+}
+
 // TestUnmarshalTrapNoAuthUserInTable checks that the security level check
 // still accepts a noAuthNoPriv trap for a table user with no authentication.
 func TestUnmarshalTrapNoAuthUserInTable(t *testing.T) {
