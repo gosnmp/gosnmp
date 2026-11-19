@@ -455,6 +455,98 @@ func TestGenlocalPrivKeySkipsUnneededExtension(t *testing.T) {
 	}
 }
 
+// TestUnmarshalTrapDerivesPrivKeyAfterAuth checks that a message with a new
+// engine ID only gets a privacy key once it has been authenticated. For these
+// protocols the Reeder key extension runs, which costs a full password hash
+// and a password cache entry per engine ID.
+func TestUnmarshalTrapDerivesPrivKeyAfterAuth(t *testing.T) {
+	cacheEnabled := !passwordCacheDisable.Load()
+	PasswordCaching(true)
+	t.Cleanup(func() { PasswordCaching(cacheEnabled) })
+
+	cacheLen := func() int {
+		passwordKeyHashMutex.RLock()
+		defer passwordKeyHashMutex.RUnlock()
+		return len(passwordKeyHashCache)
+	}
+
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	pdus := []SnmpPDU{{Name: ".1.3.6.1.2.1.1.3.0", Type: TimeTicks, Value: uint32(1)}}
+
+	for _, tc := range []struct {
+		auth SnmpV3AuthProtocol
+		priv SnmpV3PrivProtocol
+	}{
+		{MD5, AES192C},
+		{SHA, AES192C},
+		{MD5, AES256C},
+		{SHA, AES256C},
+		{SHA224, AES256C},
+	} {
+		t.Run(tc.auth.String()+"/"+tc.priv.String(), func(t *testing.T) {
+			newParams := func(engineID string) *UsmSecurityParameters {
+				return &UsmSecurityParameters{
+					UserName:                 "trapuser",
+					AuthenticationProtocol:   tc.auth,
+					AuthenticationPassphrase: "authkey1/" + t.Name(),
+					PrivacyProtocol:          tc.priv,
+					PrivacyPassphrase:        "privkey1/" + t.Name(),
+					AuthoritativeEngineID:    engineID,
+				}
+			}
+
+			listener := &GoSNMP{
+				Version:            Version3,
+				SecurityModel:      UserSecurityModel,
+				MsgFlags:           AuthPriv,
+				Logger:             logger,
+				SecurityParameters: newParams("\x80\x00\x1f\x88\x80listener"),
+			}
+			require.NoError(t, listener.validateParameters())
+			require.NoError(t, listener.SecurityParameters.InitSecurityKeys())
+			before := cacheLen()
+
+			// Unauthenticated traps from a sender that knows no credentials.
+			for i := range 5 {
+				sender := &GoSNMP{
+					Version:       Version3,
+					SecurityModel: UserSecurityModel,
+					MsgFlags:      NoAuthNoPriv,
+					Logger:        logger,
+					SecurityParameters: &UsmSecurityParameters{
+						UserName:              "trapuser",
+						AuthoritativeEngineID: fmt.Sprintf("\x80\x00\x1f\x88\x80forged%d", i),
+					},
+				}
+				pkt, err := sender.SnmpEncodePacket(SNMPv2Trap, pdus, 0, 0)
+				require.NoError(t, err)
+
+				_, err = listener.UnmarshalTrap(pkt, false)
+				require.Error(t, err)
+			}
+			require.Equal(t, before, cacheLen())
+
+			// An authenticated trap from a new engine ID still decrypts.
+			sender := &GoSNMP{
+				Version:            Version3,
+				SecurityModel:      UserSecurityModel,
+				MsgFlags:           AuthPriv,
+				Logger:             logger,
+				SecurityParameters: newParams("\x80\x00\x1f\x88\x80sender"),
+			}
+			require.NoError(t, sender.validateParameters())
+			require.NoError(t, sender.SecurityParameters.InitSecurityKeys())
+			pkt, err := sender.SnmpEncodePacket(SNMPv2Trap, pdus, 0, 0)
+			require.NoError(t, err)
+
+			result, err := listener.UnmarshalTrap(pkt, false)
+			require.NoError(t, err)
+			require.Len(t, result.Variables, 1)
+			require.Equal(t, pdus[0].Value, result.Variables[0].Value)
+		})
+	}
+}
+
 func BenchmarkSingleHash(b *testing.B) {
 	SetPwdCache()
 
