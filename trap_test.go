@@ -240,6 +240,13 @@ SANITY:
 	}
 }
 
+func TestGetTrapIdentifierReturnsHeaderError(t *testing.T) {
+	gs := newTestGoSNMP()
+	identifier, err := gs.getTrapIdentifier(nil)
+	require.ErrorContains(t, err, "cannot unmarshal empty packet")
+	require.Empty(t, identifier)
+}
+
 func TestUnmarshalTrapWithMultipleUsers(t *testing.T) {
 	usmMap := NewSnmpV3SecurityParametersTable(NewLogger(log.New(io.Discard, "", 0)))
 	for _, sp := range secParamsList {
