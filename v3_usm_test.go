@@ -5,6 +5,7 @@
 package gosnmp
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -455,13 +456,13 @@ func TestGenlocalPrivKeySkipsUnneededExtension(t *testing.T) {
 	}
 }
 
-// TestUnmarshalTrapDerivesPrivKeyAfterAuth checks that a message with a new
-// engine ID only gets a privacy key once it has been authenticated. For these
-// protocols the Reeder key extension runs, which costs a full password hash
-// and a password cache entry per engine ID.
+// TestUnmarshalTrapDerivesPrivKeyAfterAuth checks that a listener only derives
+// the privacy key for a new engine ID once a message from it has been
+// authenticated, including when the listener's own MsgFlags are noAuthNoPriv.
+// For these protocols the Reeder key extension runs, which costs a full
+// password hash and a password cache entry per engine ID.
 func TestUnmarshalTrapDerivesPrivKeyAfterAuth(t *testing.T) {
 	cacheEnabled := !passwordCacheDisable.Load()
-	PasswordCaching(true)
 	t.Cleanup(func() { PasswordCaching(cacheEnabled) })
 
 	cacheLen := func() int {
@@ -469,81 +470,82 @@ func TestUnmarshalTrapDerivesPrivKeyAfterAuth(t *testing.T) {
 		defer passwordKeyHashMutex.RUnlock()
 		return len(passwordKeyHashCache)
 	}
+	cached := func(key string) bool {
+		passwordKeyHashMutex.RLock()
+		defer passwordKeyHashMutex.RUnlock()
+		_, ok := passwordKeyHashCache[key]
+		return ok
+	}
 
+	const senderEngineID = "\x80\x00\x1f\x88\x80sender"
 	logger := NewLogger(log.New(io.Discard, "", 0))
-	pdus := []SnmpPDU{{Name: ".1.3.6.1.2.1.1.3.0", Type: TimeTicks, Value: uint32(1)}}
 
+	// authPriv traps from senderEngineID for user "trapuser", with passphrases
+	// "authpass" and "privpass" and a single sysUpTime varbind of 1. They are
+	// fixed so that the sender's keys never go through the password cache.
 	for _, tc := range []struct {
 		auth SnmpV3AuthProtocol
 		priv SnmpV3PrivProtocol
+		trap string
 	}{
-		{MD5, AES192C},
-		{SHA, AES192C},
-		{MD5, AES256C},
-		{SHA, AES256C},
-		{SHA224, AES256C},
+		{MD5, AES192C, "30730201033011020400000001020300ffff04010302010304373035040b80001f888073656e64657202010002010004087472617075736572040c259966ca2cdeddea59d43afa0408779c0164f8a898190422c2706f2fe1e6806a9debb5f0f1ab1bc5d92db9d38c901c876afd8caa34dce680fe6b"},
+		{SHA, AES192C, "30730201033011020400000001020300ffff04010302010304373035040b80001f888073656e64657202010002010004087472617075736572040c7befed66fdb0c2ec371054620408ebff9277b34979dc04221a821ee36b7e6e11e5a505b843bbd626bcc2c606af9a921c7364d3c51ed9f5cdff98"},
+		{MD5, AES256C, "30730201033011020400000001020300ffff04010302010304373035040b80001f888073656e64657202010002010004087472617075736572040ce4ac42f879096aa1fa1cfd5f0408390543a78b5f25770422989e8bee882f3f84c72a6bd945a2a07c671b292fef49ce263863e31f9e8771b58615"},
+		{SHA, AES256C, "30730201033011020400000001020300ffff04010302010304373035040b80001f888073656e64657202010002010004087472617075736572040cecc5d9d3cd8ca941eb759b700408fd4448b170acb3730422615831165644c7586773d39ce4b0bf21ec0c29c1f7f6073a569daca62d13c6e940c5"},
+		{SHA224, AES256C, "30770201033011020400000001020300ffff040103020103043b3039040b80001f888073656e6465720201000201000408747261707573657204108477514541f5e5ec40b8b95ea805357b0408a4c3c12e1a79388a04224cec656ee1eb95dffb72efc7c56b8e841dadb0d95d4c531e219553944af8d30b9555"},
 	} {
-		t.Run(tc.auth.String()+"/"+tc.priv.String(), func(t *testing.T) {
-			newParams := func(engineID string) *UsmSecurityParameters {
-				return &UsmSecurityParameters{
-					UserName:                 "trapuser",
-					AuthenticationProtocol:   tc.auth,
-					AuthenticationPassphrase: "authkey1/" + t.Name(),
-					PrivacyProtocol:          tc.priv,
-					PrivacyPassphrase:        "privkey1/" + t.Name(),
-					AuthoritativeEngineID:    engineID,
-				}
-			}
-
-			listener := &GoSNMP{
-				Version:            Version3,
-				SecurityModel:      UserSecurityModel,
-				MsgFlags:           AuthPriv,
-				Logger:             logger,
-				SecurityParameters: newParams("\x80\x00\x1f\x88\x80listener"),
-			}
-			require.NoError(t, listener.validateParameters())
-			require.NoError(t, listener.SecurityParameters.InitSecurityKeys())
-			before := cacheLen()
-
-			// Unauthenticated traps from a sender that knows no credentials.
-			for i := range 5 {
-				sender := &GoSNMP{
-					Version:       Version3,
-					SecurityModel: UserSecurityModel,
-					MsgFlags:      NoAuthNoPriv,
-					Logger:        logger,
-					SecurityParameters: &UsmSecurityParameters{
-						UserName:              "trapuser",
-						AuthoritativeEngineID: fmt.Sprintf("\x80\x00\x1f\x88\x80forged%d", i),
-					},
-				}
-				pkt, err := sender.SnmpEncodePacket(SNMPv2Trap, pdus, 0, 0)
+		for _, flags := range []SnmpV3MsgFlags{AuthPriv, NoAuthNoPriv} {
+			t.Run(tc.auth.String()+"/"+tc.priv.String()+"/"+flags.String(), func(t *testing.T) {
+				trap, err := hex.DecodeString(tc.trap)
 				require.NoError(t, err)
 
-				_, err = listener.UnmarshalTrap(pkt, false)
-				require.Error(t, err)
-			}
-			require.Equal(t, before, cacheLen())
+				// Start from an empty cache, so that only this listener can
+				// add the Reeder entry for senderEngineID.
+				PasswordCaching(false)
+				PasswordCaching(true)
 
-			// An authenticated trap from a new engine ID still decrypts.
-			sender := &GoSNMP{
-				Version:            Version3,
-				SecurityModel:      UserSecurityModel,
-				MsgFlags:           AuthPriv,
-				Logger:             logger,
-				SecurityParameters: newParams("\x80\x00\x1f\x88\x80sender"),
-			}
-			require.NoError(t, sender.validateParameters())
-			require.NoError(t, sender.SecurityParameters.InitSecurityKeys())
-			pkt, err := sender.SnmpEncodePacket(SNMPv2Trap, pdus, 0, 0)
-			require.NoError(t, err)
+				listener := &GoSNMP{
+					Version:       Version3,
+					SecurityModel: UserSecurityModel,
+					MsgFlags:      flags,
+					Logger:        logger,
+					SecurityParameters: &UsmSecurityParameters{
+						UserName:                 "trapuser",
+						AuthenticationProtocol:   tc.auth,
+						AuthenticationPassphrase: "authpass",
+						PrivacyProtocol:          tc.priv,
+						PrivacyPassphrase:        "privpass",
+						AuthoritativeEngineID:    "\x80\x00\x1f\x88\x80listener",
+					},
+				}
+				require.NoError(t, listener.validateParameters())
+				require.NoError(t, listener.SecurityParameters.InitSecurityKeys())
 
-			result, err := listener.UnmarshalTrap(pkt, false)
-			require.NoError(t, err)
-			require.Len(t, result.Variables, 1)
-			require.Equal(t, pdus[0].Value, result.Variables[0].Value)
-		})
+				// The Reeder extension caches the password hash of the key
+				// localized to the engine ID.
+				localKey, err := genlocalkey(tc.auth, "privpass", senderEngineID)
+				require.NoError(t, err)
+				reederKey := cacheKey(tc.auth, string(localKey))
+				before := cacheLen()
+
+				// The fixed trap from other engine IDs, so its HMAC doesn't verify.
+				for i := range 5 {
+					forged := bytes.Replace(trap, []byte(senderEngineID), fmt.Appendf(nil, "\x80\x00\x1f\x88\x80forge%d", i), 1)
+					require.NotEqual(t, trap, forged)
+
+					_, err = listener.UnmarshalTrap(forged, false)
+					require.Error(t, err)
+				}
+				require.Equal(t, before, cacheLen())
+				require.False(t, cached(reederKey))
+
+				result, err := listener.UnmarshalTrap(trap, false)
+				require.NoError(t, err)
+				require.Len(t, result.Variables, 1)
+				require.Equal(t, uint32(1), result.Variables[0].Value)
+				require.True(t, cached(reederKey))
+			})
+		}
 	}
 }
 
