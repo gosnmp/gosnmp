@@ -742,8 +742,11 @@ func TestV3HeaderRejectsMalformedMsgFlags(t *testing.T) {
 		require.ErrorContains(t, err, "msgFlags", "msgFlags %x", msgFlags)
 	}
 
+	_, err := gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthPriv&^AuthNoPriv)), 0, &SnmpPacket{Logger: gs.Logger})
+	require.ErrorIs(t, err, errPrivacyWithoutAuthentication)
+
 	result := &SnmpPacket{Logger: gs.Logger}
-	_, err := gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthNoPriv)), 0, result)
+	_, err = gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthNoPriv)), 0, result)
 	if err != nil {
 		require.NotContains(t, err.Error(), "msgFlags")
 	}
@@ -775,7 +778,8 @@ func TestV3SeclevelAuthPrivRejectsAuthNoPrivResponse(t *testing.T) {
 }
 
 // TestV3SeclevelRejectsPrivWithoutAuth checks that a response whose msgFlags
-// ask for privacy without authentication is discarded.
+// ask for privacy without authentication is discarded before USM decodes it,
+// and that the valid reply that follows completes the same attempt.
 func TestV3SeclevelRejectsPrivWithoutAuth(t *testing.T) {
 	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3TestAgentCreds{username: v3HarnessUser})
 	sysDescr := v3AgentSysDescr(agent)
@@ -784,7 +788,7 @@ func TestV3SeclevelRejectsPrivWithoutAuth(t *testing.T) {
 		if len(out) != 1 {
 			return out
 		}
-		return [][]byte{setV3MsgFlags(t, out[0], AuthPriv&^AuthNoPriv)}
+		return [][]byte{setV3MsgFlags(t, out[0], AuthPriv&^AuthNoPriv), out[0]}
 	}}
 	port := agent.startUDP(t)
 
@@ -793,8 +797,30 @@ func TestV3SeclevelRejectsPrivWithoutAuth(t *testing.T) {
 	v3HarnessConnect(t, gs)
 
 	result, err := gs.Get([]string{v3HarnessSysDescrOID})
-	require.Error(t, err)
-	require.Nil(t, result)
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	requireRequestCount(t, agent, 1)
+}
+
+// wrappedUSM is a caller's own SnmpV3SecurityParameters built on USM.
+type wrappedUSM struct{ *UsmSecurityParameters }
+
+// TestV3SeclevelVerifiesThroughTheInterface checks that an authenticated
+// reply is verified through the SnmpV3SecurityParameters interface, so a type
+// that embeds *UsmSecurityParameters still works.
+func TestV3SeclevelVerifiesThroughTheInterface(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{v3AgentSysDescr(agent)}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	v3SeclevelSeedSession(sp)
+	gs.SecurityParameters = &wrappedUSM{sp}
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
 	requireRequestCount(t, agent, 1)
 }
 

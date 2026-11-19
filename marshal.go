@@ -320,6 +320,13 @@ sendRetry:
 
 			var cursor int
 			cursor, err = x.unmarshalHeader(resp, result)
+			if errors.Is(err, errPrivacyWithoutAuthentication) {
+				// RFC 3412 section 7.2 steps 5 and 6: discard the message and
+				// keep waiting for the reply.
+				x.Logger.Printf("ERROR response discarded: %s", err)
+				err = nil
+				continue
+			}
 			if err != nil {
 				x.Logger.Printf("ERROR on unmarshall header: %s", err)
 				break
@@ -331,13 +338,9 @@ sendRetry:
 			var receivedLevel SnmpV3MsgFlags
 			if x.Version == Version3 {
 				// RFC 3412 section 7.2 step 5: the security level of an
-				// incoming message comes from its own msgFlags, and privacy
-				// without authentication is not a valid level.
+				// incoming message comes from its own msgFlags. The header
+				// parser has already dropped privacy without authentication.
 				receivedLevel = result.MsgFlags & AuthPriv
-				if receivedLevel == AuthPriv&^AuthNoPriv {
-					x.Logger.Print("ERROR v3 message with privacy but no authentication discarded")
-					continue
-				}
 				useResponseSecurityParameters := false
 				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok {
 					if usp.AuthoritativeEngineID == "" {

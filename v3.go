@@ -29,6 +29,10 @@ const (
 
 //go:generate stringer -type=SnmpV3MsgFlags
 
+// errPrivacyWithoutAuthentication marks a v3 message whose msgFlags ask for
+// privacy without authentication, which is not a valid security level.
+var errPrivacyWithoutAuthentication = errors.New("msgFlags ask for privacy without authentication")
+
 // SnmpV3SecurityModel describes the security model used by a SnmpV3 connection
 type SnmpV3SecurityModel uint8
 
@@ -234,17 +238,10 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 
 // verifyReceivedAuthentication checks the digest of a message whose msgFlags
 // claim authentication against the session's own user, whatever level the
-// session is configured for. A user without an authentication key can't
-// verify a digest, so such a message is rejected rather than trusted.
+// session is configured for. The USM decoder has already rejected such a
+// message if the user has no authentication protocol.
 func (x *GoSNMP) verifyReceivedAuthentication(packet []byte, result *SnmpPacket) error {
-	usp, ok := x.SecurityParameters.(*UsmSecurityParameters)
-	if !ok {
-		return errors.New("incoming packet claims authentication, but the session has no USM parameters")
-	}
-	if usp.AuthenticationProtocol <= NoAuth {
-		return errors.New("incoming packet claims authentication, but the user has no authentication key")
-	}
-	authentic, err := usp.isAuthentic(packet, result)
+	authentic, err := x.SecurityParameters.isAuthentic(packet, result)
 	if err != nil {
 		return err
 	}
@@ -469,6 +466,11 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	response.MsgFlags = SnmpV3MsgFlags(msgFlags[0])
 	x.Logger.Printf("parsed msg flags %s", response.MsgFlags)
+	// RFC 3412 section 7.2 steps 5 and 6: privacy without authentication is
+	// not a valid security level, so drop the message before USM sees it.
+	if response.MsgFlags&AuthNoPriv == 0 && response.MsgFlags&(AuthPriv&^AuthNoPriv) != 0 {
+		return 0, errPrivacyWithoutAuthentication
+	}
 
 	rawSecModel, count, err := parseRawField(x.Logger, packet[cursor:], "msgSecurityModel")
 	if err != nil {
