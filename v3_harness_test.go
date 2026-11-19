@@ -631,6 +631,30 @@ func TestV3SeclevelUnauthenticatedReportIsDiscarded(t *testing.T) {
 	}
 }
 
+func TestV3SeclevelDiscardsUnsignedReportWithLocalizedKey(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	noAuth := NoAuthNoPriv
+	otherEngineID := v3HarnessEngineID + "-new"
+	agent.steps = []v3TestAgentStep{v3SeclevelReportThenSysDescr(agent, v3TestAgentReply{
+		vars:                  []SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}},
+		msgFlags:              &noAuth,
+		authoritativeEngineID: &otherEngineID,
+	})}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	v3SeclevelSeedSession(sp)
+	require.NoError(t, sp.InitSecurityKeys())
+	sp.AuthenticationPassphrase = ""
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	requireRequestCount(t, agent, 1)
+	requireV3SeclevelStateKept(t, sp)
+}
+
 // TestV3SeclevelEmptyReportIsDiscarded checks that a Report without varbinds
 // is discarded rather than returned, so its engine boots and time are not
 // stored, at both authenticated levels and whether or not it is authenticated.
@@ -739,16 +763,16 @@ func TestV3HeaderRejectsMalformedMsgFlags(t *testing.T) {
 		{byte(Integer), 1, byte(AuthNoPriv)},
 	} {
 		result := &SnmpPacket{MsgFlags: AuthPriv, Logger: gs.Logger}
-		_, err := gs.unmarshalV3Header(header(msgFlags...), 0, result)
+		_, err := gs.unmarshalV3Header(header(msgFlags...), 0, result, false)
 		require.ErrorIs(t, err, errInvalidMsgFlags, "msgFlags %x", msgFlags)
 	}
 
-	_, err := gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthPriv&^AuthNoPriv)), 0, &SnmpPacket{Logger: gs.Logger})
+	_, err := gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthPriv&^AuthNoPriv)), 0, &SnmpPacket{Logger: gs.Logger}, false)
 	require.ErrorIs(t, err, errInvalidMsgFlags)
 	require.ErrorContains(t, err, "privacy without authentication")
 
 	result := &SnmpPacket{Logger: gs.Logger}
-	_, err = gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthNoPriv)), 0, result)
+	_, err = gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthNoPriv)), 0, result, false)
 	if err != nil {
 		require.NotContains(t, err.Error(), "msgFlags")
 	}

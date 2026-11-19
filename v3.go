@@ -30,6 +30,7 @@ const (
 //go:generate stringer -type=SnmpV3MsgFlags
 
 var errInvalidMsgFlags = errors.New("invalid SNMPV3 msgFlags")
+var errUnauthenticatedResponse = errors.New("SNMPv3 response for an authenticated request lacks authentication")
 
 // SnmpV3SecurityModel describes the security model used by a SnmpV3 connection
 type SnmpV3SecurityModel uint8
@@ -402,6 +403,7 @@ func (packet *SnmpPacket) prepareV3ScopedPDU() ([]byte, error) {
 func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	cursor int,
 	response *SnmpPacket,
+	requireAuthFlag bool,
 ) (int, error) {
 	if PDUType(packet[cursor]) != Sequence {
 		return 0, fmt.Errorf("invalid SNMPV3 Header")
@@ -468,6 +470,11 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	// not a valid security level, so drop the message before USM sees it.
 	if response.MsgFlags&AuthNoPriv == 0 && response.MsgFlags&(AuthPriv&^AuthNoPriv) != 0 {
 		return 0, fmt.Errorf("%w: privacy without authentication", errInvalidMsgFlags)
+	}
+	// The manager can reject an unsigned reply before processing USM
+	// parameters, including key localization for a different engine ID.
+	if requireAuthFlag && response.MsgFlags&AuthNoPriv == 0 {
+		return 0, errUnauthenticatedResponse
 	}
 
 	rawSecModel, count, err := parseRawField(x.Logger, packet[cursor:], "msgSecurityModel")
