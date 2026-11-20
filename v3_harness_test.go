@@ -194,6 +194,30 @@ func TestV3HarnessColdStartGetAuthNoPriv(t *testing.T) {
 	require.Equal(t, v3HarnessUser, getUsp.UserName)
 }
 
+// A discovery probe has no authentication keys. A signed Report left over
+// from another exchange must be discarded before decoding its USM parameters.
+func TestV3HarnessDiscoveryIgnoresStaleSignedReport(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	stale, err := v3NotInTimeWindowsReportFixture.decode()
+	require.NoError(t, err)
+	report := v3AgentUnknownEngineIDsReport(agent)
+	agent.steps = []v3TestAgentStep{
+		func(req *v3TestAgentRequest) [][]byte {
+			return append([][]byte{stale}, report(req)...)
+		},
+		v3AgentSysDescr(agent),
+	}
+
+	gs, _ := newV3HarnessClient(agent.startUDP(t), AuthNoPriv, agent.creds)
+	v3HarnessConnect(t, gs)
+	v3UnknownEngineIDsReportFixture.seedIDs(gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	requireRequestCount(t, agent, 2)
+}
+
 // TestV3HarnessColdStartGetAuthPriv is the cold-start flow at authPriv: the
 // agent decrypts the incoming request and the client accepts an encrypted
 // response.
@@ -340,22 +364,24 @@ func TestV3HarnessRejectsUnauthenticatedDiscoveryShapedResponse(t *testing.T) {
 // forgeV3Reply builds an unauthenticated reply to req, echoing its msgID and
 // request-id as a forger that can see the request would, so the reply passes
 // correlation and reaches the security checks.
-func forgeV3Reply(t *testing.T, logger Logger, engineID string, req *v3TestAgentRequest, pduType PDUType, vars []SnmpPDU) []byte {
-	t.Helper()
+func (a *v3TestAgent) forgeV3Reply(engineID string, req *v3TestAgentRequest, pduType PDUType, vars []SnmpPDU) [][]byte {
 	forged := &SnmpPacket{
 		Version:            Version3,
 		MsgFlags:           NoAuthNoPriv,
 		SecurityModel:      UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{AuthoritativeEngineID: engineID, Logger: logger},
+		SecurityParameters: &UsmSecurityParameters{AuthoritativeEngineID: engineID, Logger: a.logger},
 		PDUType:            pduType,
 		MsgID:              req.Packet.MsgID,
 		RequestID:          req.Packet.RequestID,
 		Variables:          vars,
-		Logger:             logger,
+		Logger:             a.logger,
 	}
 	out, err := forged.MarshalMsg()
-	require.NoError(t, err)
-	return out
+	if err != nil {
+		a.sendErr(fmt.Errorf("marshaling discovery test reply: %w", err))
+		return nil
+	}
+	return [][]byte{out}
 }
 
 // TestV3HarnessRejectsDiscoveryReportWithoutEngineID checks that a forged
@@ -367,12 +393,12 @@ func TestV3HarnessRejectsDiscoveryReportWithoutEngineID(t *testing.T) {
 	// The forger sees the probe and echoes its identifiers.
 	agent.steps = []v3TestAgentStep{
 		func(req *v3TestAgentRequest) [][]byte {
-			return [][]byte{forgeV3Reply(t, agent.logger, "", req, Report,
-				[]SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}})}
+			return agent.forgeV3Reply("", req, Report,
+				[]SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}})
 		},
 		func(req *v3TestAgentRequest) [][]byte {
-			return [][]byte{forgeV3Reply(t, agent.logger, "", req, GetResponse,
-				[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})}
+			return agent.forgeV3Reply("", req, GetResponse,
+				[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
 		},
 	}
 	port := agent.startUDP(t)
@@ -397,9 +423,9 @@ func TestV3HarnessDiscoveryIgnoresUnauthenticatedResponse(t *testing.T) {
 	// The forger sees the probe and echoes its identifiers.
 	agent.steps = []v3TestAgentStep{
 		func(req *v3TestAgentRequest) [][]byte {
-			forged := forgeV3Reply(t, agent.logger, "\x80\x00\x00\x00\x04forged", req, GetResponse,
+			forged := agent.forgeV3Reply("\x80\x00\x00\x00\x04forged", req, GetResponse,
 				[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
-			return append([][]byte{forged}, report(req)...)
+			return append(forged, report(req)...)
 		},
 		v3AgentSysDescr(agent),
 	}
@@ -601,7 +627,7 @@ func TestV3HarnessReportWithZeroRequestIDHandled(t *testing.T) {
 func TestV3HarnessResponseWithUnknownMsgIDDiscarded(t *testing.T) {
 	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
 	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
-		wrong := v3WrongReply(agent, req, req.Packet.MsgID+1000, req.Packet.RequestID)
+		wrong := v3WrongReply(agent, req, req.Packet.MsgID^1, req.Packet.RequestID)
 		return append(wrong, v3AgentSysDescr(agent)(req)...)
 	}}
 	port := agent.startUDP(t)

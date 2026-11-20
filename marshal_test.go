@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"reflect"
 	"runtime"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Tests in alphabetical order of function being tested
@@ -1826,6 +1828,181 @@ func TestSendOneRequest_ExactZeroRequestIDResponseAccepted(t *testing.T) {
 	})
 	assert.Zero(t, result.RequestID)
 	assert.Equal(t, 123, result.Variables[0].Value)
+}
+
+// correlationTestConn supplies one queued datagram per read. A failed write
+// consumes an attempt without sending a datagram.
+type correlationTestConn struct {
+	net.Conn
+	replies        [][]byte
+	failFirstWrite bool
+	writes         int
+}
+
+func (c *correlationTestConn) SetDeadline(time.Time) error { return nil }
+
+func (c *correlationTestConn) Write(p []byte) (int, error) {
+	c.writes++
+	if c.failFirstWrite && c.writes == 1 {
+		return 0, io.ErrShortWrite
+	}
+	return len(p), nil
+}
+
+func (c *correlationTestConn) Read(p []byte) (int, error) {
+	if len(c.replies) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, c.replies[0])
+	c.replies = c.replies[1:]
+	return n, nil
+}
+
+func TestManagerReplyIdentifierValues(t *testing.T) {
+	attempts := requestAttempts{{msgID: 0, requestID: 0}}
+	response := &SnmpPacket{Version: Version3, PDUType: GetResponse}
+	report := &SnmpPacket{Version: Version3, PDUType: Report}
+	for _, tc := range []struct {
+		name        string
+		field       []byte
+		matchesZero bool
+		validReport bool
+	}{
+		{"zero", []byte{byte(Integer), 1, 0}, true, true},
+		{"different ID", []byte{byte(Integer), 1, 1}, false, true},
+		{"minimum Integer32", []byte{byte(Integer), 4, 0x80, 0, 0, 0}, false, true},
+		{"above Integer32", []byte{byte(Integer), 5, 0, 0x80, 0, 0, 0}, false, false},
+		{"wide ID with zero low bits", []byte{byte(Integer), 5, 1, 0, 0, 0, 0}, false, false},
+		{"different tag", []byte{byte(OctetString), 1, 0}, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A wide INTEGER decodes on amd64 and returns nil with an error on 386.
+			raw, _, _ := parseRawField(Logger{}, tc.field, "identifier")
+			require.Equal(t, tc.matchesZero, attempts.matchesMsgID(raw))
+			require.Equal(t, tc.matchesZero, attempts.matchesRequestID(raw, Version3, response))
+			require.Equal(t, tc.validReport, attempts.matchesRequestID(raw, Version3, report))
+		})
+	}
+}
+
+func TestUnrelatedResponseSkipsBody(t *testing.T) {
+	for _, version := range []SnmpVersion{Version1, Version2c, Version3} {
+		t.Run(version.String(), func(t *testing.T) {
+			x := &GoSNMP{Version: version}
+			vars := []SnmpPDU{{Name: ".1.2", Type: Null}}
+			pkt := x.mkSnmpPacket(GetResponse, vars, 0, 0)
+			pkt.RequestID, pkt.Error = 21, GenErr
+			payload, err := pkt.marshalPDU()
+			require.NoError(t, err)
+
+			result := &SnmpPacket{Version: version}
+			if version == Version3 {
+				result.MsgID = 11
+			}
+			attempt := attemptIDs{msgID: result.MsgID, requestID: 20}
+			err = x.unmarshalPayloadForAttempts(payload, 0, result, []attemptIDs{attempt})
+			require.ErrorIs(t, err, errUnmatchedResponse)
+			require.Equal(t, NoError, result.Error)
+			require.Empty(t, result.Variables)
+
+			attempt.requestID = pkt.RequestID
+			err = x.unmarshalPayloadForAttempts(payload, 0, result, []attemptIDs{attempt})
+			require.NoError(t, err)
+			require.Equal(t, pkt.Error, result.Error)
+			require.Equal(t, vars, result.Variables)
+		})
+	}
+}
+
+// invalidateReplyID changes the tag of the v3 msgID or the v1/v2c request-id.
+func invalidateReplyID(t *testing.T, x *GoSNMP, wire []byte) {
+	t.Helper()
+	var pkt SnmpPacket
+	var cursor int
+	var err error
+	if x.Version == Version3 {
+		_, cursor, err = x.unmarshalVersionFromHeader(wire, &pkt)
+	} else {
+		cursor, err = x.unmarshalHeader(wire, &pkt)
+	}
+	require.NoError(t, err)
+	_, headerSize, err := parseLength(wire[cursor:])
+	require.NoError(t, err)
+	tag := cursor + headerSize
+	require.Equal(t, byte(Integer), wire[tag])
+	wire[tag] = byte(OctetString)
+}
+
+func TestGetResponseCorrelation(t *testing.T) {
+	const oid = ".1.2"
+	vars := []SnmpPDU{{Name: oid, Type: Integer, Value: 123}}
+	type reply struct {
+		msgID, requestID uint32
+		variables        []SnmpPDU
+	}
+	first := reply{11, 21, vars}
+	retry := reply{12, 22, vars}
+	wrapped := reply{0, 0, vars}
+	for _, version := range []SnmpVersion{Version1, Version2c, Version3} {
+		for _, tc := range []struct {
+			name           string
+			invalidFirstID bool
+			failFirstWrite bool
+			replies        []reply // the last reply is the expected result
+		}{
+			{name: "ignore unrelated empty reply", replies: []reply{{11, 20, nil}, first}},
+			{name: "accept matching empty reply", replies: []reply{{11, 21, nil}}},
+			{name: "invalid identifier cannot match zero", invalidFirstID: true, replies: []reply{wrapped, wrapped}},
+			{name: "ignore failed write IDs", failFirstWrite: true, replies: []reply{first, retry}},
+		} {
+			t.Run(version.String()+"/"+tc.name, func(t *testing.T) {
+				conn := &correlationTestConn{failFirstWrite: tc.failFirstWrite}
+				x := &GoSNMP{Version: version, Community: "public"}
+				if version == Version3 {
+					x = newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{
+						UserName:              v3HarnessUser,
+						AuthoritativeEngineID: v3HarnessEngineID,
+					})
+				}
+				x.Retries = 0
+				if tc.failFirstWrite {
+					x.Retries = 1
+				}
+				require.NoError(t, x.validateParameters())
+				x.Conn = conn
+				x.rxBuf = new([rxBufSize]byte)
+				x.SetMsgID(10)
+				x.SetRequestID(20)
+				if tc.invalidFirstID {
+					x.SetRequestID(math.MaxInt32)
+					x.SetMsgID(math.MaxInt32)
+				}
+				for i, r := range tc.replies {
+					pkt := x.mkSnmpPacket(GetResponse, r.variables, 0, 0)
+					pkt.MsgFlags &^= Reportable
+					pkt.RequestID, pkt.MsgID = r.requestID, r.msgID
+					buf, err := pkt.marshalMsg()
+					require.NoError(t, err)
+					if i == 0 && tc.invalidFirstID {
+						invalidateReplyID(t, x, buf)
+					}
+					conn.replies = append(conn.replies, buf)
+				}
+
+				got, err := x.Get([]string{oid})
+				require.NoError(t, err)
+				want := tc.replies[len(tc.replies)-1]
+				require.Equal(t, version, got.Version)
+				require.Equal(t, want.requestID, got.RequestID)
+				if version == Version3 {
+					require.Equal(t, want.msgID, got.MsgID)
+				}
+				require.ElementsMatch(t, want.variables, got.Variables)
+				require.Equal(t, 1+x.Retries, conn.writes)
+				require.Empty(t, conn.replies)
+			})
+		}
+	}
 }
 
 func TestSendOneRequest_TCP_EOF_Reconnect(t *testing.T) {

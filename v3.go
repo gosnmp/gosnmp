@@ -385,12 +385,13 @@ func (packet *SnmpPacket) prepareV3ScopedPDU() ([]byte, error) {
 func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	cursor int,
 	response *SnmpPacket,
+	attempts requestAttempts,
 ) (int, error) {
 	if PDUType(packet[cursor]) != Sequence {
 		return 0, fmt.Errorf("invalid SNMPV3 Header")
 	}
 
-	_, cursorTmp, err := parseLength(packet[cursor:])
+	headerLength, cursorTmp, err := parseLength(packet[cursor:])
 	if err != nil {
 		return 0, err
 	}
@@ -399,7 +400,20 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
-	rawMsgID, count, err := parseRawField(x.Logger, packet[cursor:], "msgID")
+	msgIDField := packet[cursor:]
+	if attempts != nil {
+		size := headerLength - cursorTmp
+		if size < 0 || size > len(msgIDField) {
+			return 0, ErrInvalidPacketLength
+		}
+		msgIDField = msgIDField[:size]
+	}
+	rawMsgID, count, err := parseRawField(x.Logger, msgIDField, "msgID")
+	// A stale msgID can be discarded before decoding USM, including during
+	// discovery when the probe has no authentication parameters.
+	if attempts != nil && !attempts.matchesMsgID(rawMsgID) {
+		return 0, errUnmatchedResponse
+	}
 	if err != nil {
 		return 0, fmt.Errorf("error parsing SNMPV3 message ID: %w", err)
 	}
