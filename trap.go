@@ -5,6 +5,9 @@
 package gosnmp
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -139,6 +142,11 @@ type TrapListener struct {
 	// Total number of packets received referencing an unknown snmpEngineID
 	usmStatsUnknownEngineIDsCount uint32
 
+	// Salt counters for encrypted replies, seeded once per Listen and
+	// advanced on every reply (RFC3414 8.1.1.1, RFC3826 3.1.2.1).
+	replyAESSalt atomic.Uint64
+	replyDESSalt atomic.Uint32
+
 	finish int32 // Atomic flag; set to 1 when closing connection
 
 	buffSize uint // SNMP message buffer size
@@ -243,6 +251,8 @@ func (t *TrapListener) SendUDP(packet *SnmpPacket, addr *net.UDPAddr) error {
 func (t *TrapListener) listenUDP(addr string) error {
 	// udp
 
+	t.seedReplySalts()
+
 	udpAddr, err := net.ResolveUDPAddr(t.proto, addr)
 	if err != nil {
 		return err
@@ -335,12 +345,19 @@ func (t *TrapListener) listenUDP(addr string) error {
 				// with the exact same variables unless there's an error.
 				// Change the PDUType to the response, though.
 				trap.PDUType = GetResponse
+				// A Response PDU is never reportable (RFC3412 6.4).
+				trap.MsgFlags &^= Reportable
 
 				// If the response can be sent, the error-status is
 				// supposed to be set to noError and the error-index set to
 				// zero.
 				trap.Error = NoError
 				trap.ErrorIndex = 0
+
+				if err := t.newReplySalt(trap); err != nil {
+					t.Params.Logger.Printf("TrapListener: %s", err)
+					continue
+				}
 
 				// TODO: Check that the message marshalled is not too large
 				// for the originator to accept and if so, send a tooBig
@@ -375,6 +392,48 @@ func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineI
 		},
 	}
 	return t.SendUDP(reportPacket, addr)
+}
+
+// seedReplySalts seeds the salt counters for encrypted replies. They are
+// seeded once and then advanced, as Net-SNMP does, rather than drawing a new
+// random salt per reply, which would make a repeat under one key likely after
+// enough DES replies.
+func (t *TrapListener) seedReplySalts() {
+	var seed [12]byte
+	_, _ = rand.Read(seed[:]) // never fails as of Go 1.24
+	t.replyAESSalt.Store(binary.BigEndian.Uint64(seed[:8]))
+	t.replyDESSalt.Store(binary.BigEndian.Uint32(seed[8:]))
+}
+
+// newReplySalt gives an encrypted reply built from a received packet its own
+// msgPrivacyParameters from the listener's salt counters. Keeping the received
+// ones would reuse their IV under the same key, engine boots and time
+// (RFC3414 8.1.1.1, RFC3826 3.1.2.1), so a salt equal to them is skipped. The
+// next counter value always differs, so this loops at most twice.
+func (t *TrapListener) newReplySalt(reply *SnmpPacket) error {
+	if reply.MsgFlags&AuthPriv <= AuthNoPriv {
+		return nil
+	}
+	usm, err := castUsmSecParams(reply.SecurityParameters)
+	if err != nil {
+		return err
+	}
+	received := usm.PrivacyParameters
+	for {
+		var salt any
+		switch usm.PrivacyProtocol {
+		case AES, AES192, AES256, AES192C, AES256C:
+			salt = t.replyAESSalt.Add(1)
+		default:
+			salt = t.replyDESSalt.Add(1)
+		}
+		if err := usm.usmSetSalt(salt); err != nil {
+			return err
+		}
+		if !bytes.Equal(usm.PrivacyParameters, received) {
+			return nil
+		}
+	}
 }
 
 func (t *TrapListener) handleTCPRequest(conn net.Conn) {

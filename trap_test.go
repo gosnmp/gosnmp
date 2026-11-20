@@ -8,6 +8,7 @@ package gosnmp
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -995,6 +996,130 @@ func TestSendInformBasic(t *testing.T) {
 		if reflect.DeepEqual(tv, rv) {
 			t.Fatalf("Expected variable %d = %#v, got %#v", i, tv, rv)
 		}
+	}
+}
+
+// TestListenV3ReplyNewSalt checks that the listener's response to an authPriv
+// inform uses its own msgPrivacyParameters, since reusing the inform's would
+// reuse its IV under the same key and engine boots/time, and that it isn't
+// marked reportable.
+func TestListenV3ReplyNewSalt(t *testing.T) {
+	logger := NewLogger(log.New(io.Discard, "", 0))
+	const engineID = "\x80\x00\x1f\x88\x80informtest"
+	for _, priv := range []SnmpV3PrivProtocol{DES, AES} {
+		t.Run(priv.String(), func(t *testing.T) {
+			usm := func() *UsmSecurityParameters {
+				return &UsmSecurityParameters{
+					UserName:                 "myuser",
+					AuthenticationProtocol:   SHA,
+					AuthenticationPassphrase: "mypassword",
+					PrivacyProtocol:          priv,
+					PrivacyPassphrase:        "myprivacy",
+					AuthoritativeEngineID:    engineID,
+					AuthoritativeEngineBoots: 1,
+					AuthoritativeEngineTime:  100,
+					Logger:                   logger,
+				}
+			}
+
+			tl := NewTrapListener()
+			defer tl.Close()
+			tl.OnNewTrap = func(*SnmpPacket, *net.UDPAddr) {}
+			tl.Params = newTestGoSNMPv3(AuthPriv, usm())
+			host, port := listenOnEphemeral(t, tl)
+
+			gs := newTestGoSNMPv3(AuthPriv|Reportable, usm())
+			require.NoError(t, gs.SecurityParameters.init(logger))
+			require.NoError(t, gs.SecurityParameters.InitSecurityKeys())
+			pkt := gs.mkSnmpPacket(InformRequest, []SnmpPDU{{Name: trapTestOid, Type: OctetString, Value: trapTestPayload}}, 0, 0)
+			pkt.MsgID, pkt.RequestID = 1, 1
+			require.NoError(t, gs.initPacket(pkt))
+			buf, err := pkt.marshalMsg()
+			require.NoError(t, err)
+
+			conn, err := net.Dial("udp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+			require.NoError(t, err)
+			defer conn.Close()
+			_, err = conn.Write(buf)
+			require.NoError(t, err)
+			require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+			rbuf := make([]byte, 1500)
+			n, err := conn.Read(rbuf)
+			require.NoError(t, err)
+
+			resp := &SnmpPacket{SecurityParameters: gs.SecurityParameters.Copy()}
+			cursor, err := gs.unmarshalHeader(rbuf[:n], resp)
+			require.NoError(t, err)
+			require.Equal(t, AuthPriv, resp.MsgFlags&AuthPriv)
+			require.Zero(t, resp.MsgFlags&Reportable, "response is marked reportable")
+			require.NotEqual(t, pkt.SecurityParameters.(*UsmSecurityParameters).PrivacyParameters,
+				resp.SecurityParameters.(*UsmSecurityParameters).PrivacyParameters,
+				"reply reuses the received packet's privacy parameters")
+
+			require.NoError(t, gs.testAuthentication(rbuf[:n], resp, false))
+			plain, cursor, err := gs.decryptPacket(rbuf[:n], cursor, resp)
+			require.NoError(t, err)
+			require.NoError(t, gs.unmarshalPayload(plain, cursor, resp))
+			require.Equal(t, GetResponse, resp.PDUType)
+			require.Equal(t, uint32(1), resp.RequestID)
+		})
+	}
+}
+
+// TestTrapListenerReplySalt checks that encrypted replies take their salt from
+// the listener's counters, which advance across replies, and skip a salt equal
+// to the received packet's.
+func TestTrapListenerReplySalt(t *testing.T) {
+	const boots = 7
+	for _, tc := range []struct {
+		priv SnmpV3PrivProtocol
+		seed func(*TrapListener, uint32)
+		salt func(uint32) []byte
+	}{
+		{
+			DES,
+			func(tl *TrapListener, n uint32) { tl.replyDESSalt.Store(n) },
+			func(n uint32) []byte {
+				b := make([]byte, 8)
+				binary.BigEndian.PutUint32(b, boots)
+				binary.BigEndian.PutUint32(b[4:], n)
+				return b
+			},
+		},
+		{
+			AES,
+			func(tl *TrapListener, n uint32) { tl.replyAESSalt.Store(uint64(n)) },
+			func(n uint32) []byte {
+				b := make([]byte, 8)
+				binary.BigEndian.PutUint64(b, uint64(n))
+				return b
+			},
+		},
+	} {
+		t.Run(tc.priv.String(), func(t *testing.T) {
+			tl := NewTrapListener()
+			tc.seed(tl, 10)
+			reply := func(flags SnmpV3MsgFlags, received []byte) []byte {
+				t.Helper()
+				usm := &UsmSecurityParameters{
+					PrivacyProtocol:          tc.priv,
+					AuthoritativeEngineBoots: boots,
+					PrivacyParameters:        received,
+				}
+				p := &SnmpPacket{Version: Version3, MsgFlags: flags, SecurityParameters: usm}
+				require.NoError(t, tl.newReplySalt(p))
+				return usm.PrivacyParameters
+			}
+
+			received := tc.salt(13)
+			require.Equal(t, tc.salt(11), reply(AuthPriv, received))
+			require.Equal(t, tc.salt(12), reply(AuthPriv, received))
+			// 13 would repeat the received salt, and so the request's IV.
+			require.Equal(t, tc.salt(14), reply(AuthPriv, received))
+			// A reply that isn't encrypted keeps its parameters and uses no salt.
+			require.Equal(t, received, reply(AuthNoPriv, received))
+			require.Equal(t, tc.salt(15), reply(AuthPriv, received))
+		})
 	}
 }
 
