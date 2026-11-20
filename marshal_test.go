@@ -1747,9 +1747,7 @@ type v2cReply struct {
 func sendOneRequestV2c(t *testing.T, startRequestID uint32, replies func(requestID uint32) []v2cReply) *SnmpPacket {
 	t.Helper()
 	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatalf("udp4 error listening: %s", err)
-	}
+	require.NoError(t, err)
 	defer srvr.Close()
 
 	x := &GoSNMP{
@@ -1760,9 +1758,7 @@ func sendOneRequestV2c(t *testing.T, startRequestID uint32, replies func(request
 		Timeout:   time.Millisecond * 500,
 		Retries:   0,
 	}
-	if err := x.Connect(); err != nil {
-		t.Fatalf("error connecting: %s", err)
-	}
+	require.NoError(t, x.Connect())
 	defer x.Conn.Close()
 	x.SetRequestID(startRequestID) // after Connect, which seeds the counter
 
@@ -1800,12 +1796,8 @@ func sendOneRequestV2c(t *testing.T, startRequestID uint32, replies func(request
 	// This is not actually a GetResponse, but we need something our test server can unmarshal.
 	reqPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{{Name: ".1.2", Type: Null}}, 0, 0)
 	result, err := x.sendOneRequest(reqPkt, true)
-	if err != nil {
-		t.Fatalf("error: %s", err)
-	}
-	if len(result.Variables) != 1 {
-		t.Fatalf("expected 1 variable, got %d", len(result.Variables))
-	}
+	require.NoError(t, err)
+	require.Len(t, result.Variables, 1)
 	return result
 }
 
@@ -1816,8 +1808,8 @@ func TestSendOneRequest_ZeroRequestIDResponseDiscarded(t *testing.T) {
 	result := sendOneRequestV2c(t, 0, func(requestID uint32) []v2cReply {
 		return []v2cReply{{0, 999}, {requestID, 123}}
 	})
-	assert.NotZero(t, result.RequestID)
-	assert.Equal(t, 123, result.Variables[0].Value)
+	require.NotZero(t, result.RequestID)
+	require.Equal(t, 123, result.Variables[0].Value)
 }
 
 // TestSendOneRequest_ExactZeroRequestIDResponseAccepted checks that a v2c
@@ -1826,8 +1818,8 @@ func TestSendOneRequest_ExactZeroRequestIDResponseAccepted(t *testing.T) {
 	result := sendOneRequestV2c(t, 0x7FFFFFFF, func(requestID uint32) []v2cReply {
 		return []v2cReply{{requestID, 123}}
 	})
-	assert.Zero(t, result.RequestID)
-	assert.Equal(t, 123, result.Variables[0].Value)
+	require.Zero(t, result.RequestID)
+	require.Equal(t, 123, result.Variables[0].Value)
 }
 
 // correlationTestConn supplies one queued datagram per read. A failed write

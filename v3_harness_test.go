@@ -558,43 +558,41 @@ func v3WrongReply(a *v3TestAgent, req *v3TestAgentRequest, msgID, requestID uint
 	})
 }
 
-// testV3StaleReportDiscarded checks that a REPORT left over from an earlier
-// exchange - such as the reply to a retransmitted discovery probe - is
+// TestV3HarnessStaleReportDiscarded checks that a REPORT left over from an
+// earlier exchange - such as the reply to a retransmitted discovery probe - is
 // ignored without a resend and the real reply is returned.
-func testV3StaleReportDiscarded(t *testing.T, staleRequestID func(req *v3TestAgentRequest) uint32) {
-	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
-		return v3AgentStaleReportThenSysDescr(agent, staleRequestID(req))(req)
-	}}
-	port := agent.startUDP(t)
+func TestV3HarnessStaleReportDiscarded(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		staleRequestID func(req *v3TestAgentRequest) uint32
+	}{
+		{"earlier request-id", func(req *v3TestAgentRequest) uint32 { return req.Packet.RequestID - 1 }},
+		{"zero request-id", func(*v3TestAgentRequest) uint32 { return 0 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+			agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+				return v3AgentStaleReportThenSysDescr(agent, tc.staleRequestID(req))(req)
+			}}
+			port := agent.startUDP(t)
 
-	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
-	sp.AuthoritativeEngineID = v3HarnessEngineID
-	sp.AuthoritativeEngineBoots = v3HarnessBoots
-	sp.AuthoritativeEngineTime = v3HarnessTime
-	var retries, finished int
-	gs.OnRetry = func(*GoSNMP) { retries++ }
-	gs.OnFinish = func(*GoSNMP) { finished++ }
-	v3HarnessConnect(t, gs)
+			gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+			sp.AuthoritativeEngineID = v3HarnessEngineID
+			sp.AuthoritativeEngineBoots = v3HarnessBoots
+			sp.AuthoritativeEngineTime = v3HarnessTime
+			var retries, finished int
+			gs.OnRetry = func(*GoSNMP) { retries++ }
+			gs.OnFinish = func(*GoSNMP) { finished++ }
+			v3HarnessConnect(t, gs)
 
-	result, err := gs.Get([]string{v3HarnessSysDescrOID})
-	require.NoError(t, err)
-	requireSysDescrResult(t, result)
-	require.Equal(t, 1, agent.requestCount())
-	require.Equal(t, 0, retries)
-	require.Equal(t, 1, finished)
-}
-
-// TestV3HarnessStaleReportWithOldRequestIDDiscarded covers a stale REPORT echoing an
-// earlier request's msgID and request-id.
-func TestV3HarnessStaleReportWithOldRequestIDDiscarded(t *testing.T) {
-	testV3StaleReportDiscarded(t, func(req *v3TestAgentRequest) uint32 { return req.Packet.RequestID - 1 })
-}
-
-// TestV3HarnessStaleReportWithZeroRequestIDDiscarded covers a stale REPORT with
-// request-id 0.
-func TestV3HarnessStaleReportWithZeroRequestIDDiscarded(t *testing.T) {
-	testV3StaleReportDiscarded(t, func(*v3TestAgentRequest) uint32 { return 0 })
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			require.Equal(t, 1, agent.requestCount())
+			require.Equal(t, 0, retries)
+			require.Equal(t, 1, finished)
+		})
+	}
 }
 
 // TestV3HarnessReportWithZeroRequestIDHandled checks that a REPORT for the current
