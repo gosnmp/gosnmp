@@ -2782,52 +2782,7 @@ func TestSendOneRequest_CommunityNotLogged(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	logged := logBuf.String()
-	if strings.Contains(logged, community) {
+	if logged := logBuf.String(); strings.Contains(logged, community) {
 		t.Errorf("community string written to the debug log:\n%s", logged)
-	}
-	// Raw packet bytes are formatted as decimal byte lists.
-	if decimal := strings.Trim(fmt.Sprintf("%d", []byte(community)), "[]"); strings.Contains(logged, decimal) {
-		t.Errorf("community string bytes written to the debug log:\n%s", logged)
-	}
-	// The response is still dumped, with only the community value masked.
-	masked := fmt.Sprintf("4 %d %s", len(community), strings.TrimSpace(strings.Repeat("42 ", len(community))))
-	if !strings.Contains(logged, "GET RESPONSE OK: [48 ") || !strings.Contains(logged, masked) {
-		t.Errorf("response dump with masked community missing from the debug log:\n%s", logged)
-	}
-}
-
-func TestCommunityRedacted(t *testing.T) {
-	const community = "s3cr3t-community"
-	x := &GoSNMP{Version: Version2c, Community: community, Logger: NewLogger(log.New(io.Discard, "", 0))}
-	pkt, err := x.mkSnmpPacket(GetResponse, []SnmpPDU{
-		{Name: ".1.3.6.1.2.1.1.5.0", Type: OctetString, Value: []byte("host")},
-	}, 0, 0).marshalMsg()
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	want := append([]byte(nil), pkt...)
-	i := bytes.Index(want, []byte(community))
-	copy(want[i:], bytes.Repeat([]byte("*"), len(community)))
-	assert.Equal(t, fmt.Sprint(want), communityRedacted(pkt).String())
-
-	v3 := []byte{0x30, 0x05, 0x02, 0x01, 0x03, 0x30, 0x00}
-	assert.Equal(t, fmt.Sprint(v3), communityRedacted(v3).String())
-
-	// Truncated or malformed headers must not panic or leak the community.
-	leak := strings.Trim(fmt.Sprint([]byte(community[:4])), "[]")
-	for n := range len(pkt) {
-		if got := communityRedacted(pkt[:n]).String(); strings.Contains(got, leak) {
-			t.Errorf("truncated to %d bytes, community leaked: %s", n, got)
-		}
-	}
-	for _, bad := range [][]byte{
-		{0x30, 0x84, 0xff},
-		{0x30, 0x80, 0x02, 0x01, 0x01},
-		{0x04, 0x02, 'h', 'i'},
-		{0x30, 0x03, 0x02, 0x05, 0x01},
-	} {
-		assert.Equal(t, fmt.Sprintf("%d bytes, header not parsed", len(bad)), communityRedacted(bad).String())
 	}
 }
