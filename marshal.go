@@ -12,8 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -182,11 +184,36 @@ func (packet *SnmpPacket) SafeString() string {
 	)
 }
 
-// GoSNMP
+var errUnmatchedResponse = errors.New("response does not match request")
+
+type attemptIDs struct{ msgID, requestID uint32 }
+
+// Only successfully written attempts are eligible while waiting for a reply.
+type requestAttempts []attemptIDs
+
+func (attempts requestAttempts) matchesMsgID(raw any) bool {
+	return slices.ContainsFunc(attempts, func(attempt attemptIDs) bool {
+		return raw == int(attempt.msgID) // Manager-generated IDs fit in 31 bits.
+	})
+}
+
+func (attempts requestAttempts) matchesRequestID(raw any, version SnmpVersion, response *SnmpPacket) bool {
+	if version == Version3 && response.PDUType == Report {
+		// A Report is correlated by msgID. Its request-id is an Integer32
+		// and may be zero when the sender could not extract the request-id.
+		id, ok := raw.(int)
+		return ok && id >= math.MinInt32 && id <= math.MaxInt32
+	}
+	return slices.ContainsFunc(attempts, func(attempt attemptIDs) bool {
+		return raw == int(attempt.requestID) && (version != Version3 || attempt.msgID == response.MsgID)
+	})
+}
+
 // send/receive one snmp request
 func (x *GoSNMP) sendOneRequest(packetOut *SnmpPacket, wait bool) (result *SnmpPacket, err error) {
-	allReqIDs := make([]uint32, 0, x.Retries+1)
-	// allMsgIDs := make([]uint32, 0, x.Retries+1) // unused
+	// The identifiers from successful writes. A reply must match one attempt's
+	// pair, so a late reply to an earlier attempt is still accepted.
+	attempts := make(requestAttempts, 0, x.Retries+1)
 
 	timeout := x.Timeout
 	withContextDeadline := false
@@ -238,23 +265,18 @@ sendRetry:
 
 		// Request ID is an atomic counter that wraps to 0 at max int32.
 		reqID := (atomic.AddUint32(&x.requestID, 1) & 0x7FFFFFFF)
-		allReqIDs = append(allReqIDs, reqID)
 
 		packetOut.RequestID = reqID
 
+		var msgID uint32 // only SNMPv3 has a msgID
 		if x.Version == Version3 {
-			msgID := (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
-
-			// allMsgIDs = append(allMsgIDs, msgID) // unused
-
+			msgID = (atomic.AddUint32(&x.msgID, 1) & 0x7FFFFFFF)
 			packetOut.MsgID = msgID
 
 			err = x.initPacket(packetOut)
 			if err != nil {
 				break
 			}
-		}
-		if x.Version == Version3 {
 			packetOut.SecurityParameters.Log()
 		}
 
@@ -279,6 +301,7 @@ sendRetry:
 		if err != nil {
 			continue
 		}
+		attempts = append(attempts, attemptIDs{msgID: msgID, requestID: reqID})
 		if x.OnSent != nil {
 			x.OnSent(x)
 		}
@@ -320,9 +343,12 @@ sendRetry:
 			}
 
 			var cursor int
-			cursor, err = x.unmarshalHeader(resp, result)
+			cursor, err = x.unmarshalHeaderForAttempts(resp, result, attempts)
 			if err != nil {
 				x.Logger.Printf("ERROR on unmarshall header: %s", err)
+				if errors.Is(err, errUnmatchedResponse) {
+					continue
+				}
 				break
 			}
 
@@ -350,17 +376,21 @@ sendRetry:
 				}
 			}
 
-			err = x.unmarshalPayload(resp, cursor, result)
+			err = x.unmarshalPayloadForAttempts(resp, cursor, result, attempts)
 			if err != nil {
-				x.Logger.Printf("ERROR on UnmarshalPayload on v3: %s", err)
+				x.Logger.Printf("ERROR on unmarshal payload: %s", err)
+				if errors.Is(err, errUnmatchedResponse) {
+					continue
+				}
 				break
 			}
 			if unauthenticated && result.PDUType != Report {
 				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
 				continue
 			}
-			if result.Error == NoError && len(result.Variables) < 1 {
-				x.Logger.Printf("ERROR on UnmarshalPayload on v3: Empty result")
+
+			if result.Error == NoError && len(result.Variables) == 0 {
+				x.Logger.Print("Empty result")
 				break
 			}
 
@@ -404,20 +434,6 @@ sendRetry:
 				default:
 					return result, ErrUnknownReportPDU
 				}
-			}
-
-			validID := false
-			for _, id := range allReqIDs {
-				if id == result.RequestID {
-					validID = true
-				}
-			}
-			if result.RequestID == 0 {
-				validID = true
-			}
-			if !validID {
-				x.Logger.Print("ERROR out of order")
-				continue
 			}
 
 			break
@@ -990,20 +1006,30 @@ func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket)
 }
 
 func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, error) {
+	return x.unmarshalHeaderForAttempts(packet, response, nil)
+}
+
+func (x *GoSNMP) unmarshalHeaderForAttempts(packet []byte, response *SnmpPacket, attempts requestAttempts) (int, error) {
 	version, cursor, err := x.unmarshalVersionFromHeader(packet, response)
 	if err != nil {
 		return 0, err
 	}
 	response.Version = version
 
+	if x.Version != Version3 {
+		attempts = nil // Only a v3 session sends message IDs.
+	}
 	if response.Version == Version3 {
 		oldcursor := cursor
-		cursor, err = x.unmarshalV3Header(packet, cursor, response)
+		cursor, err = x.unmarshalV3Header(packet, cursor, response, attempts)
 		if err != nil {
 			return 0, err
 		}
 		x.Logger.Printf("UnmarshalV3Header done. [with SecurityParameters]. Header Size %d. Last 4 Bytes=[%v]", cursor-oldcursor, packet[cursor-4:cursor])
 	} else {
+		if attempts != nil { // A community header has no msgID to match.
+			return 0, errUnmatchedResponse
+		}
 		// Parse community
 		rawCommunity, count, err := parseRawField(x.Logger, packet[cursor:], "community")
 		if err != nil {
@@ -1023,6 +1049,10 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 }
 
 func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacket) error {
+	return x.unmarshalPayloadForAttempts(packet, cursor, response, nil)
+}
+
+func (x *GoSNMP) unmarshalPayloadForAttempts(packet []byte, cursor int, response *SnmpPacket, attempts requestAttempts) error {
 	if len(packet) == 0 {
 		return errors.New("cannot unmarshal nil or empty payload packet")
 	}
@@ -1040,12 +1070,15 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 	// known, supported types
 	case GetResponse, GetNextRequest, GetBulkRequest, Report, SNMPv2Trap, GetRequest, SetRequest, InformRequest:
 		response.PDUType = requestType
-		if err := x.unmarshalResponse(packet[cursor:], response); err != nil {
+		if err := x.unmarshalResponse(packet[cursor:], response, attempts); err != nil {
 			return fmt.Errorf("error in unmarshalResponse: %w", err)
 		}
 		// If it's an InformRequest, mark the trap.
 		response.IsInform = (requestType == InformRequest)
 	case Trap:
+		if attempts != nil { // A v1 Trap-PDU has no request ID.
+			return errUnmatchedResponse
+		}
 		response.PDUType = requestType
 		if err := x.unmarshalTrapV1(packet[cursor:], response); err != nil {
 			return fmt.Errorf("error in unmarshalTrapV1: %w", err)
@@ -1057,7 +1090,7 @@ func (x *GoSNMP) unmarshalPayload(packet []byte, cursor int, response *SnmpPacke
 	return nil
 }
 
-func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
+func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket, attempts requestAttempts) error {
 	cursor := 0
 
 	getResponseLength, cursor, err := parseLength(packet)
@@ -1071,6 +1104,9 @@ func (x *GoSNMP) unmarshalResponse(packet []byte, response *SnmpPacket) error {
 
 	// Parse Request-ID
 	rawRequestID, count, err := parseRawField(x.Logger, packet[cursor:], "request id")
+	if attempts != nil && !attempts.matchesRequestID(rawRequestID, x.Version, response) {
+		return errUnmatchedResponse
+	}
 	if err != nil {
 		return fmt.Errorf("error parsing SNMP packet request ID: %w", err)
 	}
