@@ -251,9 +251,7 @@ func (t *TrapListener) SendUDP(packet *SnmpPacket, addr *net.UDPAddr) error {
 func (t *TrapListener) listenUDP(addr string) error {
 	// udp
 
-	if err := t.seedReplySalts(); err != nil {
-		return err
-	}
+	t.seedReplySalts()
 
 	udpAddr, err := net.ResolveUDPAddr(t.proto, addr)
 	if err != nil {
@@ -400,14 +398,11 @@ func (t *TrapListener) reportAuthoritativeEngineID(trap *SnmpPacket, snmpEngineI
 // seeded once and then advanced, as Net-SNMP does, rather than drawing a new
 // random salt per reply, which would make a repeat under one key likely after
 // enough DES replies.
-func (t *TrapListener) seedReplySalts() error {
+func (t *TrapListener) seedReplySalts() {
 	var seed [12]byte
-	if _, err := rand.Read(seed[:]); err != nil {
-		return fmt.Errorf("error creating a cryptographically secure salt: %w", err)
-	}
+	_, _ = rand.Read(seed[:]) // never fails as of Go 1.24
 	t.replyAESSalt.Store(binary.BigEndian.Uint64(seed[:8]))
 	t.replyDESSalt.Store(binary.BigEndian.Uint32(seed[8:]))
-	return nil
 }
 
 // newReplySalt gives an encrypted reply built from a received packet its own
