@@ -162,13 +162,14 @@ func (packet *SnmpPacket) SafeString() string {
 	if packet.SecurityParameters != nil {
 		sp = packet.SecurityParameters.SafeString()
 	}
-	return fmt.Sprintf("Version:%s, MsgFlags:%s, SecurityModel:%s, SecurityParameters:%s, ContextEngineID:%s, ContextName:%s, PDUType:%s, MsgID:%d, RequestID:%d, MsgMaxSize:%d, Error:%s, ErrorIndex:%d, NonRepeaters:%d, MaxRepetitions:%d, Variables:%v",
+	return fmt.Sprintf("Version:%s, MsgFlags:%s, SecurityModel:%s, SecurityParameters:%s, ContextEngineID:%s, ContextName:%s, Community:%s, PDUType:%s, MsgID:%d, RequestID:%d, MsgMaxSize:%d, Error:%s, ErrorIndex:%d, NonRepeaters:%d, MaxRepetitions:%d, Variables:%v",
 		packet.Version,
 		packet.MsgFlags,
 		packet.SecurityModel,
 		sp,
 		packet.ContextEngineID,
 		packet.ContextName,
+		packet.Community,
 		packet.PDUType,
 		packet.MsgID,
 		packet.RequestID,
@@ -1015,7 +1016,7 @@ func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, erro
 
 		if community, ok := rawCommunity.(string); ok {
 			response.Community = community
-			x.Logger.Print("Parsed community")
+			x.Logger.Printf("Parsed community %s", community)
 		}
 	}
 	return cursor, nil

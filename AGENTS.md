@@ -17,7 +17,7 @@ Most tests sit behind build tags, so use the Makefile rather than a plain `go te
 - Don't rename, remove or change the signature of exported identifiers, struct fields or the `Handler` interface. Code must build with the `go` version in `go.mod` and on 386.
 - Don't hand-edit generated files. `make generate` installs the tools and regenerates the stringer `*_string.go` files (CI fails on a diff). After changing `Handler`, regenerate `mocks/gosnmp_mock.go` with `mockgen --source interface.go --destination mocks/gosnmp_mock.go --package mocks`.
 - `marshal.go`, `helper.go`, `v3*.go` and `trap.go` parse untrusted network input: bounds-check every length and never panic on a malformed packet.
-- Never log or return passphrases, keys or community strings. `UsmSecurityParameters.SafeString()` omits passphrases and keys and `SnmpPacket.SafeString()` omits the community; `Description()` includes the passphrases.
+- Never log or return passphrases or keys. `UsmSecurityParameters.SafeString()` omits them; `Description()` includes them. Community strings aren't treated as secrets, so `SnmpPacket.SafeString()` and the debug log include them.
 - Sign off commits (`git commit -s`); the DCO check fails without it.
 
 ## Agent skills
