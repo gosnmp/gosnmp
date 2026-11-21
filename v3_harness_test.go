@@ -538,3 +538,449 @@ func TestV3HarnessTCPFraming(t *testing.T) {
 		require.NotErrorIs(t, err, io.EOF, name)
 	}
 }
+
+// The tests below check that an established session takes the security
+// level of an incoming message from the message's own msgFlags (RFC 3412
+// section 7.2 step 5), verifies every message that claims authentication, and
+// only accepts responses at the level of the request (step 12). A Report
+// below an authenticated request's level, or one without varbinds, is
+// discarded and the request keeps waiting for its reply.
+
+// setV3MsgFlags returns a copy of a marshaled v3 message with its msgFlags
+// octet replaced, for flag combinations the marshaling code won't produce.
+// The msgFlags field is the one-octet OCTET STRING followed by the USM
+// msgSecurityModel INTEGER in msgGlobalData.
+func setV3MsgFlags(t *testing.T, msg []byte, flags SnmpV3MsgFlags) []byte {
+	t.Helper()
+	out := append([]byte(nil), msg...)
+	for i := 0; i+6 <= len(out); i++ {
+		if out[i] == byte(OctetString) && out[i+1] == 1 &&
+			bytes.Equal(out[i+3:i+6], []byte{byte(Integer), 1, byte(UserSecurityModel)}) {
+			out[i+2] = byte(flags)
+			return out
+		}
+	}
+	t.Fatal("msgFlags not found in marshaled message")
+	return nil
+}
+
+func v3SeclevelSeedSession(sp *UsmSecurityParameters) {
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+}
+
+// v3SeclevelReportThenSysDescr answers a request with r as a Report carrying
+// engine boots and time of 99 and 5, followed by the genuine sysDescr reply.
+func v3SeclevelReportThenSysDescr(a *v3TestAgent, r v3TestAgentReply) v3TestAgentStep {
+	sysDescr := v3AgentSysDescr(a)
+	return func(req *v3TestAgentRequest) [][]byte {
+		boots, engineTime := uint32(99), uint32(5)
+		r.pduType = Report
+		r.boots = &boots
+		r.engineTime = &engineTime
+		return append(a.reply(req, r), sysDescr(req)...)
+	}
+}
+
+// requireV3SeclevelStateKept checks that the session still has the harness
+// engine boots and time, not the Report's.
+func requireV3SeclevelStateKept(t *testing.T, sp *UsmSecurityParameters) {
+	t.Helper()
+	require.Equal(t, v3HarnessEngineID, sp.AuthoritativeEngineID)
+	require.Equal(t, v3HarnessBoots, sp.AuthoritativeEngineBoots)
+	requireEngineTimeNear(t, v3HarnessTime, sp.AuthoritativeEngineTime)
+}
+
+// TestV3SeclevelUnauthenticatedReportIsDiscarded checks that a noAuthNoPriv
+// Report can't end an authenticated request, whatever it reports: it is
+// discarded, the reply that follows completes the same attempt, and the
+// Report's engine boots and time are not stored.
+func TestV3SeclevelUnauthenticatedReportIsDiscarded(t *testing.T) {
+	noAuth := NoAuthNoPriv
+	for _, tc := range []struct {
+		name  string
+		level SnmpV3MsgFlags
+		creds v3TestAgentCreds
+		oid   string
+	}{
+		{"notInTimeWindows authNoPriv", AuthNoPriv, v3HarnessCredsAuthNoPriv(), usmStatsNotInTimeWindows},
+		{"notInTimeWindows authPriv", AuthPriv, v3HarnessCredsAuthPriv(), usmStatsNotInTimeWindows},
+		{"unknownUserNames", AuthNoPriv, v3HarnessCredsAuthNoPriv(), usmStatsUnknownUserNames},
+		{"unknownEngineIDs", AuthNoPriv, v3HarnessCredsAuthNoPriv(), usmStatsUnknownEngineIDs},
+		{"unknown OID", AuthNoPriv, v3HarnessCredsAuthNoPriv(), ".1.3.6.1.4.1.99999.1.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, tc.creds)
+			agent.steps = []v3TestAgentStep{v3SeclevelReportThenSysDescr(agent, v3TestAgentReply{
+				vars:     []SnmpPDU{{Name: tc.oid, Type: Counter32, Value: uint32(1)}},
+				msgFlags: &noAuth,
+			})}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, tc.level, agent.creds)
+			v3SeclevelSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			requireRequestCount(t, agent, 1)
+			requireV3SeclevelStateKept(t, sp)
+		})
+	}
+}
+
+// TestV3SeclevelDiscardsReportWithLocalizedKey checks that a Report naming
+// another engine, which a session holding only a localized key can't process,
+// is discarded instead of ending the GET, whether it is unsigned or claims
+// authentication.
+func TestV3SeclevelDiscardsReportWithLocalizedKey(t *testing.T) {
+	noAuth := NoAuthNoPriv
+	for _, tc := range []struct {
+		name     string
+		msgFlags *SnmpV3MsgFlags // nil keeps the agent's authNoPriv level
+	}{
+		{name: "unsigned", msgFlags: &noAuth},
+		{name: "claims authentication"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+			otherEngineID := v3HarnessEngineID + "-new"
+			agent.steps = []v3TestAgentStep{v3SeclevelReportThenSysDescr(agent, v3TestAgentReply{
+				vars:                  []SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}},
+				msgFlags:              tc.msgFlags,
+				authoritativeEngineID: &otherEngineID,
+			})}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+			v3SeclevelSeedSession(sp)
+			require.NoError(t, sp.InitSecurityKeys())
+			sp.AuthenticationPassphrase = ""
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			requireRequestCount(t, agent, 1)
+			requireV3SeclevelStateKept(t, sp)
+		})
+	}
+}
+
+// TestV3SeclevelDiscardsTamperedSignedReply checks that a signed reply whose
+// digest no longer matches is discarded, and that the genuine reply that
+// follows completes the same GET, at both authenticated levels.
+func TestV3SeclevelDiscardsTamperedSignedReply(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		level SnmpV3MsgFlags
+		creds v3TestAgentCreds
+		// tamper changes one byte the digest covers.
+		tamper func([]byte) []byte
+	}{
+		{
+			name:  "authNoPriv value",
+			level: AuthNoPriv,
+			creds: v3HarnessCredsAuthNoPriv(),
+			tamper: func(msg []byte) []byte {
+				return bytes.Replace(msg, []byte(v3HarnessSysDescrValue), []byte("harness sysDescR"), 1)
+			},
+		},
+		{
+			name:  "authPriv last byte",
+			level: AuthPriv,
+			creds: v3HarnessCredsAuthPriv(),
+			tamper: func(msg []byte) []byte {
+				msg[len(msg)-1] ^= 0xff
+				return msg
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, tc.creds)
+			sysDescr := v3AgentSysDescr(agent)
+			agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+				out := sysDescr(req)
+				if len(out) != 1 {
+					return out
+				}
+				tampered := tc.tamper(append([]byte(nil), out[0]...))
+				return [][]byte{tampered, out[0]}
+			}}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, tc.level, agent.creds)
+			v3SeclevelSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			requireRequestCount(t, agent, 1)
+		})
+	}
+}
+
+// TestV3SeclevelEmptyReportIsDiscarded checks that a Report without varbinds
+// is discarded rather than returned, so its engine boots and time are not
+// stored, at both authenticated levels and whether or not it is authenticated.
+func TestV3SeclevelEmptyReportIsDiscarded(t *testing.T) {
+	noAuth := NoAuthNoPriv
+	for _, tc := range []struct {
+		name     string
+		level    SnmpV3MsgFlags
+		creds    v3TestAgentCreds
+		msgFlags *SnmpV3MsgFlags
+	}{
+		{"unauthenticated on authNoPriv", AuthNoPriv, v3HarnessCredsAuthNoPriv(), &noAuth},
+		{"unauthenticated on authPriv", AuthPriv, v3HarnessCredsAuthPriv(), &noAuth},
+		{"authenticated on authNoPriv", AuthNoPriv, v3HarnessCredsAuthNoPriv(), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, tc.creds)
+			agent.steps = []v3TestAgentStep{v3SeclevelReportThenSysDescr(agent, v3TestAgentReply{msgFlags: tc.msgFlags})}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, tc.level, agent.creds)
+			v3SeclevelSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			requireRequestCount(t, agent, 1)
+			requireV3SeclevelStateKept(t, sp)
+		})
+	}
+}
+
+// TestV3SeclevelVerifiesClaimedAuthentication checks that a noAuthNoPriv
+// session verifies a message whose msgFlags claim authentication instead of
+// trusting it. An authNoPriv usmStatsNotInTimeWindows Report is not acted on
+// when it is signed with another key, or when the session has no key at all
+// to check it with.
+func TestV3SeclevelVerifiesClaimedAuthentication(t *testing.T) {
+	notInTimeWindow := []SnmpPDU{{Name: usmStatsNotInTimeWindows, Type: Counter32, Value: uint32(1)}}
+	for _, tc := range []struct {
+		name        string
+		clientCreds v3TestAgentCreds
+		agentCreds  v3TestAgentCreds
+		// claimAuth sets the authentication flag on an unsigned Report.
+		claimAuth bool
+		// wantErr is where the Report is stopped: the digest check, or the
+		// USM decoder for a user without an authentication protocol.
+		wantErr string
+	}{
+		{
+			name:        "wrong key",
+			clientCreds: v3TestAgentCreds{username: v3HarnessUser, authProto: SHA, authPass: "not-the-agents-key"},
+			agentCreds:  v3HarnessCredsAuthNoPriv(),
+			wantErr:     "incoming packet is not authentic",
+		},
+		{
+			name:        "no key",
+			clientCreds: v3TestAgentCreds{username: v3HarnessUser},
+			agentCreds:  v3TestAgentCreds{username: v3HarnessUser},
+			claimAuth:   true,
+			wantErr:     "authentication parameters are not configured",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, tc.agentCreds)
+			report := v3SeclevelReportThenSysDescr(agent, v3TestAgentReply{vars: notInTimeWindow})
+			agent.steps = []v3TestAgentStep{
+				func(req *v3TestAgentRequest) [][]byte {
+					out := report(req)
+					if tc.claimAuth && len(out) > 0 {
+						out[0] = setV3MsgFlags(t, out[0], AuthNoPriv)
+					}
+					return out
+				},
+				v3AgentSysDescr(agent),
+			}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, NoAuthNoPriv, tc.clientCreds)
+			v3SeclevelSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.ErrorContains(t, err, tc.wantErr)
+			require.Nil(t, result)
+			requireRequestCount(t, agent, 1)
+			requireV3SeclevelStateKept(t, sp)
+		})
+	}
+}
+
+// TestV3HeaderRejectsMalformedMsgFlags checks that msgFlags must be a
+// one-octet OCTET STRING, rather than leaving the security level unset.
+func TestV3HeaderRejectsMalformedMsgFlags(t *testing.T) {
+	header := func(msgFlags ...byte) []byte {
+		body := []byte{
+			byte(Integer), 1, 1, // msgID
+			byte(Integer), 2, 0x05, 0xdc, // msgMaxSize
+		}
+		body = append(body, msgFlags...)
+		body = append(body, byte(Integer), 1, byte(UserSecurityModel), byte(OctetString), 0)
+		return append([]byte{byte(Sequence), byte(len(body))}, body...)
+	}
+	gs := newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{})
+
+	for _, msgFlags := range [][]byte{
+		{byte(OctetString), 0},
+		{byte(OctetString), 2, byte(AuthNoPriv), 0},
+		{byte(OctetString), 0x80}, // indefinite BER length
+		{byte(Integer), 1, byte(AuthNoPriv)},
+	} {
+		result := &SnmpPacket{MsgFlags: AuthPriv, Logger: gs.Logger}
+		_, err := gs.unmarshalV3Header(header(msgFlags...), 0, result, false)
+		require.ErrorIs(t, err, errInvalidMsgFlags, "msgFlags %x", msgFlags)
+	}
+
+	_, err := gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthPriv&^AuthNoPriv)), 0, &SnmpPacket{Logger: gs.Logger}, false)
+	require.ErrorIs(t, err, errInvalidMsgFlags)
+	require.ErrorContains(t, err, "privacy without authentication")
+
+	// Valid msgFlags are accepted. The header has empty USM parameters, so
+	// parsing stops there instead, after the flags were taken.
+	result := &SnmpPacket{Logger: gs.Logger}
+	_, err = gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthNoPriv)), 0, result, false)
+	require.NotErrorIs(t, err, errInvalidMsgFlags)
+	require.ErrorContains(t, err, "User Security Model parameters")
+	require.Equal(t, AuthNoPriv, result.MsgFlags)
+}
+
+// TestV3SeclevelAuthPrivRejectsAuthNoPrivResponse checks that an authPriv
+// request does not accept a correctly authenticated but unencrypted response.
+func TestV3SeclevelAuthPrivRejectsAuthNoPrivResponse(t *testing.T) {
+	authNoPriv := AuthNoPriv
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthPriv())
+	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+		return agent.reply(req, v3TestAgentReply{
+			pduType:  GetResponse,
+			vars:     []SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: v3HarnessSysDescrValue}},
+			msgFlags: &authNoPriv,
+		})
+	}}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthPriv, agent.creds)
+	v3SeclevelSeedSession(sp)
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.Error(t, err)
+	require.Nil(t, result)
+	requireRequestCount(t, agent, 1)
+}
+
+// TestV3SeclevelRejectsPrivWithoutAuth checks that a response whose msgFlags
+// ask for privacy without authentication is discarded before USM decodes it,
+// and that the valid reply that follows completes the same attempt.
+func TestV3SeclevelRejectsPrivWithoutAuth(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3TestAgentCreds{username: v3HarnessUser})
+	sysDescr := v3AgentSysDescr(agent)
+	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+		out := sysDescr(req)
+		if len(out) != 1 {
+			return out
+		}
+		return [][]byte{setV3MsgFlags(t, out[0], AuthPriv&^AuthNoPriv), out[0]}
+	}}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, NoAuthNoPriv, agent.creds)
+	v3SeclevelSeedSession(sp)
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	requireRequestCount(t, agent, 1)
+}
+
+// wrappedUSM is a caller's own SnmpV3SecurityParameters built on USM.
+type wrappedUSM struct{ *UsmSecurityParameters }
+
+// TestV3SeclevelVerifiesThroughTheInterface checks that an authenticated
+// reply is verified through the SnmpV3SecurityParameters interface, so a type
+// that embeds *UsmSecurityParameters still works.
+func TestV3SeclevelVerifiesThroughTheInterface(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{v3AgentSysDescr(agent)}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	v3SeclevelSeedSession(sp)
+	gs.SecurityParameters = &wrappedUSM{sp}
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	requireRequestCount(t, agent, 1)
+}
+
+// TestV3SeclevelAuthPrivHonoursAuthenticatedReport checks that an
+// authenticated Report below an authPriv request's level is still acted on,
+// as RFC 3414 section 3.2 step 7(a) sends usmStatsNotInTimeWindows authNoPriv.
+func TestV3SeclevelAuthPrivHonoursAuthenticatedReport(t *testing.T) {
+	const staleBoots, staleTime uint32 = 1, 100
+	authNoPriv := AuthNoPriv
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthPriv())
+	agent.steps = []v3TestAgentStep{
+		func(req *v3TestAgentRequest) [][]byte {
+			return agent.reply(req, v3TestAgentReply{
+				pduType:  Report,
+				vars:     []SnmpPDU{{Name: usmStatsNotInTimeWindows, Type: Counter32, Value: uint32(1)}},
+				msgFlags: &authNoPriv,
+			})
+		},
+		v3AgentSysDescr(agent),
+	}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = staleBoots
+	sp.AuthoritativeEngineTime = staleTime
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	require.Equal(t, 2, agent.requestCount())
+	require.Equal(t, v3HarnessBoots, v3ReqSecParams(t, agent.request(1)).AuthoritativeEngineBoots)
+}
+
+// TestV3SeclevelPlaintextPDUWithPrivacyFlag checks that a scopedPDU sent in
+// the clear is not accepted from a message whose msgFlags ask for privacy.
+func TestV3SeclevelPlaintextPDUWithPrivacyFlag(t *testing.T) {
+	gs := newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{UserName: v3HarnessUser})
+	plain := &SnmpPacket{
+		Version:            Version3,
+		MsgFlags:           NoAuthNoPriv,
+		SecurityModel:      UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{UserName: v3HarnessUser, AuthoritativeEngineID: v3HarnessEngineID},
+		PDUType:            GetResponse,
+		MsgID:              1,
+		RequestID:          1,
+		Variables:          []SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: v3HarnessSysDescrValue}},
+	}
+	msg, err := plain.MarshalMsg()
+	require.NoError(t, err)
+
+	result := &SnmpPacket{SecurityParameters: &UsmSecurityParameters{}, Logger: gs.Logger}
+	cursor, err := gs.unmarshalHeader(msg, result)
+	require.NoError(t, err)
+
+	_, _, err = gs.decryptPacket(msg, cursor, result)
+	require.NoError(t, err, "a plaintext scopedPDU without privacy is accepted")
+
+	result.MsgFlags = AuthPriv
+	_, _, err = gs.decryptPacket(msg, cursor, result)
+	require.ErrorContains(t, err, "scopedPDU encryption does not match msgFlags")
+}

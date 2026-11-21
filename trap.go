@@ -524,11 +524,13 @@ func (x *GoSNMP) getTrapIdentifier(trap []byte) (string, error) {
 	// Initialize a packet with no auth/priv to unmarshal ID/key for security parameters to use
 	packet := new(SnmpPacket)
 	_, err := x.unmarshalHeader(trap, packet)
-	// Return err if no identifier was able to be parsed after unmarshaling
-	if err != nil && packet.SecurityParameters.getIdentifier() == "" {
-		return "", err
+	// A later USM error can still leave a username for credential lookup.
+	if packet.SecurityParameters != nil {
+		if identifier := packet.SecurityParameters.getIdentifier(); identifier != "" {
+			return identifier, nil
+		}
 	}
-	return packet.SecurityParameters.getIdentifier(), nil
+	return "", err
 }
 
 func (x *GoSNMP) unmarshalTrapBase(trap []byte, sp SnmpV3SecurityParameters, useResponseSecurityParameters bool) (*SnmpPacket, error) {

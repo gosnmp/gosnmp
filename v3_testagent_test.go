@@ -347,6 +347,7 @@ type v3TestAgentReply struct {
 	contextEngineID       *string
 	boots                 *uint32
 	engineTime            *uint32
+	msgFlags              *SnmpV3MsgFlags // security level to reply at instead of the user's
 }
 
 // reply builds and marshals a conforming response to req at the agent's
@@ -388,6 +389,10 @@ func (a *v3TestAgent) reply(req *v3TestAgentRequest, r v3TestAgentReply) [][]byt
 		PrivacyKey:               a.privacyKey,
 		Logger:                   a.logger,
 	}
+	msgFlags := a.securityLevel()
+	if r.msgFlags != nil {
+		msgFlags = *r.msgFlags
+	}
 	if a.creds.privProto > NoPriv {
 		salt := make([]byte, 8)
 		binary.BigEndian.PutUint64(salt, atomic.AddUint64(&a.saltCtr, 1))
@@ -395,7 +400,7 @@ func (a *v3TestAgent) reply(req *v3TestAgentRequest, r v3TestAgentReply) [][]byt
 	}
 	pkt := &SnmpPacket{
 		Version:            Version3,
-		MsgFlags:           a.securityLevel(),
+		MsgFlags:           msgFlags,
 		SecurityModel:      UserSecurityModel,
 		SecurityParameters: sp,
 		PDUType:            r.pduType,
