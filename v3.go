@@ -243,12 +243,13 @@ func (x *GoSNMP) engineIDChanged(result *SnmpPacket) bool {
 	if x.Version != Version3 {
 		return false
 	}
-	usp, ok := x.SecurityParameters.(*UsmSecurityParameters)
-	if !ok || usp.AuthoritativeEngineID == "" {
+	if x.SecurityParameters == nil || result.SecurityParameters == nil {
 		return false
 	}
-	rsp, ok := result.SecurityParameters.(*UsmSecurityParameters)
-	return ok && rsp.AuthoritativeEngineID != usp.AuthoritativeEngineID
+	// Through the interface, so a type that embeds *UsmSecurityParameters
+	// gets the same check.
+	established := x.SecurityParameters.getDefaultContextEngineID()
+	return established != "" && result.SecurityParameters.getDefaultContextEngineID() != established
 }
 
 // update packet security parameters to match connection security parameters

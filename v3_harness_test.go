@@ -557,19 +557,35 @@ func v3EngineIDSeedSession(sp *UsmSecurityParameters) {
 // response from another engine is discarded rather than returned, and leaves
 // the session's engine ID alone.
 func TestV3EngineIDNoAuthResponseKeepsIdentity(t *testing.T) {
-	agent := newV3TestAgent(t, v3OtherEngineID, v3HarnessBoots, v3HarnessTime, v3TestAgentCreds{username: v3HarnessUser})
-	agent.steps = []v3TestAgentStep{v3AgentSysDescr(agent)}
-	port := agent.startUDP(t)
+	// wrappedUSM is a caller's own SnmpV3SecurityParameters built on USM.
+	type wrappedUSM struct{ *UsmSecurityParameters }
 
-	gs, sp := newV3HarnessClient(port, NoAuthNoPriv, agent.creds)
-	v3EngineIDSeedSession(sp)
-	v3HarnessConnect(t, gs)
+	for _, tc := range []struct {
+		name string
+		wrap bool
+	}{
+		{name: "USM"},
+		{name: "wrapped USM", wrap: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3OtherEngineID, v3HarnessBoots, v3HarnessTime, v3TestAgentCreds{username: v3HarnessUser})
+			agent.steps = []v3TestAgentStep{v3AgentSysDescr(agent)}
+			port := agent.startUDP(t)
 
-	result, err := gs.Get([]string{v3HarnessSysDescrOID})
-	require.Error(t, err)
-	require.Nil(t, result)
-	require.Equal(t, v3HarnessEngineID, sp.AuthoritativeEngineID)
-	requireRequestCount(t, agent, 1)
+			gs, sp := newV3HarnessClient(port, NoAuthNoPriv, agent.creds)
+			v3EngineIDSeedSession(sp)
+			if tc.wrap {
+				gs.SecurityParameters = &wrappedUSM{sp}
+			}
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.Error(t, err)
+			require.Nil(t, result)
+			require.Equal(t, v3HarnessEngineID, sp.AuthoritativeEngineID)
+			requireRequestCount(t, agent, 1)
+		})
+	}
 }
 
 // TestV3EngineIDSignedResponseKeepsIdentity checks that a response signed
