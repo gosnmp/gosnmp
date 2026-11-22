@@ -549,7 +549,9 @@ func TestV3HarnessTCPFraming(t *testing.T) {
 // setV3MsgFlags returns a copy of a marshaled v3 message with its msgFlags
 // octet replaced, for flag combinations the marshaling code won't produce.
 // The msgFlags field is the one-octet OCTET STRING followed by the USM
-// msgSecurityModel INTEGER in msgGlobalData.
+// msgSecurityModel INTEGER in msgGlobalData. It is called from agent steps,
+// which run on the agent's goroutine, so it reports with t.Errorf rather
+// than stopping the test there.
 func setV3MsgFlags(t *testing.T, msg []byte, flags SnmpV3MsgFlags) []byte {
 	t.Helper()
 	out := append([]byte(nil), msg...)
@@ -560,8 +562,8 @@ func setV3MsgFlags(t *testing.T, msg []byte, flags SnmpV3MsgFlags) []byte {
 			return out
 		}
 	}
-	t.Fatal("msgFlags not found in marshaled message")
-	return nil
+	t.Errorf("msgFlags not found in marshaled message")
+	return msg
 }
 
 func v3SeclevelSeedSession(sp *UsmSecurityParameters) {
