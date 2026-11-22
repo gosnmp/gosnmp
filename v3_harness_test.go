@@ -844,13 +844,24 @@ func TestV3HeaderRejectsMalformedMsgFlags(t *testing.T) {
 	require.ErrorIs(t, err, errInvalidMsgFlags)
 	require.ErrorContains(t, err, "privacy without authentication")
 
-	// Valid msgFlags are accepted. The header has empty USM parameters, so
-	// parsing stops there instead, after the flags were taken.
-	result := &SnmpPacket{Logger: gs.Logger}
-	_, err = gs.unmarshalV3Header(header(byte(OctetString), 1, byte(AuthNoPriv)), 0, result, false)
-	require.NotErrorIs(t, err, errInvalidMsgFlags)
-	require.ErrorContains(t, err, "User Security Model parameters")
-	require.Equal(t, AuthNoPriv, result.MsgFlags)
+	// A complete message with a valid msgFlags octet parses without error,
+	// and its flags replace whatever the packet held before.
+	valid := &SnmpPacket{
+		Version:            Version3,
+		MsgFlags:           NoAuthNoPriv,
+		SecurityModel:      UserSecurityModel,
+		SecurityParameters: &UsmSecurityParameters{UserName: v3HarnessUser, AuthoritativeEngineID: v3HarnessEngineID},
+		PDUType:            GetResponse,
+		MsgID:              1,
+		RequestID:          1,
+		Variables:          []SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: v3HarnessSysDescrValue}},
+	}
+	msg, err := valid.MarshalMsg()
+	require.NoError(t, err)
+	result := &SnmpPacket{MsgFlags: AuthPriv, SecurityParameters: &UsmSecurityParameters{}, Logger: gs.Logger}
+	_, err = gs.unmarshalHeader(msg, result)
+	require.NoError(t, err)
+	require.Equal(t, NoAuthNoPriv, result.MsgFlags)
 }
 
 // TestV3SeclevelAuthPrivRejectsAuthNoPrivResponse checks that an authPriv
