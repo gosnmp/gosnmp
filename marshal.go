@@ -314,31 +314,65 @@ sendRetry:
 			result = new(SnmpPacket)
 			result.Logger = x.Logger
 
-			result.MsgFlags = packetOut.MsgFlags
 			if packetOut.SecurityParameters != nil {
 				result.SecurityParameters = packetOut.SecurityParameters.Copy()
 			}
 
+			requestLevel := packetOut.MsgFlags & AuthPriv
+			var discoveryUSM *UsmSecurityParameters
+			if x.Version == Version3 {
+				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok && usp.AuthoritativeEngineID == "" {
+					discoveryUSM = usp
+				}
+			}
+			requireAuthFlag := x.Version == Version3 && discoveryUSM == nil && requestLevel&AuthNoPriv != 0
+
 			var cursor int
-			cursor, err = x.unmarshalHeader(resp, result)
+			cursor, err = x.unmarshalHeaderWithAuthRequirement(resp, result, requireAuthFlag)
+			if errors.Is(err, errInvalidMsgFlags) || errors.Is(err, errUnauthenticatedResponse) {
+				// Discard the message and keep waiting on the same attempt.
+				x.Logger.Printf("ERROR response discarded: %s", err)
+				err = nil
+				continue
+			}
+			if err != nil && requireAuthFlag {
+				// Nothing in the message is authenticated yet, so a decoding
+				// error, such as a USM failure for another engine's parameters,
+				// can't end an authenticated request either.
+				x.Logger.Printf("ERROR response discarded: %s", err)
+				err = nil
+				continue
+			}
 			if err != nil {
 				x.Logger.Printf("ERROR on unmarshall header: %s", err)
 				break
 			}
 
 			unauthenticated := false
+			var receivedLevel SnmpV3MsgFlags
 			if x.Version == Version3 {
-				useResponseSecurityParameters := false
-				if usp, ok := x.SecurityParameters.(*UsmSecurityParameters); ok {
-					if usp.AuthoritativeEngineID == "" {
-						useResponseSecurityParameters = true
-						// Until the engine ID is known, testAuthentication trusts
-						// the response's own msgFlags, so only an engine discovery
-						// Report may arrive below the configured security level.
-						unauthenticated = usp.checkAuthenticated(result.MsgFlags) != nil
-					}
+				// RFC 3412 section 7.2 step 5: the security level of an
+				// incoming message comes from its own msgFlags. The header
+				// parser has already dropped privacy without authentication.
+				receivedLevel = result.MsgFlags & AuthPriv
+				switch {
+				case discoveryUSM != nil:
+					// During engine discovery, only Reports may be accepted
+					// without authentication for a user that requires it.
+					unauthenticated = discoveryUSM.checkAuthenticated(result.MsgFlags) != nil
+					err = x.testAuthentication(resp, result, true)
+				case receivedLevel&AuthNoPriv != 0:
+					// Verify every message whose msgFlags claim authentication,
+					// whatever level the session itself is configured for.
+					err = x.verifyReceivedAuthentication(resp, result)
 				}
-				err = x.testAuthentication(resp, result, useResponseSecurityParameters)
+				if err != nil && requireAuthFlag {
+					// RFC 3414 section 3.2 step 6: a message that fails
+					// authentication is discarded; keep waiting for the reply.
+					x.Logger.Printf("ERROR response discarded: %s", err)
+					err = nil
+					continue
+				}
 				if err != nil {
 					x.Logger.Printf("ERROR on Test Authentication on v3: %s", err)
 					break
@@ -357,6 +391,19 @@ sendRetry:
 			}
 			if unauthenticated && result.PDUType != Report {
 				x.Logger.Printf("ERROR unauthenticated %s discarded", result.PDUType)
+				continue
+			}
+			// RFC 3412 section 7.2 step 12: anything but a Report must come
+			// back at the security level of the request.
+			if x.Version == Version3 && result.PDUType != Report && receivedLevel != requestLevel {
+				x.Logger.Printf("ERROR %s at security level %s for a %s request discarded",
+					result.PDUType, receivedLevel, requestLevel)
+				continue
+			}
+			if result.PDUType == Report && len(result.Variables) == 0 {
+				// It names no condition, and returning it would store its
+				// security parameters.
+				x.Logger.Print("ERROR Report without varbinds discarded")
 				continue
 			}
 			if result.Error == NoError && len(result.Variables) < 1 {
@@ -990,15 +1037,22 @@ func (x *GoSNMP) unmarshalVersionFromHeader(packet []byte, response *SnmpPacket)
 }
 
 func (x *GoSNMP) unmarshalHeader(packet []byte, response *SnmpPacket) (int, error) {
+	return x.unmarshalHeaderWithAuthRequirement(packet, response, false)
+}
+
+func (x *GoSNMP) unmarshalHeaderWithAuthRequirement(packet []byte, response *SnmpPacket, requireAuthFlag bool) (int, error) {
 	version, cursor, err := x.unmarshalVersionFromHeader(packet, response)
 	if err != nil {
 		return 0, err
 	}
 	response.Version = version
+	if requireAuthFlag && version != Version3 {
+		return 0, errUnauthenticatedResponse
+	}
 
 	if response.Version == Version3 {
 		oldcursor := cursor
-		cursor, err = x.unmarshalV3Header(packet, cursor, response)
+		cursor, err = x.unmarshalV3Header(packet, cursor, response, requireAuthFlag)
 		if err != nil {
 			return 0, err
 		}
