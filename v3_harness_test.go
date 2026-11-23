@@ -194,6 +194,30 @@ func TestV3HarnessColdStartGetAuthNoPriv(t *testing.T) {
 	require.Equal(t, v3HarnessUser, getUsp.UserName)
 }
 
+// A discovery probe has no authentication keys. A signed Report left over
+// from another exchange must be discarded before decoding its USM parameters.
+func TestV3HarnessDiscoveryIgnoresStaleSignedReport(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	stale, err := v3NotInTimeWindowsReportFixture.decode()
+	require.NoError(t, err)
+	report := v3AgentUnknownEngineIDsReport(agent)
+	agent.steps = []v3TestAgentStep{
+		func(req *v3TestAgentRequest) [][]byte {
+			return append([][]byte{stale}, report(req)...)
+		},
+		v3AgentSysDescr(agent),
+	}
+
+	gs, _ := newV3HarnessClient(agent.startUDP(t), AuthNoPriv, agent.creds)
+	v3HarnessConnect(t, gs)
+	v3UnknownEngineIDsReportFixture.seedIDs(gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	requireRequestCount(t, agent, 2)
+}
+
 // TestV3HarnessColdStartGetAuthPriv is the cold-start flow at authPriv: the
 // agent decrypts the incoming request and the client accepts an encrypted
 // response.
@@ -337,23 +361,27 @@ func TestV3HarnessRejectsUnauthenticatedDiscoveryShapedResponse(t *testing.T) {
 	require.Equal(t, v3HarnessBoots, sp.AuthoritativeEngineBoots)
 }
 
-// forgeV3Reply builds an unauthenticated reply with request-id 0, which the
-// client accepts for any request, so an attacker need not see the request.
-func forgeV3Reply(t *testing.T, logger Logger, engineID string, pduType PDUType, vars []SnmpPDU) []byte {
-	t.Helper()
+// forgeV3Reply builds an unauthenticated reply to req, echoing its msgID and
+// request-id as a forger that can see the request would, so the reply passes
+// correlation and reaches the security checks.
+func (a *v3TestAgent) forgeV3Reply(engineID string, req *v3TestAgentRequest, pduType PDUType, vars []SnmpPDU) [][]byte {
 	forged := &SnmpPacket{
 		Version:            Version3,
 		MsgFlags:           NoAuthNoPriv,
 		SecurityModel:      UserSecurityModel,
-		SecurityParameters: &UsmSecurityParameters{AuthoritativeEngineID: engineID, Logger: logger},
+		SecurityParameters: &UsmSecurityParameters{AuthoritativeEngineID: engineID, Logger: a.logger},
 		PDUType:            pduType,
-		MsgID:              1,
+		MsgID:              req.Packet.MsgID,
+		RequestID:          req.Packet.RequestID,
 		Variables:          vars,
-		Logger:             logger,
+		Logger:             a.logger,
 	}
 	out, err := forged.MarshalMsg()
-	require.NoError(t, err)
-	return out
+	if err != nil {
+		a.sendErr(fmt.Errorf("marshaling discovery test reply: %w", err))
+		return nil
+	}
+	return [][]byte{out}
 }
 
 // TestV3HarnessRejectsDiscoveryReportWithoutEngineID checks that a forged
@@ -362,11 +390,16 @@ func forgeV3Reply(t *testing.T, logger Logger, engineID string, pduType PDUType,
 // own msgFlags.
 func TestV3HarnessRejectsDiscoveryReportWithoutEngineID(t *testing.T) {
 	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	report := forgeV3Reply(t, agent.logger, "", Report, []SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}})
-	forged := forgeV3Reply(t, agent.logger, "", GetResponse, []SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
+	// The forger sees the probe and echoes its identifiers.
 	agent.steps = []v3TestAgentStep{
-		func(*v3TestAgentRequest) [][]byte { return [][]byte{report} },
-		func(*v3TestAgentRequest) [][]byte { return [][]byte{forged} },
+		func(req *v3TestAgentRequest) [][]byte {
+			return agent.forgeV3Reply("", req, Report,
+				[]SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(1)}})
+		},
+		func(req *v3TestAgentRequest) [][]byte {
+			return agent.forgeV3Reply("", req, GetResponse,
+				[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
+		},
 	}
 	port := agent.startUDP(t)
 
@@ -386,11 +419,14 @@ func TestV3HarnessRejectsDiscoveryReportWithoutEngineID(t *testing.T) {
 // genuine discovery REPORT behind it is still used.
 func TestV3HarnessDiscoveryIgnoresUnauthenticatedResponse(t *testing.T) {
 	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
-	forged := forgeV3Reply(t, agent.logger, "\x80\x00\x00\x00\x04forged", GetResponse,
-		[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
 	report := v3AgentUnknownEngineIDsReport(agent)
+	// The forger sees the probe and echoes its identifiers.
 	agent.steps = []v3TestAgentStep{
-		func(req *v3TestAgentRequest) [][]byte { return append([][]byte{forged}, report(req)...) },
+		func(req *v3TestAgentRequest) [][]byte {
+			forged := agent.forgeV3Reply("\x80\x00\x00\x00\x04forged", req, GetResponse,
+				[]SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "FORGED"}})
+			return append(forged, report(req)...)
+		},
 		v3AgentSysDescr(agent),
 	}
 	port := agent.startUDP(t)
@@ -403,6 +439,10 @@ func TestV3HarnessDiscoveryIgnoresUnauthenticatedResponse(t *testing.T) {
 	require.NoError(t, err)
 	requireSysDescrResult(t, result)
 	require.Equal(t, v3HarnessEngineID, sp.AuthoritativeEngineID)
+	// The real request uses the engine ID from the genuine REPORT, not the
+	// forged one. The agent's reply would reset it either way.
+	requireRequestCount(t, agent, 2)
+	require.Equal(t, v3HarnessEngineID, v3ReqSecParams(t, agent.request(1)).AuthoritativeEngineID)
 }
 
 // TestV3HarnessTimeoutAllAttemptsDropped pins retry accounting when
@@ -483,6 +523,235 @@ func TestV3HarnessDropFirstAttemptThenRespond(t *testing.T) {
 	require.Equal(t, 2, agent.requestCount())
 	require.NotEqual(t, agent.request(0).Packet.MsgID, agent.request(1).Packet.MsgID)
 	require.NotEqual(t, agent.request(0).Packet.RequestID, agent.request(1).Packet.RequestID)
+}
+
+// The tests below pin how a received message is matched to its request: by
+// msgID (RFC 3412 7.2 step 10) and, for an ordinary response, by the
+// request-id sent on that same attempt (RFC 3413 3.1). A REPORT is matched by
+// msgID alone, as it may legally carry request-id 0. Anything else is ignored
+// while the client keeps waiting within the same deadline.
+
+// v3AgentStaleReportThenSysDescr answers with a usmStatsUnknownEngineIDs
+// REPORT left over from an earlier exchange (the previous msgID and the given
+// request-id), followed by the real GetResponse.
+func v3AgentStaleReportThenSysDescr(a *v3TestAgent, staleRequestID uint32) v3TestAgentStep {
+	return func(req *v3TestAgentRequest) [][]byte {
+		staleMsgID := req.Packet.MsgID - 1
+		stale := a.reply(req, v3TestAgentReply{
+			pduType:   Report,
+			vars:      []SnmpPDU{{Name: usmStatsUnknownEngineIDs, Type: Counter32, Value: uint32(32534)}},
+			msgID:     &staleMsgID,
+			requestID: &staleRequestID,
+		})
+		return append(stale, v3AgentSysDescr(a)(req)...)
+	}
+}
+
+// v3WrongReply builds a GetResponse to req carrying the given msgID and
+// request-id and a value the client must not return.
+func v3WrongReply(a *v3TestAgent, req *v3TestAgentRequest, msgID, requestID uint32) [][]byte {
+	return a.reply(req, v3TestAgentReply{
+		pduType:   GetResponse,
+		vars:      []SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: "wrong reply"}},
+		msgID:     &msgID,
+		requestID: &requestID,
+	})
+}
+
+// TestV3HarnessStaleReportDiscarded checks that a REPORT left over from an
+// earlier exchange - such as the reply to a retransmitted discovery probe - is
+// ignored without a resend and the real reply is returned.
+func TestV3HarnessStaleReportDiscarded(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		staleRequestID func(req *v3TestAgentRequest) uint32
+	}{
+		{"earlier request-id", func(req *v3TestAgentRequest) uint32 { return req.Packet.RequestID - 1 }},
+		{"zero request-id", func(*v3TestAgentRequest) uint32 { return 0 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+			agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+				return v3AgentStaleReportThenSysDescr(agent, tc.staleRequestID(req))(req)
+			}}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+			sp.AuthoritativeEngineID = v3HarnessEngineID
+			sp.AuthoritativeEngineBoots = v3HarnessBoots
+			sp.AuthoritativeEngineTime = v3HarnessTime
+			var retries, finished int
+			gs.OnRetry = func(*GoSNMP) { retries++ }
+			gs.OnFinish = func(*GoSNMP) { finished++ }
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			require.Equal(t, 1, agent.requestCount())
+			require.Equal(t, 0, retries)
+			require.Equal(t, 1, finished)
+		})
+	}
+}
+
+// TestV3HarnessReportWithZeroRequestIDHandled checks that a REPORT for the current
+// request is still acted on when it carries request-id 0.
+func TestV3HarnessReportWithZeroRequestIDHandled(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	zero := uint32(0)
+	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+		return agent.reply(req, v3TestAgentReply{
+			pduType:   Report,
+			vars:      []SnmpPDU{{Name: usmStatsUnknownUserNames, Type: Counter32, Value: uint32(1)}},
+			requestID: &zero,
+		})
+	}}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+	v3HarnessConnect(t, gs)
+
+	_, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.ErrorIs(t, err, ErrUnknownUsername)
+	require.Equal(t, 1, agent.requestCount())
+}
+
+// TestV3HarnessResponseWithUnknownMsgIDDiscarded covers a GetResponse with the
+// expected request-id but a msgID that was never sent.
+func TestV3HarnessResponseWithUnknownMsgIDDiscarded(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+		wrong := v3WrongReply(agent, req, req.Packet.MsgID^1, req.Packet.RequestID)
+		return append(wrong, v3AgentSysDescr(agent)(req)...)
+	}}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	require.Equal(t, 1, agent.requestCount())
+}
+
+// TestV3HarnessDelayedReplyToEarlierAttemptAccepted covers a reply that arrives after
+// the client has retried, carrying the complete msgID and request-id pair of
+// the first attempt.
+func TestV3HarnessDelayedReplyToEarlierAttemptAccepted(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{
+		v3AgentDrop,
+		func(req *v3TestAgentRequest) [][]byte {
+			first := agent.request(0).Packet
+			return agent.reply(req, v3TestAgentReply{
+				pduType:   GetResponse,
+				vars:      []SnmpPDU{{Name: v3HarnessSysDescrOID, Type: OctetString, Value: v3HarnessSysDescrValue}},
+				msgID:     &first.MsgID,
+				requestID: &first.RequestID,
+			})
+		},
+	}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+	gs.Timeout = 150 * time.Millisecond
+	gs.Retries = 1
+	var retries, finished int
+	gs.OnRetry = func(*GoSNMP) { retries++ }
+	gs.OnFinish = func(*GoSNMP) { finished++ }
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	require.Equal(t, 2, agent.requestCount())
+	require.Equal(t, 1, retries)
+	require.Equal(t, 1, finished)
+}
+
+// TestV3HarnessCrossedAttemptIdentifiersDiscarded covers replies whose msgID and
+// request-id were each sent, but on different attempts. Neither combination
+// was sent, so both are ignored in favour of the real reply.
+func TestV3HarnessCrossedAttemptIdentifiersDiscarded(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{
+		v3AgentDrop,
+		func(req *v3TestAgentRequest) [][]byte {
+			first, second := agent.request(0).Packet, req.Packet
+			wrong := v3WrongReply(agent, req, first.MsgID, second.RequestID)
+			wrong = append(wrong, v3WrongReply(agent, req, second.MsgID, first.RequestID)...)
+			return append(wrong, v3AgentSysDescr(agent)(req)...)
+		},
+	}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+	gs.Timeout = 150 * time.Millisecond
+	gs.Retries = 1
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	require.Equal(t, 2, agent.requestCount())
+}
+
+// TestV3HarnessResponseWithZeroRequestIDDiscarded covers a GetResponse carrying the
+// request's msgID but request-id 0, when the request used another request-id.
+func TestV3HarnessResponseWithZeroRequestIDDiscarded(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{func(req *v3TestAgentRequest) [][]byte {
+		wrong := v3WrongReply(agent, req, req.Packet.MsgID, 0)
+		return append(wrong, v3AgentSysDescr(agent)(req)...)
+	}}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+	v3HarnessConnect(t, gs)
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	require.Equal(t, 1, agent.requestCount())
+	require.NotZero(t, agent.request(0).Packet.RequestID)
+}
+
+// TestV3HarnessResponseWithExactZeroRequestIDAccepted covers request-id 0 sent after
+// the request-id counter wraps: a response echoing it must be accepted.
+func TestV3HarnessResponseWithExactZeroRequestIDAccepted(t *testing.T) {
+	agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+	agent.steps = []v3TestAgentStep{v3AgentSysDescr(agent)}
+	port := agent.startUDP(t)
+
+	gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+	v3HarnessConnect(t, gs)
+	gs.SetRequestID(0x7FFFFFFF) // the next request-id wraps to 0
+
+	result, err := gs.Get([]string{v3HarnessSysDescrOID})
+	require.NoError(t, err)
+	requireSysDescrResult(t, result)
+	require.Equal(t, 1, agent.requestCount())
+	require.Zero(t, agent.request(0).Packet.RequestID)
 }
 
 // TestV3HarnessTCPGet runs the cold-start discovery and Get flow over TCP.

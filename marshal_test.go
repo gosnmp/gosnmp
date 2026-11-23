@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"reflect"
 	"runtime"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Tests in alphabetical order of function being tested
@@ -1731,6 +1733,267 @@ func TestSendOneRequest_dups(t *testing.T) {
 	if err != nil {
 		t.Errorf("error: %s", err)
 		return
+	}
+}
+
+// v2cReply is one GetResponse sent by sendOneRequestV2c's server.
+type v2cReply struct {
+	requestID uint32
+	value     int
+}
+
+// sendOneRequestV2c sends one v2c request, with the request-id counter set to
+// startRequestID, to a server that answers with replies(request-id received).
+func sendOneRequestV2c(t *testing.T, startRequestID uint32, replies func(requestID uint32) []v2cReply) *SnmpPacket {
+	t.Helper()
+	srvr, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	require.NoError(t, err)
+	defer srvr.Close()
+
+	x := &GoSNMP{
+		Version:   Version2c,
+		Community: "public",
+		Target:    srvr.LocalAddr().(*net.UDPAddr).IP.String(),
+		Port:      uint16(srvr.LocalAddr().(*net.UDPAddr).Port),
+		Timeout:   time.Millisecond * 500,
+		Retries:   0,
+	}
+	require.NoError(t, x.Connect())
+	defer x.Conn.Close()
+	x.SetRequestID(startRequestID) // after Connect, which seeds the counter
+
+	go func() {
+		buf := make([]byte, 256)
+		n, addr, err := srvr.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		var reqPkt SnmpPacket
+		cursor, err := x.unmarshalHeader(buf[:n], &reqPkt)
+		if err != nil {
+			t.Errorf("error: %s", err)
+			return
+		}
+		if err = x.unmarshalPayload(buf[:n], cursor, &reqPkt); err != nil {
+			t.Errorf("error: %s", err)
+			return
+		}
+		for _, r := range replies(reqPkt.RequestID) {
+			rspPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{{Name: ".1.2", Type: Integer, Value: r.value}}, 0, 0)
+			rspPkt.RequestID = r.requestID
+			outBuf, err := rspPkt.marshalMsg()
+			if err != nil {
+				t.Errorf("ERR: %s", err)
+				return
+			}
+			if _, err := srvr.WriteTo(outBuf, addr); err != nil {
+				t.Errorf("ERR: %s", err)
+				return
+			}
+		}
+	}()
+
+	// This is not actually a GetResponse, but we need something our test server can unmarshal.
+	reqPkt := x.mkSnmpPacket(GetResponse, []SnmpPDU{{Name: ".1.2", Type: Null}}, 0, 0)
+	result, err := x.sendOneRequest(reqPkt, true)
+	require.NoError(t, err)
+	require.Len(t, result.Variables, 1)
+	return result
+}
+
+// TestSendOneRequest_ZeroRequestIDResponseDiscarded checks that a v2c
+// GetResponse with request-id 0 is not taken as the reply to a request with a
+// different request-id.
+func TestSendOneRequest_ZeroRequestIDResponseDiscarded(t *testing.T) {
+	result := sendOneRequestV2c(t, 0, func(requestID uint32) []v2cReply {
+		return []v2cReply{{0, 999}, {requestID, 123}}
+	})
+	require.NotZero(t, result.RequestID)
+	require.Equal(t, 123, result.Variables[0].Value)
+}
+
+// TestSendOneRequest_ExactZeroRequestIDResponseAccepted checks that a v2c
+// GetResponse echoing request-id 0, sent after the counter wraps, is accepted.
+func TestSendOneRequest_ExactZeroRequestIDResponseAccepted(t *testing.T) {
+	result := sendOneRequestV2c(t, 0x7FFFFFFF, func(requestID uint32) []v2cReply {
+		return []v2cReply{{requestID, 123}}
+	})
+	require.Zero(t, result.RequestID)
+	require.Equal(t, 123, result.Variables[0].Value)
+}
+
+// correlationTestConn supplies one queued datagram per read. A failed write
+// consumes an attempt without sending a datagram.
+type correlationTestConn struct {
+	net.Conn
+	replies        [][]byte
+	failFirstWrite bool
+	writes         int
+}
+
+func (c *correlationTestConn) SetDeadline(time.Time) error { return nil }
+
+func (c *correlationTestConn) Write(p []byte) (int, error) {
+	c.writes++
+	if c.failFirstWrite && c.writes == 1 {
+		return 0, io.ErrShortWrite
+	}
+	return len(p), nil
+}
+
+func (c *correlationTestConn) Read(p []byte) (int, error) {
+	if len(c.replies) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, c.replies[0])
+	c.replies = c.replies[1:]
+	return n, nil
+}
+
+func TestManagerReplyIdentifierValues(t *testing.T) {
+	attempts := requestAttempts{{msgID: 0, requestID: 0}}
+	response := &SnmpPacket{Version: Version3, PDUType: GetResponse}
+	report := &SnmpPacket{Version: Version3, PDUType: Report}
+	for _, tc := range []struct {
+		name        string
+		field       []byte
+		matchesZero bool
+		validReport bool
+	}{
+		{"zero", []byte{byte(Integer), 1, 0}, true, true},
+		{"different ID", []byte{byte(Integer), 1, 1}, false, true},
+		{"minimum Integer32", []byte{byte(Integer), 4, 0x80, 0, 0, 0}, false, true},
+		{"above Integer32", []byte{byte(Integer), 5, 0, 0x80, 0, 0, 0}, false, false},
+		{"wide ID with zero low bits", []byte{byte(Integer), 5, 1, 0, 0, 0, 0}, false, false},
+		{"different tag", []byte{byte(OctetString), 1, 0}, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A wide INTEGER decodes on amd64 and returns nil with an error on 386.
+			raw, _, _ := parseRawField(Logger{}, tc.field, "identifier")
+			require.Equal(t, tc.matchesZero, attempts.matchesMsgID(raw))
+			require.Equal(t, tc.matchesZero, attempts.matchesRequestID(raw, Version3, response))
+			require.Equal(t, tc.validReport, attempts.matchesRequestID(raw, Version3, report))
+		})
+	}
+}
+
+func TestUnrelatedResponseSkipsBody(t *testing.T) {
+	for _, version := range []SnmpVersion{Version1, Version2c, Version3} {
+		t.Run(version.String(), func(t *testing.T) {
+			x := &GoSNMP{Version: version}
+			vars := []SnmpPDU{{Name: ".1.2", Type: Null}}
+			pkt := x.mkSnmpPacket(GetResponse, vars, 0, 0)
+			pkt.RequestID, pkt.Error = 21, GenErr
+			payload, err := pkt.marshalPDU()
+			require.NoError(t, err)
+
+			result := &SnmpPacket{Version: version}
+			if version == Version3 {
+				result.MsgID = 11
+			}
+			attempt := attemptIDs{msgID: result.MsgID, requestID: 20}
+			err = x.unmarshalPayloadForAttempts(payload, 0, result, []attemptIDs{attempt})
+			require.ErrorIs(t, err, errUnmatchedResponse)
+			require.Equal(t, NoError, result.Error)
+			require.Empty(t, result.Variables)
+
+			attempt.requestID = pkt.RequestID
+			err = x.unmarshalPayloadForAttempts(payload, 0, result, []attemptIDs{attempt})
+			require.NoError(t, err)
+			require.Equal(t, pkt.Error, result.Error)
+			require.Equal(t, vars, result.Variables)
+		})
+	}
+}
+
+// invalidateReplyID changes the tag of the v3 msgID or the v1/v2c request-id.
+func invalidateReplyID(t *testing.T, x *GoSNMP, wire []byte) {
+	t.Helper()
+	var pkt SnmpPacket
+	var cursor int
+	var err error
+	if x.Version == Version3 {
+		_, cursor, err = x.unmarshalVersionFromHeader(wire, &pkt)
+	} else {
+		cursor, err = x.unmarshalHeader(wire, &pkt)
+	}
+	require.NoError(t, err)
+	_, headerSize, err := parseLength(wire[cursor:])
+	require.NoError(t, err)
+	tag := cursor + headerSize
+	require.Equal(t, byte(Integer), wire[tag])
+	wire[tag] = byte(OctetString)
+}
+
+func TestGetResponseCorrelation(t *testing.T) {
+	const oid = ".1.2"
+	vars := []SnmpPDU{{Name: oid, Type: Integer, Value: 123}}
+	type reply struct {
+		msgID, requestID uint32
+		variables        []SnmpPDU
+	}
+	first := reply{11, 21, vars}
+	retry := reply{12, 22, vars}
+	wrapped := reply{0, 0, vars}
+	for _, version := range []SnmpVersion{Version1, Version2c, Version3} {
+		for _, tc := range []struct {
+			name           string
+			invalidFirstID bool
+			failFirstWrite bool
+			replies        []reply // the last reply is the expected result
+		}{
+			{name: "ignore unrelated empty reply", replies: []reply{{11, 20, nil}, first}},
+			{name: "accept matching empty reply", replies: []reply{{11, 21, nil}}},
+			{name: "invalid identifier cannot match zero", invalidFirstID: true, replies: []reply{wrapped, wrapped}},
+			{name: "ignore failed write IDs", failFirstWrite: true, replies: []reply{first, retry}},
+		} {
+			t.Run(version.String()+"/"+tc.name, func(t *testing.T) {
+				conn := &correlationTestConn{failFirstWrite: tc.failFirstWrite}
+				x := &GoSNMP{Version: version, Community: "public"}
+				if version == Version3 {
+					x = newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{
+						UserName:              v3HarnessUser,
+						AuthoritativeEngineID: v3HarnessEngineID,
+					})
+				}
+				x.Retries = 0
+				if tc.failFirstWrite {
+					x.Retries = 1
+				}
+				require.NoError(t, x.validateParameters())
+				x.Conn = conn
+				x.rxBuf = new([rxBufSize]byte)
+				x.SetMsgID(10)
+				x.SetRequestID(20)
+				if tc.invalidFirstID {
+					x.SetRequestID(math.MaxInt32)
+					x.SetMsgID(math.MaxInt32)
+				}
+				for i, r := range tc.replies {
+					pkt := x.mkSnmpPacket(GetResponse, r.variables, 0, 0)
+					pkt.MsgFlags &^= Reportable
+					pkt.RequestID, pkt.MsgID = r.requestID, r.msgID
+					buf, err := pkt.marshalMsg()
+					require.NoError(t, err)
+					if i == 0 && tc.invalidFirstID {
+						invalidateReplyID(t, x, buf)
+					}
+					conn.replies = append(conn.replies, buf)
+				}
+
+				got, err := x.Get([]string{oid})
+				require.NoError(t, err)
+				want := tc.replies[len(tc.replies)-1]
+				require.Equal(t, version, got.Version)
+				require.Equal(t, want.requestID, got.RequestID)
+				if version == Version3 {
+					require.Equal(t, want.msgID, got.MsgID)
+				}
+				require.ElementsMatch(t, want.variables, got.Variables)
+				require.Equal(t, 1+x.Retries, conn.writes)
+				require.Empty(t, conn.replies)
+			})
+		}
 	}
 }
 
