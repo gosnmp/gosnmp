@@ -29,6 +29,17 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
+)
+
+const (
+	// maxEngineBoots is the largest value of snmpEngineBoots, and of
+	// snmpEngineTime (RFC 3414 section 2.2.2).
+	maxEngineBoots uint32 = 2147483647
+	// timeWindowSeconds is how far behind the local notion of the
+	// authoritative engine's time an authenticated message may be
+	// (RFC 3414 section 2.2.3).
+	timeWindowSeconds = 150
 )
 
 // SnmpV3AuthProtocol describes the authentication protocol in use by an authenticated SnmpV3 connection.
@@ -166,6 +177,15 @@ type UsmSecurityParameters struct {
 	PrivacyKey []byte
 
 	Logger Logger
+
+	// Timeliness state of a non-authoritative engine (RFC 3414 section
+	// 2.3): the latest engine time received from the authoritative engine,
+	// and when AuthoritativeEngineBoots and AuthoritativeEngineTime were
+	// last taken from it. Before the first synchronisation
+	// engineTimeSynced is zero and the configured values are used as they
+	// are.
+	latestReceivedEngineTime uint32
+	engineTimeSynced         time.Time
 }
 
 func (sp *UsmSecurityParameters) getIdentifier() string {
@@ -273,7 +293,98 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 		localDESSalt:             sp.localDESSalt,
 		localAESSalt:             sp.localAESSalt,
 		Logger:                   sp.Logger,
+		latestReceivedEngineTime: sp.latestReceivedEngineTime,
+		engineTimeSynced:         sp.engineTimeSynced,
 	}
+}
+
+// markEngineTimeSynced records that AuthoritativeEngineBoots and
+// AuthoritativeEngineTime were just taken from the authoritative engine,
+// so the local estimate of its time advances from now on.
+func (sp *UsmSecurityParameters) markEngineTimeSynced(now time.Time) {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	sp.latestReceivedEngineTime = sp.AuthoritativeEngineTime
+	sp.engineTimeSynced = now
+}
+
+// engineTimeNoLock is the local notion of the authoritative engine's
+// snmpEngineTime at now: the time taken at the last synchronisation plus
+// the whole seconds elapsed since (RFC 3414 section 2.3).
+func (sp *UsmSecurityParameters) engineTimeNoLock(now time.Time) uint32 {
+	if sp.engineTimeSynced.IsZero() {
+		return sp.AuthoritativeEngineTime
+	}
+	elapsed := max(now.Sub(sp.engineTimeSynced)/time.Second, 0)
+	estimate := min(uint64(sp.AuthoritativeEngineTime)+uint64(elapsed), uint64(maxEngineBoots))
+	return uint32(estimate)
+}
+
+// stampEngineTime gives an outgoing message to the session's authoritative
+// engine the session's boots and its current estimate of the engine time,
+// so requests made some time apart don't repeat a stale time.
+func (sp *UsmSecurityParameters) stampEngineTime(out *UsmSecurityParameters, now time.Time) {
+	sp.mu.Lock()
+	engineID := sp.AuthoritativeEngineID
+	boots := sp.AuthoritativeEngineBoots
+	engineTime := sp.engineTimeNoLock(now)
+	sp.mu.Unlock()
+
+	out.mu.Lock()
+	defer out.mu.Unlock()
+	if engineID == "" || out.AuthoritativeEngineID != engineID {
+		return
+	}
+	out.AuthoritativeEngineBoots = boots
+	out.AuthoritativeEngineTime = engineTime
+}
+
+// checkTimeliness applies RFC 3414 section 3.2 step 7b to an authenticated
+// message from the session's authoritative engine. A newer message (higher
+// boots, or the same boots and a later time than any received so far)
+// advances the session's notion of the engine's boots and time; an equal
+// or older one leaves it alone, so replaying a message can't reset it. The
+// message is then rejected with ErrNotInTimeWindow if the session's boots
+// is at its maximum, the message's boots is lower, or its time is more than
+// 150 seconds behind the session's estimate.
+//
+// Boots and time set by hand rather than learned from the engine count as
+// the starting point: the first authenticated message inside the window
+// replaces them and starts the local clock.
+func (sp *UsmSecurityParameters) checkTimeliness(in *UsmSecurityParameters, now time.Time) error {
+	in.mu.Lock()
+	boots, engineTime := in.AuthoritativeEngineBoots, in.AuthoritativeEngineTime
+	in.mu.Unlock()
+
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	synced := !sp.engineTimeSynced.IsZero()
+	latest := sp.latestReceivedEngineTime
+	if !synced {
+		latest = sp.AuthoritativeEngineTime
+	}
+	if boots > sp.AuthoritativeEngineBoots || (boots == sp.AuthoritativeEngineBoots && engineTime > latest) {
+		sp.AuthoritativeEngineBoots = boots
+		sp.AuthoritativeEngineTime = engineTime
+		sp.latestReceivedEngineTime = engineTime
+		sp.engineTimeSynced = now
+	}
+
+	local := sp.engineTimeNoLock(now)
+	if sp.AuthoritativeEngineBoots == maxEngineBoots ||
+		boots < sp.AuthoritativeEngineBoots ||
+		(boots == sp.AuthoritativeEngineBoots && uint64(engineTime)+timeWindowSeconds < uint64(local)) {
+		return fmt.Errorf("%w: message engine boots %d time %d, expected boots %d time %d",
+			ErrNotInTimeWindow, boots, engineTime, sp.AuthoritativeEngineBoots, local)
+	}
+
+	if !synced && sp.engineTimeSynced.IsZero() {
+		sp.AuthoritativeEngineTime = engineTime
+		sp.latestReceivedEngineTime = engineTime
+		sp.engineTimeSynced = now
+	}
+	return nil
 }
 
 func (sp *UsmSecurityParameters) getDefaultContextEngineID() string {
