@@ -727,6 +727,24 @@ func parseObjectIdentifier(src []byte) (string, error) {
 	return string(out), nil
 }
 
+// parseOctetStringField parses a field that must be an OCTET STRING. It checks
+// the tag itself, because parseRawField also returns strings for other types
+// such as OBJECT IDENTIFIER and IpAddress.
+func parseOctetStringField(logger Logger, data []byte, msg string) (string, int, error) {
+	if len(data) == 0 || Asn1BER(data[0]) != OctetString {
+		return "", 0, fmt.Errorf("%s is not an OCTET STRING", msg)
+	}
+	raw, count, err := parseRawField(logger, data, msg)
+	if err != nil {
+		return "", 0, err
+	}
+	s, ok := raw.(string)
+	if !ok {
+		return "", 0, fmt.Errorf("%s is not an OCTET STRING", msg)
+	}
+	return s, count, nil
+}
+
 func parseRawField(logger Logger, data []byte, msg string) (any, int, error) {
 	if len(data) == 0 {
 		return nil, 0, fmt.Errorf("empty data passed to parseRawField")

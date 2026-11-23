@@ -538,3 +538,239 @@ func TestV3HarnessTCPFraming(t *testing.T) {
 		require.NotErrorIs(t, err, io.EOF, name)
 	}
 }
+
+// The tests below check that an ordinary response is only accepted when its
+// security model, contextEngineID, contextName and USM user name match the
+// outstanding request (RFC 3412 section 7.2 steps 4 and 12). A mismatched
+// response is discarded and the request keeps waiting for its real reply.
+
+func v3CachedRequestSeedSession(sp *UsmSecurityParameters) {
+	sp.AuthoritativeEngineID = v3HarnessEngineID
+	sp.AuthoritativeEngineBoots = v3HarnessBoots
+	sp.AuthoritativeEngineTime = v3HarnessTime
+}
+
+// v3SpoofedSysDescrValue is the value a mismatched reply carries, so a test
+// can tell which reply Get returned.
+const v3SpoofedSysDescrValue = "spoofed sysDescr"
+
+// v3AgentSysDescrReplies answers a request with each reply in turn, all
+// sysDescr GetResponses. A reply without vars carries the genuine value.
+func v3AgentSysDescrReplies(a *v3TestAgent, replies ...v3TestAgentReply) v3TestAgentStep {
+	return func(req *v3TestAgentRequest) [][]byte {
+		var out [][]byte
+		for _, r := range replies {
+			r.pduType = GetResponse
+			if r.vars == nil {
+				r.vars = []SnmpPDU{{Name: v3HarnessSysDescrOID, Value: v3HarnessSysDescrValue, Type: OctetString}}
+			}
+			out = append(out, a.reply(req, r)...)
+		}
+		return out
+	}
+}
+
+func v3SpoofedSysDescr() []SnmpPDU {
+	return []SnmpPDU{{Name: v3HarnessSysDescrOID, Value: v3SpoofedSysDescrValue, Type: OctetString}}
+}
+
+// TestV3CachedRequestDiscardsMismatchedResponse checks that a GetResponse
+// whose security model, contextEngineID, contextName or user name differs
+// from the request is discarded, and that the matching reply that follows it
+// completes the same attempt. The user name case runs without
+// authentication: authenticated sessions already reject another user in
+// isAuthentic, but without authentication nothing else does.
+func TestV3CachedRequestDiscardsMismatchedResponse(t *testing.T) {
+	otherContextEngineID := "\x80\x00\x1f\x88\x04othercontext"
+	otherContextName := "other-context"
+	otherUserName := "someoneElse"
+	otherSecurityModel := SnmpV3SecurityModel(2)
+
+	for _, tc := range []struct {
+		name  string
+		level SnmpV3MsgFlags
+		creds v3TestAgentCreds
+		reply v3TestAgentReply
+	}{
+		{
+			name:  "contextEngineID",
+			level: AuthNoPriv,
+			creds: v3HarnessCredsAuthNoPriv(),
+			reply: v3TestAgentReply{contextEngineID: &otherContextEngineID},
+		},
+		{
+			name:  "contextName",
+			level: AuthNoPriv,
+			creds: v3HarnessCredsAuthNoPriv(),
+			reply: v3TestAgentReply{contextName: &otherContextName},
+		},
+		{
+			name:  "user name without auth",
+			level: NoAuthNoPriv,
+			creds: v3TestAgentCreds{username: v3HarnessUser},
+			reply: v3TestAgentReply{userName: &otherUserName},
+		},
+		{
+			name:  "unsupported security model",
+			level: AuthNoPriv,
+			creds: v3HarnessCredsAuthNoPriv(),
+			reply: v3TestAgentReply{securityModel: &otherSecurityModel},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, tc.creds)
+			mismatched := tc.reply
+			mismatched.vars = v3SpoofedSysDescr()
+			agent.steps = []v3TestAgentStep{v3AgentSysDescrReplies(agent, mismatched, v3TestAgentReply{})}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, tc.level, agent.creds)
+			v3CachedRequestSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			requireRequestCount(t, agent, 1)
+		})
+	}
+}
+
+// v3AgentSysDescrWithTag answers with a noAuthNoPriv sysDescr GetResponse in
+// which the field encoded as field has its tag replaced by tag. The length is
+// unchanged, so the rest of the message still parses.
+func v3AgentSysDescrWithTag(t *testing.T, a *v3TestAgent, r v3TestAgentReply, field []byte, tag Asn1BER) v3TestAgentStep {
+	return func(req *v3TestAgentRequest) [][]byte {
+		replies := v3AgentSysDescrReplies(a, r)(req)
+		for _, msg := range replies {
+			// This runs on the agent's goroutine, so report without FailNow.
+			if n := bytes.Count(msg, field); n != 1 {
+				t.Errorf("field %x found %d times in the reply, want 1", field, n)
+				return nil
+			}
+			msg[bytes.Index(msg, field)] = byte(tag)
+		}
+		return replies
+	}
+}
+
+// TestV3CachedRequestRejectsNonStringFields checks that a response whose user
+// name, contextEngineID or contextName isn't an OCTET STRING is rejected.
+// Before the tag check an IpAddress or INTEGER there was skipped, leaving the
+// request's own value in place to match.
+func TestV3CachedRequestRejectsNonStringFields(t *testing.T) {
+	shortUserName := "abcd" // 4 bytes, so it also parses as an INTEGER
+	pduType := []byte{byte(GetResponse)}
+
+	for _, tc := range []struct {
+		name  string
+		reply v3TestAgentReply
+		field []byte
+		tag   Asn1BER
+	}{
+		{
+			name:  "user name as INTEGER",
+			reply: v3TestAgentReply{userName: &shortUserName},
+			field: append([]byte{byte(OctetString), 4}, shortUserName...),
+			tag:   Integer,
+		},
+		{
+			name:  "contextEngineID as OBJECT IDENTIFIER",
+			field: append(append([]byte{byte(OctetString), byte(len(v3HarnessEngineID))}, v3HarnessEngineID...), byte(OctetString), 0),
+			tag:   ObjectIdentifier,
+		},
+		{
+			name:  "empty contextName as IpAddress",
+			field: append([]byte{byte(OctetString), 0}, pduType...),
+			tag:   IPAddress,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3TestAgentCreds{username: v3HarnessUser})
+			agent.steps = []v3TestAgentStep{v3AgentSysDescrWithTag(t, agent, tc.reply, tc.field, tc.tag)}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, NoAuthNoPriv, agent.creds)
+			v3CachedRequestSeedSession(sp)
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.Error(t, err)
+			require.Nil(t, result)
+			requireRequestCount(t, agent, 1)
+		})
+	}
+}
+
+// TestV3HeaderRejectsUnsupportedSecurityModel checks that msgSecurityModel is
+// compared in full before it is narrowed, so 259 (0x0103) is not taken for
+// USM, and that a model which isn't an INTEGER is rejected.
+func TestV3HeaderRejectsUnsupportedSecurityModel(t *testing.T) {
+	header := func(secModel ...byte) []byte {
+		body := []byte{
+			byte(Integer), 1, 1, // msgID
+			byte(Integer), 2, 0x05, 0xdc, // msgMaxSize
+			byte(OctetString), 1, byte(NoAuthNoPriv), // msgFlags
+		}
+		body = append(body, secModel...)
+		body = append(body, byte(OctetString), 0) // msgSecurityParameters
+		return append([]byte{byte(Sequence), byte(len(body))}, body...)
+	}
+	gs := newTestGoSNMPv3(NoAuthNoPriv, &UsmSecurityParameters{})
+
+	for _, secModel := range [][]byte{
+		{byte(Integer), 1, 2},
+		{byte(Integer), 2, 0x01, 0x03},
+	} {
+		_, err := gs.unmarshalV3Header(header(secModel...), 0, &SnmpPacket{Logger: gs.Logger})
+		require.ErrorIs(t, err, errUnsupportedSecurityModel, "msgSecurityModel %x", secModel)
+	}
+
+	_, err := gs.unmarshalV3Header(header(byte(OctetString), 1, 3), 0, &SnmpPacket{Logger: gs.Logger})
+	require.ErrorContains(t, err, "not an INTEGER")
+}
+
+// TestV3CachedRequestAcceptsMatchingResponse checks that a response for the
+// request's own context is accepted, both for a non-default contextEngineID
+// and contextName and for a request that leaves contextEngineID empty. That
+// request is sent for the default context, the authoritative engine's
+// (RFC 3412 section 7.1), and is compared with it exactly.
+func TestV3CachedRequestAcceptsMatchingResponse(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		contextEngineID     string
+		contextName         string
+		wantContextEngineID string
+	}{
+		{
+			name:                "non-default context",
+			contextEngineID:     "\x80\x00\x1f\x88\x04proxiedctx",
+			contextName:         "vlan-42",
+			wantContextEngineID: "\x80\x00\x1f\x88\x04proxiedctx",
+		},
+		{name: "default contextEngineID", wantContextEngineID: v3HarnessEngineID},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newV3TestAgent(t, v3HarnessEngineID, v3HarnessBoots, v3HarnessTime, v3HarnessCredsAuthNoPriv())
+			var reply v3TestAgentReply
+			if tc.contextEngineID != "" {
+				reply.contextEngineID = &tc.contextEngineID
+				reply.contextName = &tc.contextName
+			}
+			agent.steps = []v3TestAgentStep{v3AgentSysDescrReplies(agent, reply)}
+			port := agent.startUDP(t)
+
+			gs, sp := newV3HarnessClient(port, AuthNoPriv, agent.creds)
+			v3CachedRequestSeedSession(sp)
+			gs.ContextEngineID = tc.contextEngineID
+			gs.ContextName = tc.contextName
+			v3HarnessConnect(t, gs)
+
+			result, err := gs.Get([]string{v3HarnessSysDescrOID})
+			require.NoError(t, err)
+			requireSysDescrResult(t, result)
+			require.Equal(t, tc.wantContextEngineID, agent.request(0).Packet.ContextEngineID)
+			require.Equal(t, tc.contextName, agent.request(0).Packet.ContextName)
+		})
+	}
+}
