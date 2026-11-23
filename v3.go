@@ -225,11 +225,31 @@ func (x *GoSNMP) storeSecurityParameters(result *SnmpPacket) error {
 		return fmt.Errorf("connection security model does not match security model extracted from packet")
 	}
 
+	if x.engineIDChanged(result) {
+		return fmt.Errorf("%w: response is from a different authoritative engine than the session's", ErrUnknownEngineID)
+	}
+
 	if x.ContextEngineID == "" {
 		x.ContextEngineID = result.SecurityParameters.getDefaultContextEngineID()
 	}
 
 	return x.SecurityParameters.setSecurityParameters(result.SecurityParameters)
+}
+
+// engineIDChanged reports whether an incoming message carries an
+// authoritative engine ID other than the one the session has established.
+// Only engine discovery, while the session's engine ID is empty, may set it.
+func (x *GoSNMP) engineIDChanged(result *SnmpPacket) bool {
+	if x.Version != Version3 {
+		return false
+	}
+	if x.SecurityParameters == nil || result.SecurityParameters == nil {
+		return false
+	}
+	// Through the interface, so a type that embeds *UsmSecurityParameters
+	// gets the same check.
+	established := x.SecurityParameters.getDefaultContextEngineID()
+	return established != "" && result.SecurityParameters.getDefaultContextEngineID() != established
 }
 
 // update packet security parameters to match connection security parameters
