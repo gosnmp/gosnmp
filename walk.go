@@ -25,6 +25,14 @@ func (x *GoSNMP) walk(getRequestType PDUType, rootOid string, walkFn WalkFunc) e
 		rootOid = string(".") + rootOid
 	}
 
+	// A trailing dot (e.g. ".1.3.6.1.2.1.3.7.") is not a valid OID: response
+	// OIDs never carry a trailing dot, so walking such a root silently walked
+	// nothing at all (issue #480). Reject it explicitly rather than guessing the
+	// caller's intent.
+	if strings.HasSuffix(rootOid, ".") {
+		return fmt.Errorf("invalid rootOid %q: trailing dot is not allowed", rootOid)
+	}
+
 	oid := rootOid
 	requests := 0
 	maxReps := x.MaxRepetitions
